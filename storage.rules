@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// V0.1: any signed-in user can read/write any of the reserved folders
+// (vehicle-images/, verification-images/, verification-videos/, voltage-data/).
+// Per-folder / per-owner authorization is designed before the real
+// verification flow ships.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
