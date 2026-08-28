@@ -55,6 +55,10 @@ export const useProbeStore = defineStore('probe', () => {
     probeService.simulateEngineStart()
   }
 
+  function setMode(nextMode: 'mock' | 'ble'): void {
+    probeService.setMode(nextMode)
+  }
+
   return {
     connected,
     measuring,
@@ -69,5 +73,6 @@ export const useProbeStore = defineStore('probe', () => {
     start,
     stop,
     simulateEngineStart,
+    setMode,
   }
 })

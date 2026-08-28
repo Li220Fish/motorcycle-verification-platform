@@ -1,0 +1,89 @@
+<script setup lang="ts">
+import { ChevronLeft } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+
+withDefaults(
+  defineProps<{
+    title?: string
+    back?: boolean
+  }>(),
+  { title: '', back: false },
+)
+
+const emit = defineEmits<{ back: [] }>()
+const router = useRouter()
+
+function handleBack(): void {
+  emit('back')
+  router.back()
+}
+</script>
+
+<template>
+  <header class="app-header">
+    <div class="left">
+      <button v-if="back" class="icon-button" aria-label="Back" @click="handleBack">
+        <ChevronLeft :size="22" />
+      </button>
+      <h1 v-if="title" class="title">{{ title }}</h1>
+      <slot v-else name="left" />
+    </div>
+    <div class="right">
+      <slot name="right" />
+    </div>
+  </header>
+</template>
+
+<style scoped>
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--space-md);
+  padding-top: env(safe-area-inset-top);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.icon-button:active {
+  background: var(--color-background);
+}
+</style>

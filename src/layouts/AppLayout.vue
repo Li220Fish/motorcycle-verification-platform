@@ -1,114 +1,114 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { Bike, Bluetooth, Home, ShieldCheck, User } from 'lucide-vue-next'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
-import { useAuthStore } from '@/stores/auth.store'
+import BottomNavigation from '@/components/common/BottomNavigation.vue'
+import Logo from '@/components/common/Logo.vue'
 
-const authStore = useAuthStore()
-const router = useRouter()
+const route = useRoute()
 
 const navItems = [
-  { path: '/dashboard', label: 'Home' },
-  { path: '/vehicles', label: 'Vehicles' },
-  { path: '/verification', label: 'Verify' },
-  { path: '/probe', label: 'Probe' },
-  { path: '/settings', label: 'Settings' },
+  { path: '/dashboard', label: '首頁', icon: Home },
+  { path: '/vehicles', label: '車輛', icon: Bike },
+  { path: '/verification', label: '驗證', icon: ShieldCheck },
+  { path: '/probe', label: 'Probe', icon: Bluetooth },
+  { path: '/settings', label: '我的', icon: User },
 ]
 
-async function handleLogout(): Promise<void> {
-  await authStore.logout()
-  router.push('/login')
+function isActive(path: string): boolean {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function showChrome(): boolean {
+  return route.meta.requiresAuth !== false && route.meta.hideChrome !== true
 }
 </script>
 
 <template>
   <div class="app-shell">
-    <header class="app-header">
-      <span class="app-title">Motorcycle Verification Platform</span>
-      <button v-if="authStore.isAuthenticated" class="logout-button" @click="handleLogout">
-        Logout
-      </button>
-    </header>
-
-    <div class="app-body">
-      <nav class="app-sidebar">
-        <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">
-          {{ item.label }}
+    <aside v-if="showChrome()" class="app-sidebar">
+      <div class="sidebar-logo">
+        <Logo />
+      </div>
+      <nav class="sidebar-nav">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="sidebar-link"
+          :class="{ active: isActive(item.path) }"
+        >
+          <component :is="item.icon" :size="20" />
+          <span>{{ item.label }}</span>
         </RouterLink>
       </nav>
+    </aside>
 
-      <main class="app-main">
-        <RouterView />
-      </main>
-    </div>
+    <main class="app-main" :class="{ 'full-bleed': !showChrome() }">
+      <RouterView />
+    </main>
 
-    <nav class="app-bottom-nav">
-      <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">
-        {{ item.label }}
-      </RouterLink>
-    </nav>
+    <BottomNavigation v-if="showChrome()" class="mobile-only" />
   </div>
 </template>
 
 <style scoped>
 .app-shell {
   display: flex;
-  flex-direction: column;
   min-height: 100vh;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.app-title {
-  font-weight: 600;
-}
-
-.app-body {
-  flex: 1;
-  display: flex;
+  background: var(--color-background);
 }
 
 .app-sidebar {
-  width: 180px;
-  padding: 1rem;
+  width: 220px;
+  flex-shrink: 0;
   display: none;
   flex-direction: column;
-  gap: 0.5rem;
-  border-right: 1px solid #ddd;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-md);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
 }
 
-.app-sidebar a,
-.app-bottom-nav a {
+.sidebar-logo {
+  padding: 0 var(--space-sm);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px var(--space-sm);
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  color: inherit;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.app-sidebar a.router-link-active,
-.app-bottom-nav a.router-link-active {
-  font-weight: 700;
+.sidebar-link.active {
+  color: var(--color-primary);
+  background: #e8f1fd;
 }
 
 .app-main {
   flex: 1;
-  padding: 1rem;
-  padding-bottom: 4.5rem;
+  min-width: 0;
+  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
 }
 
-.app-bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+.app-main.full-bleed {
+  padding-bottom: 0;
+}
+
+.mobile-only {
   display: flex;
-  justify-content: space-around;
-  padding: 0.5rem;
-  background: #fff;
-  border-top: 1px solid #ddd;
 }
 
 @media (min-width: 768px) {
@@ -116,12 +116,12 @@ async function handleLogout(): Promise<void> {
     display: flex;
   }
 
-  .app-bottom-nav {
-    display: none;
+  .app-main {
+    padding-bottom: 0;
   }
 
-  .app-main {
-    padding-bottom: 1rem;
+  .mobile-only {
+    display: none;
   }
 }
 </style>

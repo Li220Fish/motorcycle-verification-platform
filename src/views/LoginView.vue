@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Bike, Lock, Mail } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 
-import PageHeader from '@/components/common/PageHeader.vue'
+import Logo from '@/components/common/Logo.vue'
+import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
@@ -33,68 +35,208 @@ async function handleSubmit(): Promise<void> {
     submitting.value = false
   }
 }
+
+function handleUnavailableLogin(providerName: string): void {
+  errorMessage.value = `${providerName} 登入尚未啟用`
+}
 </script>
 
 <template>
-  <section>
-    <PageHeader
-      title="Login"
-      description="Email/password authentication backed by Firebase Auth."
-    />
-
-    <div class="mode-toggle">
-      <button :class="{ active: mode === 'login' }" @click="mode = 'login'">Login</button>
-      <button :class="{ active: mode === 'register' }" @click="mode = 'register'">Register</button>
+  <div class="login-page">
+    <div class="login-hero">
+      <Logo size="lg" />
+      <p class="tagline">機車驗證平台</p>
+      <div class="illustration">
+        <Bike :size="56" color="var(--color-primary)" />
+      </div>
     </div>
 
-    <form class="auth-form" @submit.prevent="handleSubmit">
-      <label v-if="mode === 'register'">
-        Display Name
-        <input v-model="displayName" type="text" />
-      </label>
-      <label>
-        Email
-        <input v-model="email" type="email" required />
-      </label>
-      <label>
-        Password
-        <input v-model="password" type="password" required minlength="6" />
-      </label>
-      <button type="submit" :disabled="submitting">
-        {{ submitting ? 'Please wait...' : mode === 'register' ? 'Register' : 'Login' }}
-      </button>
-    </form>
+    <div class="login-card">
+      <div class="mode-toggle">
+        <button :class="{ active: mode === 'login' }" @click="mode = 'login'">登入</button>
+        <button :class="{ active: mode === 'register' }" @click="mode = 'register'">註冊</button>
+      </div>
 
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-  </section>
+      <form class="auth-form" @submit.prevent="handleSubmit">
+        <label v-if="mode === 'register'" class="field">
+          <span>顯示名稱</span>
+          <input v-model="displayName" type="text" placeholder="騎士大哥" />
+        </label>
+        <label class="field">
+          <span>電子郵件</span>
+          <div class="input-with-icon">
+            <Mail :size="18" />
+            <input v-model="email" type="email" required placeholder="you@example.com" />
+          </div>
+        </label>
+        <label class="field">
+          <span>密碼</span>
+          <div class="input-with-icon">
+            <Lock :size="18" />
+            <input
+              v-model="password"
+              type="password"
+              required
+              minlength="6"
+              placeholder="••••••••"
+            />
+          </div>
+        </label>
+
+        <PrimaryButton type="submit" block :disabled="submitting">
+          {{ submitting ? '請稍候...' : mode === 'register' ? '註冊' : '登入' }}
+        </PrimaryButton>
+      </form>
+
+      <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+
+      <div class="divider"><span>或使用其他方式</span></div>
+
+      <div class="social-buttons">
+        <PrimaryButton variant="secondary" block @click="handleUnavailableLogin('Google')">
+          Google 登入
+        </PrimaryButton>
+        <PrimaryButton variant="secondary" block @click="handleUnavailableLogin('Apple')">
+          Apple 登入
+        </PrimaryButton>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.mode-toggle {
+.login-page {
+  min-height: 100vh;
+  background: var(--color-surface);
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-xl) var(--space-md);
 }
 
-.mode-toggle .active {
-  font-weight: 700;
+.login-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+
+.tagline {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.illustration {
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  background: var(--color-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-md);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-lg);
+}
+
+.mode-toggle button {
+  border: none;
+  background: none;
+  padding: var(--space-sm) 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-disabled);
+  border-bottom: 2px solid transparent;
+}
+
+.mode-toggle button.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-width: 320px;
+  gap: var(--space-md);
 }
 
-.auth-form label {
+.field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-xs);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.field input {
+  height: 46px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+.input-with-icon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-md);
+  color: var(--color-text-disabled);
+}
+
+.input-with-icon input {
+  border: none;
+  height: 46px;
+  padding: 0;
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.input-with-icon input:focus {
+  outline: none;
 }
 
 .error {
-  color: #b00020;
-  margin-top: 1rem;
+  color: var(--color-danger);
+  margin-top: var(--space-md);
+  font-size: 14px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-disabled);
+  font-size: 12px;
+  margin: var(--space-lg) 0 var(--space-md);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.social-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 </style>

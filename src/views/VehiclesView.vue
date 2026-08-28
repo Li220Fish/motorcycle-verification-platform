@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { Bike, Plus } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
-import PageHeader from '@/components/common/PageHeader.vue'
+import AppHeader from '@/components/common/AppHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import VehicleCard from '@/components/common/VehicleCard.vue'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import type { VehicleDraft } from '@/types/vehicle'
 
 const vehicleStore = useVehicleStore()
+const router = useRouter()
+
+const showForm = ref(false)
+const submitting = ref(false)
 
 const form = reactive<VehicleDraft>({
   brand: '',
@@ -15,8 +23,6 @@ const form = reactive<VehicleDraft>({
   mileage: null,
   licensePlate: '',
 })
-
-const submitting = ref(false)
 
 async function handleCreate(): Promise<void> {
   submitting.value = true
@@ -27,9 +33,14 @@ async function handleCreate(): Promise<void> {
     form.year = null
     form.mileage = null
     form.licensePlate = ''
+    showForm.value = false
   } finally {
     submitting.value = false
   }
+}
+
+function openVehicle(id: string): void {
+  router.push(`/vehicles/${id}`)
 }
 
 onMounted(() => {
@@ -38,52 +49,91 @@ onMounted(() => {
 </script>
 
 <template>
-  <section>
-    <PageHeader title="Vehicles" description="Create and list vehicles stored in Firestore." />
+  <div>
+    <AppHeader title="我的車輛">
+      <template #right>
+        <button class="icon-button" aria-label="新增車輛" @click="showForm = !showForm">
+          <Plus :size="20" />
+        </button>
+      </template>
+    </AppHeader>
 
-    <form class="vehicle-form" @submit.prevent="handleCreate">
-      <input v-model="form.brand" placeholder="Brand" required />
-      <input v-model="form.model" placeholder="Model" required />
-      <input v-model.number="form.year" type="number" placeholder="Year" />
-      <input v-model.number="form.mileage" type="number" placeholder="Mileage" />
-      <input v-model="form.licensePlate" placeholder="License Plate" />
-      <button type="submit" :disabled="submitting">
-        {{ submitting ? 'Saving...' : 'Create Vehicle' }}
-      </button>
-    </form>
+    <div class="content">
+      <form v-if="showForm" class="vehicle-form" @submit.prevent="handleCreate">
+        <input v-model="form.brand" placeholder="廠牌，例如 YAMAHA" required />
+        <input v-model="form.model" placeholder="車型，例如 勁戰六代" required />
+        <input v-model.number="form.year" type="number" placeholder="年式" />
+        <input v-model.number="form.mileage" type="number" placeholder="里程 (km)" />
+        <input v-model="form.licensePlate" placeholder="車牌號碼" />
+        <PrimaryButton type="submit" block :disabled="submitting">
+          {{ submitting ? '儲存中...' : '新增車輛' }}
+        </PrimaryButton>
+      </form>
 
-    <h2>Vehicle List ({{ vehicleStore.vehicles.length }})</h2>
-    <p v-if="vehicleStore.loading">Loading...</p>
-    <ul v-else class="vehicle-list">
-      <li v-for="vehicle in vehicleStore.vehicles" :key="vehicle.id">
-        <RouterLink :to="`/vehicles/${vehicle.id}`">
-          {{ vehicle.brand }} {{ vehicle.model }} ({{ vehicle.year ?? 'n/a' }})
-        </RouterLink>
-      </li>
-      <li v-if="vehicleStore.vehicles.length === 0">No vehicles yet.</li>
-    </ul>
-  </section>
+      <p v-if="vehicleStore.loading">載入中...</p>
+      <EmptyState
+        v-else-if="vehicleStore.vehicles.length === 0"
+        :icon="Bike"
+        title="尚未建立車輛"
+        description="新增第一台車，開始建立屬於它的驗證紀錄。"
+      >
+        <template #action>
+          <PrimaryButton @click="showForm = true">新增車輛</PrimaryButton>
+        </template>
+      </EmptyState>
+      <div v-else class="vehicle-list">
+        <VehicleCard
+          v-for="vehicle in vehicleStore.vehicles"
+          :key="vehicle.id"
+          :vehicle="vehicle"
+          @click="openVehicle(vehicle.id)"
+        />
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+}
+
+.content {
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
 .vehicle-form {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
 .vehicle-form input {
-  padding: 0.4rem;
+  height: 44px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
 }
 
 .vehicle-list {
-  list-style: none;
-  padding: 0;
-}
-
-.vehicle-list li {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 </style>

@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { ChevronRight, ShieldCheck, UserCheck, Wrench } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
 
-import PageHeader from '@/components/common/PageHeader.vue'
+import AppHeader from '@/components/common/AppHeader.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
@@ -10,107 +13,234 @@ import type { VerificationType } from '@/types/verification'
 const authStore = useAuthStore()
 const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
+const router = useRouter()
+const route = useRoute()
 
 const selectedVehicleId = ref('')
-const type = ref<VerificationType>('seller')
-const mileage = ref<number | null>(null)
 const submitting = ref(false)
+const errorMessage = ref('')
 
-async function handleCreate(): Promise<void> {
-  if (!selectedVehicleId.value || !authStore.user) return
+const verificationTypes: Array<{
+  type: VerificationType
+  title: string
+  subtitle: string
+  description: string
+  icon: typeof UserCheck
+  disabled?: boolean
+}> = [
+  {
+    type: 'seller',
+    title: '賣家驗證',
+    subtitle: 'Seller Verification',
+    description: '完整檢查車況，建立可分享給買家的驗證報告。',
+    icon: UserCheck,
+  },
+  {
+    type: 'buyer',
+    title: '買家複驗',
+    subtitle: 'Buyer Re-verification',
+    description: '查看賣家驗證資料，並確認現場車況是否一致。',
+    icon: ShieldCheck,
+  },
+  {
+    type: 'professional',
+    title: '專業驗證',
+    subtitle: 'Professional Verification',
+    description: '未來功能，由專業技師進行深入的檢測與評估。',
+    icon: Wrench,
+    disabled: true,
+  },
+]
+
+const canStart = computed(() => Boolean(selectedVehicleId.value) && !submitting.value)
+
+async function handleSelectType(type: VerificationType): Promise<void> {
+  if (type === 'professional') return
+  if (!selectedVehicleId.value) {
+    errorMessage.value = '請先選擇車輛'
+    return
+  }
+  if (!authStore.user) return
+
   submitting.value = true
+  errorMessage.value = ''
   try {
-    await verificationStore.createVerification({
+    let relatedVerificationId: string | undefined
+    if (type === 'buyer') {
+      await verificationStore.fetchByVehicle(selectedVehicleId.value)
+      relatedVerificationId = verificationStore.verifications.find(
+        (verification) => verification.type === 'seller' && verification.status === 'completed',
+      )?.id
+    }
+
+    const id = await verificationStore.createVerification({
       vehicleId: selectedVehicleId.value,
       userId: authStore.user.id,
-      type: type.value,
+      type,
       status: 'draft',
-      mileage: mileage.value ?? undefined,
+      relatedVerificationId,
     })
-    mileage.value = null
+    router.push(`/verification/${id}`)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
   } finally {
     submitting.value = false
   }
 }
 
-watch(selectedVehicleId, (vehicleId) => {
-  if (vehicleId) verificationStore.fetchByVehicle(vehicleId)
-})
-
 onMounted(async () => {
   await vehicleStore.fetchVehicles()
-  if (vehicleStore.vehicles.length > 0) {
-    selectedVehicleId.value = vehicleStore.vehicles[0].id
-  }
+  const queryVehicleId = typeof route.query.vehicleId === 'string' ? route.query.vehicleId : ''
+  selectedVehicleId.value = queryVehicleId || vehicleStore.vehicles[0]?.id || ''
 })
 </script>
 
 <template>
-  <section>
-    <PageHeader
-      title="Verification"
-      description="Minimal verification record creation. Verification always relates to a Vehicle via vehicleId — never to a buyer/seller account."
-    />
+  <div>
+    <AppHeader title="開始驗證" />
 
-    <div class="form-row">
-      <label>
-        Vehicle
+    <div class="content">
+      <label class="field">
+        <span>選擇車輛</span>
         <select v-model="selectedVehicleId">
+          <option v-if="vehicleStore.vehicles.length === 0" value="">尚無車輛，請先新增</option>
           <option v-for="vehicle in vehicleStore.vehicles" :key="vehicle.id" :value="vehicle.id">
             {{ vehicle.brand }} {{ vehicle.model }}
           </option>
         </select>
       </label>
-      <label>
-        Type
-        <select v-model="type">
-          <option value="seller">Seller</option>
-          <option value="buyer">Buyer</option>
-          <option value="professional">Professional</option>
-        </select>
-      </label>
-      <label>
-        Mileage
-        <input v-model.number="mileage" type="number" />
-      </label>
-      <button :disabled="submitting || !selectedVehicleId" @click="handleCreate">
-        {{ submitting ? 'Saving...' : 'Create Verification' }}
-      </button>
-    </div>
 
-    <h2>Verifications for selected vehicle</h2>
-    <ul class="verification-list">
-      <li v-for="verification in verificationStore.verifications" :key="verification.id">
-        {{ verification.type }} — {{ verification.status }} — mileage:
-        {{ verification.mileage ?? 'n/a' }}
-      </li>
-      <li v-if="verificationStore.verifications.length === 0">No verifications yet.</li>
-    </ul>
-  </section>
+      <p class="question">您要進行哪種類型的驗證？</p>
+
+      <div class="type-list">
+        <button
+          v-for="item in verificationTypes"
+          :key="item.type"
+          class="type-card"
+          :disabled="item.disabled || !canStart"
+          @click="handleSelectType(item.type)"
+        >
+          <div class="type-icon">
+            <component :is="item.icon" :size="22" color="var(--color-primary)" />
+          </div>
+          <div class="type-info">
+            <p class="type-title">
+              {{ item.title }}
+              <StatusBadge v-if="item.disabled" tone="neutral">未來功能</StatusBadge>
+            </p>
+            <p class="type-subtitle">{{ item.subtitle }}</p>
+            <p class="type-description">{{ item.description }}</p>
+          </div>
+          <ChevronRight :size="20" color="var(--color-text-disabled)" />
+        </button>
+      </div>
+
+      <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+
+      <p class="hint">完整驗證約需 20～30 分鐘</p>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.form-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.form-row label {
+.content {
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-lg);
 }
 
-.verification-list {
-  list-style: none;
-  padding: 0;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
-.verification-list li {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #e0e0e0;
+.field select {
+  height: 46px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+.question {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.type-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.type-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+}
+
+.type-card:disabled {
+  opacity: 0.55;
+}
+
+.type-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: #e8f1fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.type-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.type-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.type-subtitle {
+  font-size: 12px;
+  color: var(--color-text-disabled);
+  margin-top: 1px;
+}
+
+.type-description {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--color-text-disabled);
+  font-size: 13px;
 }
 </style>
