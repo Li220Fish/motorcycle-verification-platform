@@ -16,6 +16,10 @@ function evidenceKey(verificationId: string): string {
   return `motoverify:verification:${verificationId}:evidence`
 }
 
+function lastPositionKey(verificationId: string): string {
+  return `motoverify:verification:${verificationId}:lastPosition`
+}
+
 function readJson<T>(key: string): T[] {
   try {
     const raw = localStorage.getItem(key)
@@ -60,10 +64,34 @@ function removeEvidence(verificationId: string, evidenceId: string): void {
   writeJson(evidenceKey(verificationId), list)
 }
 
+/**
+ * Where the user was last looking at this verification — distinct from
+ * "first unanswered item" (see verification.store.ts `resumeIndex`). A
+ * reload should restore the exact item the user left off on, not silently
+ * yank them back to 事前準備 #1 because they were free-jumping around 車輛檢查.
+ */
+function loadLastPosition(verificationId: string): string | null {
+  try {
+    return localStorage.getItem(lastPositionKey(verificationId))
+  } catch {
+    return null
+  }
+}
+
+function saveLastPosition(verificationId: string, itemId: string): void {
+  try {
+    localStorage.setItem(lastPositionKey(verificationId), itemId)
+  } catch {
+    // best-effort only
+  }
+}
+
 export const localDraftService = {
   loadAnswers,
   saveAnswer,
   loadEvidence,
   saveEvidence,
   removeEvidence,
+  loadLastPosition,
+  saveLastPosition,
 }

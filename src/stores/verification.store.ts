@@ -217,6 +217,31 @@ export const useVerificationStore = defineStore('verification', () => {
 
   const canComplete = computed(() => flowLoaded.value && missingRequiredItems.value.length === 0)
 
+  /**
+   * P0 fix: within a `lockedOrder` section (引擎狀況), "下一步" must be a
+   * REAL gate — not just hidden step-chips — or a rider can blast through
+   * every safety check with zero evidence. An item is advance-ready once it
+   * has an answer AND every evidence requirement it marks `required: true`
+   * has at least one capture on file. Non-locked sections stay fully free —
+   * this only ever tightens the 引擎 flow.
+   */
+  function isItemAdvanceReady(flatItem: FlatVerificationItem): boolean {
+    if (!flatItem.section.lockedOrder) return true
+    const { item } = flatItem
+    if (!answers.value[item.id]) return false
+
+    const requiredEvidence = (item.evidence ?? []).filter((requirement) => requirement.required)
+    if (requiredEvidence.length === 0) return true
+
+    const captured = evidenceByItem.value[item.id] ?? []
+    return requiredEvidence.every((requirement) => {
+      // MotionEvidenceCapture has no dedicated EvidenceType — it reuses
+      // 'manual' for sensor readings (see MotionEvidenceCapture.vue).
+      const evidenceType = requirement.kind === 'motion' ? 'manual' : requirement.kind
+      return captured.some((evidence) => evidence.type === evidenceType)
+    })
+  }
+
   return {
     verifications,
     currentVerification,
@@ -242,5 +267,6 @@ export const useVerificationStore = defineStore('verification', () => {
     overallProgress,
     missingRequiredItems,
     canComplete,
+    isItemAdvanceReady,
   }
 })

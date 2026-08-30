@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { Bike, Bluetooth, Home, ShieldCheck, User } from 'lucide-vue-next'
+import { FileText, Home, ShieldCheck, ShoppingBag, User } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
 
 const items = [
   { path: '/dashboard', label: '首頁', icon: Home },
-  { path: '/vehicles', label: '車輛', icon: Bike },
-  { path: '/verification', label: '驗證', icon: ShieldCheck },
-  { path: '/probe', label: 'Probe', icon: Bluetooth },
+  { path: '/marketplace', label: '市場', icon: ShoppingBag },
+  { path: '/verification', label: '驗證', icon: ShieldCheck, raised: true },
+  { path: '/reports', label: '報告', icon: FileText },
   { path: '/settings', label: '我的', icon: User },
 ]
 
@@ -24,9 +24,11 @@ function isActive(path: string): boolean {
       :key="item.path"
       :to="item.path"
       class="nav-item"
-      :class="{ active: isActive(item.path) }"
+      :class="{ active: isActive(item.path), raised: item.raised }"
     >
-      <component :is="item.icon" :size="22" />
+      <span class="icon-wrap">
+        <component :is="item.icon" :size="item.raised ? 22 : 22" />
+      </span>
       <span>{{ item.label }}</span>
     </RouterLink>
   </nav>
@@ -40,6 +42,7 @@ function isActive(path: string): boolean {
   right: 0;
   display: flex;
   justify-content: space-around;
+  align-items: flex-end;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   padding-top: 6px;
@@ -60,5 +63,22 @@ function isActive(path: string): boolean {
 
 .nav-item.active {
   color: var(--color-primary);
+}
+
+.nav-item.raised .icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -18px;
+  box-shadow: 0 4px 12px rgba(23, 105, 232, 0.35);
+}
+
+.nav-item.raised span:last-child {
+  margin-top: 2px;
 }
 </style>

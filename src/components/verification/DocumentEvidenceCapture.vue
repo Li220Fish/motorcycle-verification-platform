@@ -91,7 +91,7 @@ async function handleConfirm(): Promise<void> {
       >
         影像輔助分析
       </button>
-      <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">Analyzing...</p>
+      <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">分析中...</p>
       <div v-else-if="recognitionStatus === 'completed'" class="fields">
         <div v-for="(value, key) in recognitionFields" :key="key" class="field-row">
           <span>{{ key }}</span>

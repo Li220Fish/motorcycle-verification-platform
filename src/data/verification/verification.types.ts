@@ -6,7 +6,16 @@
  */
 
 export type VerificationItemType =
-  'check' | 'photo' | 'video' | 'audio' | 'voltage' | 'question' | 'document' | 'ride' | 'form'
+  | 'check'
+  | 'photo'
+  | 'video'
+  | 'audio'
+  | 'voltage'
+  | 'question'
+  | 'document'
+  | 'ride'
+  | 'form'
+  | 'motion'
 
 export type ItemSeverity = 'normal' | 'important' | 'critical'
 
@@ -17,7 +26,7 @@ export interface InspectionOption {
   label: string
 }
 
-export type EvidenceKind = 'photo' | 'video' | 'audio' | 'voltage' | 'document'
+export type EvidenceKind = 'photo' | 'video' | 'audio' | 'voltage' | 'document' | 'motion'
 
 export interface EvidenceRequirement {
   kind: EvidenceKind
@@ -52,6 +61,10 @@ export interface VerificationItem {
   mockAnalysis?: boolean
   severity?: ItemSeverity
   helpText?: string
+  /** Shown under a disabled "下一步" when this item sits in a lockedOrder
+   *  section and its required evidence hasn't been captured yet — explains
+   *  WHY skipping isn't allowed (e.g. "發動後將無法補拍"), not just that it isn't. */
+  lockedHint?: string
 }
 
 export interface VerificationSection {
@@ -60,6 +73,10 @@ export interface VerificationSection {
   shortDescription: string
   order: number
   items: VerificationItem[]
+  /** When true, items in this section can only be reached via Prev/Next —
+   *  no free jump between steps (e.g. 引擎狀況, where the checks are
+   *  procedurally ordered: don't rev the engine before the cold check). */
+  lockedOrder?: boolean
 }
 
 export type VerificationFlowKind = 'seller' | 'buyer'

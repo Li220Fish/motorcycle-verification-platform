@@ -14,7 +14,7 @@ defineEmits<{ jumpTo: [string]; complete: [] }>()
 
 <template>
   <div class="review">
-    <h2>Verification Review</h2>
+    <h2>驗證總覽</h2>
 
     <div class="section-list">
       <VerificationSectionCard
@@ -27,7 +27,7 @@ defineEmits<{ jumpTo: [string]; complete: [] }>()
     </div>
 
     <template v-if="missingRequiredItems.length > 0">
-      <p class="missing-title">Missing：</p>
+      <p class="missing-title">尚未完成：</p>
       <ul class="missing-list">
         <li v-for="missing in missingRequiredItems" :key="missing.itemId">
           <button @click="$emit('jumpTo', missing.itemId)">
@@ -35,7 +35,7 @@ defineEmits<{ jumpTo: [string]; complete: [] }>()
           </button>
         </li>
       </ul>
-      <p class="missing-count">Required Missing：{{ missingRequiredItems.length }}</p>
+      <p class="missing-count">尚有 {{ missingRequiredItems.length }} 項必填未完成</p>
       <PrimaryButton
         variant="secondary"
         block

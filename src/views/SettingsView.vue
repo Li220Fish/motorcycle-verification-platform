@@ -20,14 +20,18 @@ const router = useRouter()
 const noticeMessage = ref('')
 
 const sections = [
-  { icon: UserIcon, label: '帳號' },
-  { icon: Bell, label: '通知' },
-  { icon: Bluetooth, label: 'Probe' },
-  { icon: Shield, label: '資料與隱私' },
-  { icon: Info, label: '關於 MotoVerify' },
+  { icon: UserIcon, label: '帳號', to: null },
+  { icon: Bell, label: '通知', to: null },
+  { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
+  { icon: Shield, label: '資料與隱私', to: null },
+  { icon: Info, label: '關於 MotoVerify', to: null },
 ]
 
-function handleSectionClick(label: string): void {
+function handleSectionClick(label: string, to: string | null): void {
+  if (to) {
+    router.push(to)
+    return
+  }
   noticeMessage.value = `「${label}」尚未開放設定`
   setTimeout(() => {
     noticeMessage.value = ''
@@ -60,7 +64,7 @@ async function handleLogout(): Promise<void> {
           v-for="item in sections"
           :key="item.label"
           class="section-row"
-          @click="handleSectionClick(item.label)"
+          @click="handleSectionClick(item.label, item.to)"
         >
           <component :is="item.icon" :size="18" color="var(--color-text-secondary)" />
           <span>{{ item.label }}</span>

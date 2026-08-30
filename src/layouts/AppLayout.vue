@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { Bike, Bluetooth, Home, ShieldCheck, User } from 'lucide-vue-next'
+import { FileText, Home, ShieldCheck, ShoppingBag, User } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
+import { useUserPreferenceStore } from '@/stores/user-preference.store'
 
 const route = useRoute()
+const preferenceStore = useUserPreferenceStore()
 
 const navItems = [
   { path: '/dashboard', label: '首頁', icon: Home },
-  { path: '/vehicles', label: '車輛', icon: Bike },
+  { path: '/marketplace', label: '市場', icon: ShoppingBag },
   { path: '/verification', label: '驗證', icon: ShieldCheck },
-  { path: '/probe', label: 'Probe', icon: Bluetooth },
+  { path: '/reports', label: '報告', icon: FileText },
   { path: '/settings', label: '我的', icon: User },
 ]
 
@@ -20,7 +22,13 @@ function isActive(path: string): boolean {
 }
 
 function showChrome(): boolean {
-  return route.meta.requiresAuth !== false && route.meta.hideChrome !== true
+  if (route.meta.requiresAuth === false || route.meta.hideChrome === true) return false
+  // Home doubles as the first-run Role Selection gate (§4 of the Home
+  // redesign spec) — that screen is a decision point, not a navigable page,
+  // so the nav shouldn't invite the user into Marketplace/Verification/etc.
+  // before any role-based content exists yet.
+  if (route.path === '/dashboard' && !preferenceStore.hasSelectedRole) return false
+  return true
 }
 </script>
 

@@ -14,6 +14,8 @@ defineProps<{
   canGoPrev: boolean
   nextLabel?: string
   nextDisabled?: boolean
+  /** WHY "下一步" is disabled — shown above the footer, not just an inert button. */
+  nextDisabledHint?: string
 }>()
 
 defineEmits<{ back: []; prev: []; next: []; review: [] }>()
@@ -21,13 +23,15 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
 
 <template>
   <div class="verification-layout">
-    <AppHeader :title="title" back @back="$emit('back')">
+    <AppHeader :title="title" back custom-back @back="$emit('back')">
       <template #right>
         <button class="icon-button" aria-label="Review" @click="$emit('review')">
           <ClipboardList :size="20" />
         </button>
       </template>
     </AppHeader>
+
+    <slot name="nav" />
 
     <div class="progress-wrap">
       <VerificationProgress :done="done" :total="total" :percent="percent" />
@@ -39,12 +43,15 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
     </div>
 
     <div class="footer">
-      <PrimaryButton variant="secondary" :disabled="!canGoPrev" @click="$emit('prev')"
-        >上一步</PrimaryButton
-      >
-      <PrimaryButton block :disabled="nextDisabled" @click="$emit('next')">
-        {{ nextLabel ?? '下一步' }}
-      </PrimaryButton>
+      <p v-if="nextDisabled && nextDisabledHint" class="locked-hint">🔒 {{ nextDisabledHint }}</p>
+      <div class="footer-buttons">
+        <PrimaryButton variant="secondary" :disabled="!canGoPrev" @click="$emit('prev')"
+          >上一步</PrimaryButton
+        >
+        <PrimaryButton block :disabled="nextDisabled" @click="$emit('next')">
+          {{ nextLabel ?? '下一步' }}
+        </PrimaryButton>
+      </div>
     </div>
   </div>
 </template>
@@ -91,7 +98,8 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
 
 .footer {
   display: flex;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: 6px;
   padding: var(--space-sm) var(--space-md);
   padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-border);
@@ -105,6 +113,19 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
   right: 0;
   bottom: 0;
   z-index: 15;
+}
+
+.footer-buttons {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.locked-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warning, #9a6b0a);
+  text-align: center;
 }
 
 .footer :deep(.btn) {

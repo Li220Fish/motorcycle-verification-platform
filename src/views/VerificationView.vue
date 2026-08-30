@@ -4,6 +4,7 @@ import { ChevronRight, ShieldCheck, UserCheck, Wrench } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
@@ -19,6 +20,16 @@ const route = useRoute()
 const selectedVehicleId = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
+
+// Arriving from a role Home's own CTA (e.g. Seller's "開始車況驗證") already
+// tells us the type — re-asking buyer/seller here would be exactly the
+// "先找車輛→再找 Verification→再找開始" friction the Home redesign was
+// meant to remove. Only fall back to the picker when arriving without that
+// context (e.g. the bottom-nav "驗證" tab).
+const presetType = computed<VerificationType | null>(() => {
+  const value = route.query.type
+  return value === 'seller' || value === 'buyer' ? value : null
+})
 
 const verificationTypes: Array<{
   type: VerificationType
@@ -53,6 +64,9 @@ const verificationTypes: Array<{
 ]
 
 const canStart = computed(() => Boolean(selectedVehicleId.value) && !submitting.value)
+const presetTypeMeta = computed(
+  () => verificationTypes.find((item) => item.type === presetType.value) ?? null,
+)
 
 async function handleSelectType(type: VerificationType): Promise<void> {
   if (type === 'professional') return
@@ -97,7 +111,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <AppHeader title="開始驗證" />
+    <AppHeader :title="presetTypeMeta ? presetTypeMeta.title : '開始驗證'" />
 
     <div class="content">
       <label class="field">
@@ -110,30 +124,47 @@ onMounted(async () => {
         </select>
       </label>
 
-      <p class="question">您要進行哪種類型的驗證？</p>
-
-      <div class="type-list">
-        <button
-          v-for="item in verificationTypes"
-          :key="item.type"
-          class="type-card"
-          :disabled="item.disabled || !canStart"
-          @click="handleSelectType(item.type)"
-        >
+      <template v-if="presetTypeMeta">
+        <div class="preset-summary">
           <div class="type-icon">
-            <component :is="item.icon" :size="22" color="var(--color-primary)" />
+            <component :is="presetTypeMeta.icon" :size="22" color="var(--color-primary)" />
           </div>
           <div class="type-info">
-            <p class="type-title">
-              {{ item.title }}
-              <StatusBadge v-if="item.disabled" tone="neutral">未來功能</StatusBadge>
-            </p>
-            <p class="type-subtitle">{{ item.subtitle }}</p>
-            <p class="type-description">{{ item.description }}</p>
+            <p class="type-title">{{ presetTypeMeta.title }}</p>
+            <p class="type-description">{{ presetTypeMeta.description }}</p>
           </div>
-          <ChevronRight :size="20" color="var(--color-text-disabled)" />
-        </button>
-      </div>
+        </div>
+        <PrimaryButton block :disabled="!canStart" @click="handleSelectType(presetTypeMeta.type)">
+          {{ submitting ? '處理中...' : '開始' }}
+        </PrimaryButton>
+      </template>
+
+      <template v-else>
+        <p class="question">您要進行哪種類型的驗證？</p>
+
+        <div class="type-list">
+          <button
+            v-for="item in verificationTypes"
+            :key="item.type"
+            class="type-card"
+            :disabled="item.disabled || !canStart"
+            @click="handleSelectType(item.type)"
+          >
+            <div class="type-icon">
+              <component :is="item.icon" :size="22" color="var(--color-primary)" />
+            </div>
+            <div class="type-info">
+              <p class="type-title">
+                {{ item.title }}
+                <StatusBadge v-if="item.disabled" tone="neutral">未來功能</StatusBadge>
+              </p>
+              <p class="type-subtitle">{{ item.subtitle }}</p>
+              <p class="type-description">{{ item.description }}</p>
+            </div>
+            <ChevronRight :size="20" color="var(--color-text-disabled)" />
+          </button>
+        </div>
+      </template>
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
@@ -178,6 +209,17 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.preset-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .type-card {

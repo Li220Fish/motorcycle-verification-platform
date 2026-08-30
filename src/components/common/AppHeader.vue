@@ -2,12 +2,19 @@
 import { ChevronLeft } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     title?: string
     back?: boolean
+    /** When true, the parent's @back handler owns navigation entirely and
+     *  router.back() is never called as a fallback. Needed because Vue
+     *  strips a recognized emit's `onBack` listener out of $attrs, so it
+     *  can't be detected implicitly — this has to be explicit. Used by the
+     *  verification flow, which always wants a deterministic exit (its own
+     *  Vehicle Detail page), never raw browser history. */
+    customBack?: boolean
   }>(),
-  { title: '', back: false },
+  { title: '', back: false, customBack: false },
 )
 
 const emit = defineEmits<{ back: [] }>()
@@ -15,7 +22,7 @@ const router = useRouter()
 
 function handleBack(): void {
   emit('back')
-  router.back()
+  if (!props.customBack) router.back()
 }
 </script>
 
