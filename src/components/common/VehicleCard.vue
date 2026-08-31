@@ -15,7 +15,8 @@ defineEmits<{ more: [] }>()
 <template>
   <div class="vehicle-card">
     <div class="thumb">
-      <Bike :size="32" color="var(--color-text-disabled)" />
+      <img v-if="vehicle.imageUrl" :src="vehicle.imageUrl" class="thumb-img" alt="" />
+      <Bike v-else :size="32" color="var(--color-text-disabled)" />
     </div>
     <div class="info">
       <p class="brand">{{ vehicle.brand }}</p>
@@ -55,6 +56,13 @@ defineEmits<{ more: [] }>()
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .info {

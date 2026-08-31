@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { Check } from 'lucide-vue-next'
 
 import type { UserUsageRole } from '@/types/user-preference'
 
-const props = defineProps<{ currentRole: UserUsageRole }>()
-const emit = defineEmits<{ select: [UserUsageRole] }>()
-
-const open = ref(false)
+const props = defineProps<{ currentRole: UserUsageRole; open: boolean }>()
+const emit = defineEmits<{ select: [UserUsageRole]; close: [] }>()
 
 const ROLE_META: Record<UserUsageRole, { label: string; desc: string }> = {
   buyer: { label: '買家', desc: '找車、查詢與比較' },
@@ -17,57 +14,37 @@ const ROLE_META: Record<UserUsageRole, { label: string; desc: string }> = {
 
 function handleSelect(role: UserUsageRole): void {
   emit('select', role)
-  open.value = false
+  emit('close')
 }
 </script>
 
 <template>
-  <div class="role-switcher">
-    <button class="trigger" @click="open = true">
-      <span>{{ ROLE_META[props.currentRole].label }}模式</span>
-      <ChevronDown :size="16" />
-    </button>
-
-    <Teleport to="body">
-      <Transition name="sheet-fade">
-        <div v-if="open" class="sheet-backdrop" @click="open = false" />
-      </Transition>
-      <Transition name="sheet-slide">
-        <div v-if="open" class="sheet">
-          <p class="sheet-title">使用模式</p>
-          <button
-            v-for="role in ['buyer', 'seller', 'professional_seller'] as UserUsageRole[]"
-            :key="role"
-            class="sheet-option"
-            :class="{ active: role === props.currentRole }"
-            @click="handleSelect(role)"
-          >
-            <span class="mark"><Check v-if="role === props.currentRole" :size="16" /></span>
-            <span class="option-info">
-              <span class="option-title">{{ ROLE_META[role].label }}</span>
-              <span class="option-desc">{{ ROLE_META[role].desc }}</span>
-            </span>
-          </button>
-        </div>
-      </Transition>
-    </Teleport>
-  </div>
+  <Teleport to="body">
+    <Transition name="sheet-fade">
+      <div v-if="props.open" class="sheet-backdrop" @click="emit('close')" />
+    </Transition>
+    <Transition name="sheet-slide">
+      <div v-if="props.open" class="sheet">
+        <p class="sheet-title">使用模式</p>
+        <button
+          v-for="role in ['buyer', 'seller', 'professional_seller'] as UserUsageRole[]"
+          :key="role"
+          class="sheet-option"
+          :class="{ active: role === props.currentRole }"
+          @click="handleSelect(role)"
+        >
+          <span class="mark"><Check v-if="role === props.currentRole" :size="16" /></span>
+          <span class="option-info">
+            <span class="option-title">{{ ROLE_META[role].label }}</span>
+            <span class="option-desc">{{ ROLE_META[role].desc }}</span>
+          </span>
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .sheet-backdrop {
   position: fixed;
   inset: 0;

@@ -2,15 +2,19 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
 import ElectricalLightsCheck from '@/components/verification/ElectricalLightsCheck.vue'
 import RideSafetyGate from '@/components/verification/RideSafetyGate.vue'
 import VerificationCategoryNav from '@/components/verification/VerificationCategoryNav.vue'
 import VerificationItem from '@/components/verification/VerificationItem.vue'
 import VerificationLayout from '@/components/verification/VerificationLayout.vue'
 import VerificationReview from '@/components/verification/VerificationReview.vue'
+import { getAppearanceGroup, getAppearanceGroupId } from '@/data/verification/appearance-groups'
 import { SELLER_ELECTRIC_LIGHT_ITEM_IDS } from '@/data/verification/seller-verification'
 import { localDraftService } from '@/services/verification/local-draft.service'
 import { useVerificationStore } from '@/stores/verification.store'
+
+const APPEARANCE_SECTION_ID = 'seller-appearance'
 
 const props = defineProps<{ id: string }>()
 
@@ -22,6 +26,9 @@ const showReview = ref(false)
 const rideSafetyConfirmedIndex = ref(-1)
 const completing = ref(false)
 const completeError = ref('')
+// Capture Map hub for 車身外觀 (P1 §10 of the UX report) — a UI-only mode
+// flag; the 20 underlying APR-* items and their linear order are untouched.
+const appearanceMapOpen = ref(false)
 
 const typeLabel: Record<string, string> = {
   seller: '賣家驗證',
@@ -67,6 +74,8 @@ const needsRideSafetyGate = computed(
     rideSafetyConfirmedIndex.value !== currentIndex.value,
 )
 
+const isAppearanceSection = computed(() => currentFlat.value?.section.id === APPEARANCE_SECTION_ID)
+
 // P0: within a lockedOrder section (引擎狀況) "下一步" must be a real gate,
 // not just hidden step-chips — see isItemAdvanceReady in the store.
 const nextDisabled = computed(
@@ -87,6 +96,13 @@ function handleBack(): void {
 
 function handlePrev(): void {
   if (currentIndex.value === 0) return
+  if (appearanceMapOpen.value) {
+    // Map has no single "current item" — stepping back leaves the category
+    // entirely, same as if the user had never opened the map.
+    appearanceMapOpen.value = false
+    currentIndex.value -= 1
+    return
+  }
   if (isLightsGroup.value) {
     // Step back over the WHOLE consolidated lights screen at once, not one
     // light at a time — it renders as a single page.
@@ -101,6 +117,21 @@ function handlePrev(): void {
 
 function handleNext(): void {
   if (nextDisabled.value) return
+  if (appearanceMapOpen.value) {
+    // Skip the whole category from the hub screen — same idea as Prev above.
+    const items = verificationStore.flatItems
+    let lastAppearanceIndex = -1
+    items.forEach((flat, idx) => {
+      if (flat.section.id === APPEARANCE_SECTION_ID) lastAppearanceIndex = idx
+    })
+    if (lastAppearanceIndex !== -1 && lastAppearanceIndex < items.length - 1) {
+      currentIndex.value = lastAppearanceIndex + 1
+      appearanceMapOpen.value = false
+    } else {
+      showReview.value = true
+    }
+    return
+  }
   if (isLightsGroup.value) {
     const lastLightIndex = verificationStore.flatItems.findIndex(
       (flat) =>
@@ -114,7 +145,20 @@ function handleNext(): void {
     return
   }
   if (currentIndex.value < verificationStore.flatItems.length - 1) {
-    currentIndex.value += 1
+    const nextIndex = currentIndex.value + 1
+    const nextFlat = verificationStore.flatItems[nextIndex]
+    // Crossing INTO 車身外觀, or from one Capture Map group into a different
+    // one, re-opens the hub instead of silently walking into the next photo
+    // — the map is the free-select mechanism for this category, not a
+    // one-time landing page.
+    if (nextFlat.section.id === APPEARANCE_SECTION_ID) {
+      const currentGroupId = currentFlat.value
+        ? getAppearanceGroupId(currentFlat.value.item.id)
+        : null
+      const nextGroupId = getAppearanceGroupId(nextFlat.item.id)
+      if (currentGroupId !== nextGroupId) appearanceMapOpen.value = true
+    }
+    currentIndex.value = nextIndex
   } else {
     showReview.value = true
   }
@@ -134,6 +178,16 @@ function handleJumpTo(itemId: string): void {
   currentIndex.value =
     firstBlockedIndex !== -1 && index > firstBlockedIndex ? firstBlockedIndex : index
   showReview.value = false
+  // Jumping to one specific item is always a drill-in, whether it came from
+  // the Capture Map or from Review's missing-item list.
+  appearanceMapOpen.value = false
+}
+
+function handleSelectAppearanceGroup(groupId: string): void {
+  const group = getAppearanceGroup(groupId)
+  if (!group) return
+  const firstUnanswered = group.itemIds.find((itemId) => !verificationStore.answers[itemId])
+  handleJumpTo(firstUnanswered ?? group.itemIds[0])
 }
 
 // Bookmark navigation — only offered on the Seller flow for now (see
@@ -147,7 +201,19 @@ function handleJumpToSection(sectionId: string): void {
   const section = verificationStore.sections.find((candidate) => candidate.id === sectionId)
   if (!section || section.items.length === 0) return
   const firstUnanswered = section.items.find((it) => !verificationStore.answers[it.id])
-  handleJumpTo((firstUnanswered ?? section.items[0]).id)
+  const targetId = (firstUnanswered ?? section.items[0]).id
+
+  // Jumping to 車身外觀 via the category tab always opens the Capture Map
+  // hub, never a specific photo item directly — see handleJumpTo, which
+  // would otherwise force appearanceMapOpen back to false.
+  if (sectionId === APPEARANCE_SECTION_ID) {
+    const index = verificationStore.flatItems.findIndex((flat) => flat.item.id === targetId)
+    if (index !== -1) currentIndex.value = index
+    showReview.value = false
+    appearanceMapOpen.value = true
+    return
+  }
+  handleJumpTo(targetId)
 }
 
 async function handleComplete(): Promise<void> {
@@ -179,6 +245,10 @@ watch(
       ? verificationStore.flatItems.findIndex((flat) => flat.item.id === lastItemId)
       : -1
     currentIndex.value = lastIndex !== -1 ? lastIndex : verificationStore.resumeIndex
+    // Resuming always lands directly on the exact last-visited item (or the
+    // first-unanswered fallback) — even inside 車身外觀 — never re-interrupts
+    // with the Capture Map hub.
+    appearanceMapOpen.value = false
   },
 )
 
@@ -235,12 +305,21 @@ onMounted(() => {
     </template>
 
     <RideSafetyGate v-if="needsRideSafetyGate" @confirm="rideSafetyConfirmedIndex = currentIndex" />
+    <AppearanceCaptureMap
+      v-else-if="isAppearanceSection && appearanceMapOpen"
+      @select-group="handleSelectAppearanceGroup"
+    />
     <ElectricalLightsCheck
       v-else-if="isLightsGroup"
       :verification-id="id"
       :items="lightsGroupItems"
     />
-    <VerificationItem v-else :verification-id="id" :item="currentFlat.item" />
+    <template v-else>
+      <button v-if="isAppearanceSection" class="back-to-map-btn" @click="appearanceMapOpen = true">
+        ← 返回拍攝地圖
+      </button>
+      <VerificationItem :verification-id="id" :item="currentFlat.item" />
+    </template>
   </VerificationLayout>
   <p v-else class="loading-text">載入中...</p>
 
@@ -248,6 +327,17 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.back-to-map-btn {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 0 4px;
+  margin-bottom: 4px;
+}
+
 .loading-text {
   padding: var(--space-lg) var(--space-md);
   color: var(--color-text-secondary);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bike, ShieldCheck } from 'lucide-vue-next'
+import { Bike, Store } from 'lucide-vue-next'
 
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
@@ -9,10 +9,21 @@ defineProps<{ listing: MockMarketListing }>()
 <template>
   <div class="market-card">
     <div class="thumb">
-      <Bike :size="30" color="var(--color-text-disabled)" />
+      <img v-if="listing.imageUrl" :src="listing.imageUrl" class="thumb-img" alt="" />
+      <Bike v-else :size="30" color="var(--color-text-disabled)" />
       <span class="demo-tag">DEMO</span>
     </div>
-    <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+    <div class="title-row">
+      <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+      <!-- Every listing already requires a passing inspection to go live, so
+           "已驗證" is no longer a differentiator — dealer-sold listings get
+           their own badge instead (see marketplace-mock.ts). Icon-only and
+           inline with the title (not its own row) so it never crowds out
+           the price/mileage rows within the card's fixed height. -->
+      <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
+        <Store :size="11" />
+      </span>
+    </div>
     <p class="year">{{ listing.year }}</p>
     <div class="stat-row">
       <span class="stat-label">里程</span>
@@ -22,7 +33,6 @@ defineProps<{ listing: MockMarketListing }>()
       <span class="stat-label">價格</span>
       <span class="stat-value price">${{ listing.priceTwd.toLocaleString() }}</span>
     </div>
-    <span v-if="listing.verified" class="verified-badge"> <ShieldCheck :size="13" /> 已驗證 </span>
   </div>
 </template>
 
@@ -30,6 +40,11 @@ defineProps<{ listing: MockMarketListing }>()
 .market-card {
   flex: 0 0 auto;
   width: 168px;
+  /* Fixed regardless of content — a dealer badge, a longer title, etc. must
+     never change the card's height (would otherwise stagger cards mid-row
+     in the horizontal carousel). */
+  height: 220px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -42,13 +57,26 @@ defineProps<{ listing: MockMarketListing }>()
 
 .thumb {
   position: relative;
+  /* Explicit, not just "stretched by the flex parent" — the photo box must
+     be the exact same pixel size on every card regardless of layout. */
+  width: 152px;
   height: 96px;
+  flex-shrink: 0;
   border-radius: var(--radius-md);
   background: var(--color-background);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.thumb-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .demo-tag {
@@ -63,10 +91,22 @@ defineProps<{ listing: MockMarketListing }>()
   padding: 2px 7px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .title {
+  min-width: 0;
+  flex: 1;
   font-size: 14px;
   font-weight: 700;
   color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .year {
@@ -95,17 +135,15 @@ defineProps<{ listing: MockMarketListing }>()
   font-weight: 800;
 }
 
-.verified-badge {
-  align-self: flex-start;
+.dealer-badge {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-top: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-success);
-  background: var(--color-success-bg);
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+  background: var(--color-primary-bg, #e8f1fd);
   border-radius: 999px;
-  padding: 2px 8px;
 }
 </style>

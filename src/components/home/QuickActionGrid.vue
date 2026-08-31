@@ -21,6 +21,13 @@ defineProps<{ actions: QuickAction[] }>()
 const router = useRouter()
 const noticeMessage = ref('')
 
+/** Not-yet-built actions (no route, no custom handler) render visibly
+ * disabled — a toast alone still reads as "nothing happened" on first tap
+ * (P1 Dead Action). */
+function isDisabled(action: QuickAction): boolean {
+  return !action.to && !action.onClick
+}
+
 function handleClick(action: QuickAction): void {
   if (action.onClick) {
     action.onClick()
@@ -30,7 +37,7 @@ function handleClick(action: QuickAction): void {
     router.push(action.to)
     return
   }
-  noticeMessage.value = `「${action.label}」尚未開放`
+  noticeMessage.value = `「${action.label}」即將推出`
   setTimeout(() => {
     noticeMessage.value = ''
   }, 2000)
@@ -44,10 +51,16 @@ function handleClick(action: QuickAction): void {
         v-for="action in actions"
         :key="action.label"
         class="action-card"
+        :class="{ disabled: isDisabled(action) }"
         @click="handleClick(action)"
       >
-        <component :is="action.icon" :size="22" color="var(--color-primary)" />
+        <component
+          :is="action.icon"
+          :size="22"
+          :color="isDisabled(action) ? 'var(--color-text-disabled)' : 'var(--color-primary)'"
+        />
         <span>{{ action.label }}</span>
+        <span v-if="isDisabled(action)" class="soon-tag">即將推出</span>
       </button>
     </div>
     <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
@@ -86,6 +99,27 @@ function handleClick(action: QuickAction): void {
 
 .action-card:active {
   transform: scale(0.97);
+}
+
+.action-card.disabled {
+  color: var(--color-text-disabled);
+  position: relative;
+}
+
+.action-card.disabled:active {
+  transform: none;
+}
+
+.soon-tag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--color-text-disabled);
+  background: var(--color-background);
+  border-radius: 999px;
+  padding: 1px 5px;
 }
 
 .notice {

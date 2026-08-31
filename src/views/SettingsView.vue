@@ -1,47 +1,92 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   Bell,
   Bluetooth,
   ChevronRight,
   Info,
   LogOut,
+  Repeat,
   Shield,
   User as UserIcon,
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import RoleSwitcher from '@/components/home/RoleSwitcher.vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { useUserPreferenceStore } from '@/stores/user-preference.store'
+import type { UserUsageRole } from '@/types/user-preference'
 
 const authStore = useAuthStore()
+const preferenceStore = useUserPreferenceStore()
 const router = useRouter()
 
 const noticeMessage = ref('')
+const roleSwitcherOpen = ref(false)
 
-const sections = [
+const ROLE_LABEL: Record<UserUsageRole, string> = {
+  buyer: '買家',
+  seller: '賣家',
+  professional_seller: '專業賣家',
+}
+const currentRoleLabel = computed(() =>
+  preferenceStore.currentRole ? ROLE_LABEL[preferenceStore.currentRole] : '尚未選擇',
+)
+
+interface SettingSection {
+  icon: typeof UserIcon
+  label: string
+  to: string | null
+  trailing?: string
+  action?: () => void
+}
+
+const sections = computed<SettingSection[]>(() => [
   { icon: UserIcon, label: '帳號', to: null },
+  {
+    icon: Repeat,
+    label: '使用模式',
+    to: null,
+    trailing: currentRoleLabel.value,
+    action: () => {
+      roleSwitcherOpen.value = true
+    },
+  },
   { icon: Bell, label: '通知', to: null },
   { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
   { icon: Shield, label: '資料與隱私', to: null },
   { icon: Info, label: '關於 MotoVerify', to: null },
-]
+])
 
-function handleSectionClick(label: string, to: string | null): void {
-  if (to) {
-    router.push(to)
+function handleSectionClick(section: SettingSection): void {
+  if (section.action) {
+    section.action()
     return
   }
-  noticeMessage.value = `「${label}」尚未開放設定`
+  if (section.to) {
+    router.push(section.to)
+    return
+  }
+  noticeMessage.value = `「${section.label}」尚未開放設定`
   setTimeout(() => {
     noticeMessage.value = ''
   }, 2000)
+}
+
+async function handleSelectRole(role: UserUsageRole): Promise<void> {
+  if (!authStore.user) return
+  await preferenceStore.setRole(authStore.user.id, role)
 }
 
 async function handleLogout(): Promise<void> {
   await authStore.logout()
   router.push('/login')
 }
+
+onMounted(async () => {
+  if (authStore.user) await preferenceStore.load(authStore.user.id)
+})
 </script>
 
 <template>
@@ -64,10 +109,11 @@ async function handleLogout(): Promise<void> {
           v-for="item in sections"
           :key="item.label"
           class="section-row"
-          @click="handleSectionClick(item.label, item.to)"
+          @click="handleSectionClick(item)"
         >
           <component :is="item.icon" :size="18" color="var(--color-text-secondary)" />
           <span>{{ item.label }}</span>
+          <span v-if="item.trailing" class="trailing">{{ item.trailing }}</span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>
       </div>
@@ -79,6 +125,14 @@ async function handleLogout(): Promise<void> {
         <span>登出</span>
       </button>
     </div>
+
+    <RoleSwitcher
+      v-if="preferenceStore.currentRole"
+      :open="roleSwitcherOpen"
+      :current-role="preferenceStore.currentRole"
+      @select="handleSelectRole"
+      @close="roleSwitcherOpen = false"
+    />
   </div>
 </template>
 
@@ -154,6 +208,12 @@ async function handleLogout(): Promise<void> {
 
 .section-row span:first-of-type {
   flex: 1;
+}
+
+.trailing {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .notice {

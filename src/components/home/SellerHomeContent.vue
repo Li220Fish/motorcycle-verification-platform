@@ -1,24 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Bike, FolderCheck, ShieldCheck, Wallet } from 'lucide-vue-next'
-import { useRouter } from 'vue-router'
 
-import HomeHero from './HomeHero.vue'
-import QuickActionGrid from './QuickActionGrid.vue'
-import type { QuickAction } from './QuickActionGrid.vue'
-import SellerVehicleCard from './SellerVehicleCard.vue'
+import MyListingsSection from './MyListingsSection.vue'
+import VehicleCarousel from './VehicleCarousel.vue'
+import VehicleNewsSection from './VehicleNewsSection.vue'
+import VehicleStatusCard from './VehicleStatusCard.vue'
 import { getFlatItems } from '@/data/verification'
+import { homeContentService } from '@/services/firebase/home-content.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { Vehicle } from '@/types/vehicle'
 
-const router = useRouter()
 const vehicleStore = useVehicleStore()
+const marketListings = ref<MockMarketListing[]>([])
 
 interface VehicleWithProgress {
   vehicle: Vehicle
   percent: number | null
   verificationId: string | null
+  hasCompletedVerification: boolean
 }
 
 const vehiclesWithProgress = ref<VehicleWithProgress[]>([])
@@ -37,13 +38,17 @@ async function loadVehicleProgress(): Promise<void> {
       targets.map(async (vehicle): Promise<VehicleWithProgress> => {
         try {
           const verifications = await verificationService.listByVehicle(vehicle.id)
+          const hasCompletedVerification = verifications.some(
+            (v) => v.type === 'seller' && v.status === 'completed',
+          )
           const active = verifications.find((v) => v.type === 'seller' && v.status !== 'completed')
-          if (!active) return { vehicle, percent: null, verificationId: null }
+          if (!active)
+            return { vehicle, percent: null, verificationId: null, hasCompletedVerification }
           const answers = await verificationService.listAnswers(active.id)
           const percent = Math.round((answers.length / SELLER_TOTAL) * 100)
-          return { vehicle, percent, verificationId: active.id }
+          return { vehicle, percent, verificationId: active.id, hasCompletedVerification }
         } catch {
-          return { vehicle, percent: null, verificationId: null }
+          return { vehicle, percent: null, verificationId: null, hasCompletedVerification: false }
         }
       }),
     )
@@ -55,65 +60,50 @@ async function loadVehicleProgress(): Promise<void> {
 
 onMounted(async () => {
   if (vehicleStore.vehicles.length === 0) await vehicleStore.fetchVehicles()
-  await loadVehicleProgress()
+  await Promise.all([
+    loadVehicleProgress(),
+    homeContentService.listMarketplaceListings().then((listings) => {
+      marketListings.value = listings
+    }),
+  ])
 })
 
-function handleStartVerification(): void {
-  if (vehicleStore.vehicles.length === 0) {
-    router.push('/vehicles')
-  } else {
-    // type=seller: arriving from this CTA already answers "which type?" —
-    // VerificationView skips its buyer/seller picker when it sees this.
-    router.push('/verification?type=seller')
-  }
-}
-
-const actions: QuickAction[] = [
-  { icon: Bike, label: '我的車輛', to: '/vehicles' },
-  { icon: ShieldCheck, label: '開始驗證', to: '/verification?type=seller' },
-  { icon: FolderCheck, label: '驗證報告', to: '/reports' },
-  { icon: Wallet, label: '交易管理', to: null },
-]
+// Most recently updated vehicle — featured on the Home "我的車輛" status
+// card, matching the Reference prototype's single-vehicle summary widget.
+const featuredVehicle = computed(() => vehiclesWithProgress.value[0] ?? null)
+const featuredStatusLabel = computed(() => {
+  const entry = featuredVehicle.value
+  if (!entry) return ''
+  if (entry.hasCompletedVerification) return '狀態良好'
+  if (entry.percent !== null) return '驗證中'
+  return '尚未驗證'
+})
 
 const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
 </script>
 
 <template>
   <div class="seller-home">
-    <HomeHero
-      role="seller"
-      brand="MotoVerify"
-      :title="['讓好車', '更容易被相信']"
-      description="建立一份有證據的車況驗證紀錄。"
-      primary-label="📷 開始車況驗證"
-      secondary-label="管理我的車輛"
-      @primary="handleStartVerification"
-      @secondary="router.push('/vehicles')"
-    />
-
+    <!-- The status card IS the Home hero now — no separate marketing banner.
+         It renders its own empty state when there's no vehicle yet. -->
     <div class="section">
-      <QuickActionGrid :actions="actions" />
+      <VehicleStatusCard
+        :vehicle="featuredVehicle?.vehicle ?? null"
+        :status-label="featuredStatusLabel"
+      />
     </div>
 
     <div class="section">
       <div class="section-header">
-        <h2>我的車輛</h2>
-        <RouterLink to="/vehicles" class="see-all">查看全部 →</RouterLink>
+        <h2>為你推薦</h2>
+        <RouterLink to="/marketplace" class="see-all">查看全部 →</RouterLink>
       </div>
-      <div v-if="hasVehicles" class="vehicle-list">
-        <SellerVehicleCard
-          v-for="entry in vehiclesWithProgress"
-          :key="entry.vehicle.id"
-          :vehicle="entry.vehicle"
-          :percent="entry.percent"
-          :verification-id="entry.verificationId"
-        />
-      </div>
-      <div v-else class="empty-state">
-        <p>還沒有車輛，新增第一台開始驗證吧。</p>
-        <button class="add-vehicle-btn" @click="router.push('/vehicles')">新增車輛</button>
-      </div>
+      <VehicleCarousel :listings="marketListings" />
     </div>
+
+    <MyListingsSection v-if="hasVehicles" />
+
+    <VehicleNewsSection />
   </div>
 </template>
 
@@ -150,40 +140,5 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
   font-weight: 700;
   color: var(--color-primary);
   text-decoration: none;
-}
-
-.vehicle-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.empty-state {
-  padding: var(--space-lg);
-  background: var(--color-surface);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  align-items: center;
-}
-
-.empty-state p {
-  font-size: 13.5px;
-  color: var(--color-text-secondary);
-  margin: 0;
-}
-
-.add-vehicle-btn {
-  height: 40px;
-  padding: 0 20px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 13.5px;
-  font-weight: 700;
 }
 </style>

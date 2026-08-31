@@ -95,7 +95,7 @@ async function handleConfirm(): Promise<void> {
 <template>
   <div class="photo-capture">
     <template v-if="!previewUrl">
-      <PhotoGuide :label="label" />
+      <PhotoGuide :label="label" :item-id="itemId" />
       <button class="capture-button" @click="handleTakePhoto">請拍攝：{{ label }}</button>
     </template>
     <template v-else>

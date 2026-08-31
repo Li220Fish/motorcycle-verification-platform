@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronRight, ShieldCheck, UserCheck, Wrench } from 'lucide-vue-next'
+import { ChevronRight, ShieldCheck, UserCheck } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { verificationService } from '@/services/firebase/verification.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
-import type { VerificationType } from '@/types/verification'
+import type { Verification, VerificationType } from '@/types/verification'
 
 const authStore = useAuthStore()
 const vehicleStore = useVehicleStore()
@@ -17,7 +18,6 @@ const verificationStore = useVerificationStore()
 const router = useRouter()
 const route = useRoute()
 
-const selectedVehicleId = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
@@ -31,13 +31,30 @@ const presetType = computed<VerificationType | null>(() => {
   return value === 'seller' || value === 'buyer' ? value : null
 })
 
+// Arriving from an existing vehicle's own "開始新的驗證" button already
+// tells us which vehicle — no naming step needed, it already has one.
+const existingVehicleId = computed<string | null>(() => {
+  const value = route.query.vehicleId
+  return typeof value === 'string' && value ? value : null
+})
+
+// Otherwise verification no longer requires picking a pre-existing vehicle
+// first — the user just names this verification, and the actual vehicle
+// details get captured by the flow's own first step (PREP-01 "建立基本資
+// 料"). Set by clicking a type card when there's no `presetType`.
+const selectedType = ref<VerificationType | null>(null)
+const effectiveType = computed<VerificationType | null>(
+  () => presetType.value ?? selectedType.value,
+)
+const verificationName = ref('')
+const canStartNamed = computed(() => verificationName.value.trim().length > 0 && !submitting.value)
+
 const verificationTypes: Array<{
   type: VerificationType
   title: string
   subtitle: string
   description: string
   icon: typeof UserCheck
-  disabled?: boolean
 }> = [
   {
     type: 'seller',
@@ -53,47 +70,41 @@ const verificationTypes: Array<{
     description: '查看賣家驗證資料，並確認現場車況是否一致。',
     icon: ShieldCheck,
   },
-  {
-    type: 'professional',
-    title: '專業驗證',
-    subtitle: 'Professional Verification',
-    description: '未來功能，由專業技師進行深入的檢測與評估。',
-    icon: Wrench,
-    disabled: true,
-  },
 ]
 
-const canStart = computed(() => Boolean(selectedVehicleId.value) && !submitting.value)
 const presetTypeMeta = computed(
   () => verificationTypes.find((item) => item.type === presetType.value) ?? null,
 )
+const effectiveTypeMeta = computed(
+  () => verificationTypes.find((item) => item.type === effectiveType.value) ?? null,
+)
 
-async function handleSelectType(type: VerificationType): Promise<void> {
-  if (type === 'professional') return
-  if (!selectedVehicleId.value) {
-    errorMessage.value = '請先選擇車輛'
-    return
+async function createVerificationRecord(
+  vehicleId: string,
+  type: VerificationType,
+): Promise<string> {
+  let relatedVerificationId: string | undefined
+  if (type === 'buyer') {
+    await verificationStore.fetchByVehicle(vehicleId)
+    relatedVerificationId = verificationStore.verifications.find(
+      (verification) => verification.type === 'seller' && verification.status === 'completed',
+    )?.id
   }
-  if (!authStore.user) return
+  return verificationStore.createVerification({
+    vehicleId,
+    userId: authStore.user!.id,
+    type,
+    status: 'draft',
+    relatedVerificationId,
+  })
+}
 
+async function handleStartExisting(type: VerificationType): Promise<void> {
+  if (!existingVehicleId.value || !authStore.user) return
   submitting.value = true
   errorMessage.value = ''
   try {
-    let relatedVerificationId: string | undefined
-    if (type === 'buyer') {
-      await verificationStore.fetchByVehicle(selectedVehicleId.value)
-      relatedVerificationId = verificationStore.verifications.find(
-        (verification) => verification.type === 'seller' && verification.status === 'completed',
-      )?.id
-    }
-
-    const id = await verificationStore.createVerification({
-      vehicleId: selectedVehicleId.value,
-      userId: authStore.user.id,
-      type,
-      status: 'draft',
-      relatedVerificationId,
-    })
+    const id = await createVerificationRecord(existingVehicleId.value, type)
     router.push(`/verification/${id}`)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
@@ -102,29 +113,183 @@ async function handleSelectType(type: VerificationType): Promise<void> {
   }
 }
 
+/** Picking a type either starts immediately (vehicle already known) or just
+ * records the choice so the naming step can render next. */
+function handlePickType(type: VerificationType): void {
+  if (existingVehicleId.value) {
+    void handleStartExisting(type)
+  } else {
+    selectedType.value = type
+  }
+}
+
+async function handleConfirmName(): Promise<void> {
+  const type = effectiveType.value
+  const name = verificationName.value.trim()
+  if (!type || !name || !authStore.user) return
+
+  submitting.value = true
+  errorMessage.value = ''
+  try {
+    const vehicleId = await vehicleStore.createVehicle({
+      brand: '',
+      model: name,
+      year: null,
+      mileage: null,
+    })
+    const id = await createVerificationRecord(vehicleId, type)
+    router.push(`/verification/${id}`)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+  } finally {
+    submitting.value = false
+  }
+}
+
+// "最近的驗證紀錄" — bounded to 5, sorted most-recent-first, so users can
+// jump back into (or review) a past verification without hunting through
+// each vehicle's own detail page.
+const RECENT_LIMIT = 5
+const recentVerifications = ref<Verification[]>([])
+const loadingRecent = ref(false)
+
+const typeLabel: Record<string, string> = {
+  seller: '賣家驗證',
+  buyer: '買家複驗',
+  professional: '專業驗證',
+}
+function statusMeta(status: Verification['status']): {
+  label: string
+  tone: 'success' | 'primary' | 'neutral'
+} {
+  if (status === 'completed') return { label: '已完成', tone: 'success' }
+  if (status === 'in_progress') return { label: '進行中', tone: 'primary' }
+  return { label: '草稿', tone: 'neutral' }
+}
+
+function vehicleLabel(vehicleId: string): string {
+  const vehicle = vehicleStore.vehicles.find((candidate) => candidate.id === vehicleId)
+  return vehicle ? `${vehicle.brand} ${vehicle.model}` : '未知車輛'
+}
+
+function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('zh-TW')
+}
+
+function openRecentVerification(verification: Verification): void {
+  if (verification.status !== 'completed') {
+    router.push(`/verification/${verification.id}`)
+    return
+  }
+  router.push(
+    verification.type === 'buyer'
+      ? `/verification/${verification.id}/comparison`
+      : `/verification/${verification.id}/result`,
+  )
+}
+
+// Long-press to delete — a plain tap still opens the record, so the delete
+// timer is cancelled (and its firing ignored by the click that follows) the
+// moment the pointer lifts, moves away, or the browser cancels the gesture.
+const LONG_PRESS_MS = 550
+let longPressTimer: number | null = null
+const longPressTriggered = ref(false)
+const deletingId = ref<string | null>(null)
+
+function cancelLongPress(): void {
+  if (longPressTimer !== null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function handleRecentPointerDown(verification: Verification): void {
+  longPressTriggered.value = false
+  cancelLongPress()
+  longPressTimer = window.setTimeout(() => {
+    longPressTriggered.value = true
+    void handleDeleteRecent(verification)
+  }, LONG_PRESS_MS)
+}
+
+function handleRecentClick(verification: Verification): void {
+  if (longPressTriggered.value) {
+    longPressTriggered.value = false
+    return
+  }
+  openRecentVerification(verification)
+}
+
+async function handleDeleteRecent(verification: Verification): Promise<void> {
+  const label = `${vehicleLabel(verification.vehicleId)}（${typeLabel[verification.type] ?? verification.type}）`
+  if (!window.confirm(`刪除「${label}」這筆驗證紀錄？此操作無法復原。`)) {
+    longPressTriggered.value = false
+    return
+  }
+  deletingId.value = verification.id
+  try {
+    await verificationStore.deleteVerification(verification.id)
+    recentVerifications.value = recentVerifications.value.filter(
+      (item) => item.id !== verification.id,
+    )
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '刪除失敗'
+  } finally {
+    deletingId.value = null
+  }
+}
+
+async function loadRecentVerifications(): Promise<void> {
+  if (!authStore.user) return
+  loadingRecent.value = true
+  try {
+    const all = await verificationService.listByUser(authStore.user.id)
+    recentVerifications.value = all.slice(0, RECENT_LIMIT)
+  } finally {
+    loadingRecent.value = false
+  }
+}
+
 onMounted(async () => {
+  // Only needed to resolve vehicle names for "最近的驗證紀錄" below — no
+  // longer used to populate a vehicle picker.
   await vehicleStore.fetchVehicles()
-  const queryVehicleId = typeof route.query.vehicleId === 'string' ? route.query.vehicleId : ''
-  selectedVehicleId.value = queryVehicleId || vehicleStore.vehicles[0]?.id || ''
+  await loadRecentVerifications()
 })
 </script>
 
 <template>
   <div>
-    <AppHeader :title="presetTypeMeta ? presetTypeMeta.title : '開始驗證'" />
+    <AppHeader :title="effectiveTypeMeta ? effectiveTypeMeta.title : '開始驗證'" />
 
     <div class="content">
-      <label class="field">
-        <span>選擇車輛</span>
-        <select v-model="selectedVehicleId">
-          <option v-if="vehicleStore.vehicles.length === 0" value="">尚無車輛，請先新增</option>
-          <option v-for="vehicle in vehicleStore.vehicles" :key="vehicle.id" :value="vehicle.id">
-            {{ vehicle.brand }} {{ vehicle.model }}
-          </option>
-        </select>
-      </label>
+      <!-- Existing vehicle (arrived via its own "開始新的驗證"), type not
+           preset: pick a type, starts immediately — vehicle is already known. -->
+      <template v-if="existingVehicleId && !presetType">
+        <p class="question">您要進行哪種類型的驗證？</p>
+        <div class="type-list">
+          <button
+            v-for="item in verificationTypes"
+            :key="item.type"
+            class="type-card"
+            :disabled="submitting"
+            @click="handlePickType(item.type)"
+          >
+            <div class="type-icon">
+              <component :is="item.icon" :size="22" color="var(--color-primary)" />
+            </div>
+            <div class="type-info">
+              <p class="type-title">{{ item.title }}</p>
+              <p class="type-subtitle">{{ item.subtitle }}</p>
+              <p class="type-description">{{ item.description }}</p>
+            </div>
+            <ChevronRight :size="20" color="var(--color-text-disabled)" />
+          </button>
+        </div>
+      </template>
 
-      <template v-if="presetTypeMeta">
+      <!-- Existing vehicle + preset type: confirm and start. -->
+      <template v-else-if="existingVehicleId && presetTypeMeta">
         <div class="preset-summary">
           <div class="type-icon">
             <component :is="presetTypeMeta.icon" :size="22" color="var(--color-primary)" />
@@ -134,30 +299,31 @@ onMounted(async () => {
             <p class="type-description">{{ presetTypeMeta.description }}</p>
           </div>
         </div>
-        <PrimaryButton block :disabled="!canStart" @click="handleSelectType(presetTypeMeta.type)">
+        <PrimaryButton
+          block
+          :disabled="submitting"
+          @click="handleStartExisting(presetTypeMeta.type)"
+        >
           {{ submitting ? '處理中...' : '開始' }}
         </PrimaryButton>
       </template>
 
-      <template v-else>
+      <!-- No existing vehicle, type not chosen yet: pick a type (doesn't
+           start yet — the naming step comes next). -->
+      <template v-else-if="!effectiveType">
         <p class="question">您要進行哪種類型的驗證？</p>
-
         <div class="type-list">
           <button
             v-for="item in verificationTypes"
             :key="item.type"
             class="type-card"
-            :disabled="item.disabled || !canStart"
-            @click="handleSelectType(item.type)"
+            @click="handlePickType(item.type)"
           >
             <div class="type-icon">
               <component :is="item.icon" :size="22" color="var(--color-primary)" />
             </div>
             <div class="type-info">
-              <p class="type-title">
-                {{ item.title }}
-                <StatusBadge v-if="item.disabled" tone="neutral">未來功能</StatusBadge>
-              </p>
+              <p class="type-title">{{ item.title }}</p>
               <p class="type-subtitle">{{ item.subtitle }}</p>
               <p class="type-description">{{ item.description }}</p>
             </div>
@@ -166,9 +332,77 @@ onMounted(async () => {
         </div>
       </template>
 
+      <!-- No existing vehicle, type decided (preset or just picked): name
+           this verification, then create the vehicle + verification and
+           jump straight into the flow — its own first step (建立基本資料)
+           is where the real vehicle details get captured, so nothing here
+           needs to duplicate that. -->
+      <template v-else>
+        <div v-if="effectiveTypeMeta" class="preset-summary">
+          <div class="type-icon">
+            <component :is="effectiveTypeMeta.icon" :size="22" color="var(--color-primary)" />
+          </div>
+          <div class="type-info">
+            <p class="type-title">{{ effectiveTypeMeta.title }}</p>
+            <p class="type-description">{{ effectiveTypeMeta.description }}</p>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>幫這次驗車取個名字</span>
+          <input
+            v-model="verificationName"
+            type="text"
+            placeholder="例如：小紅、我的勁戰六代"
+            maxlength="30"
+          />
+        </label>
+        <button v-if="!presetType" class="back-link" @click="selectedType = null">
+          ‹ 重新選擇類型
+        </button>
+
+        <PrimaryButton block :disabled="!canStartNamed" @click="handleConfirmName">
+          {{ submitting ? '處理中...' : '開始' }}
+        </PrimaryButton>
+      </template>
+
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
       <p class="hint">完整驗證約需 20～30 分鐘</p>
+
+      <div v-if="recentVerifications.length > 0" class="recent-section">
+        <div class="recent-header">
+          <h3 class="recent-title">最近的驗證紀錄</h3>
+          <span class="recent-hint">長按可刪除</span>
+        </div>
+        <div class="recent-list">
+          <button
+            v-for="verification in recentVerifications"
+            :key="verification.id"
+            class="recent-row"
+            :class="{ deleting: deletingId === verification.id }"
+            :disabled="deletingId === verification.id"
+            @pointerdown="handleRecentPointerDown(verification)"
+            @pointerup="cancelLongPress"
+            @pointerleave="cancelLongPress"
+            @pointercancel="cancelLongPress"
+            @contextmenu.prevent
+            @click="handleRecentClick(verification)"
+          >
+            <div class="recent-info">
+              <p class="recent-vehicle">{{ vehicleLabel(verification.vehicleId) }}</p>
+              <p class="recent-meta">
+                {{ typeLabel[verification.type] ?? verification.type }} ·
+                {{ formatDate(verification.createdAt) }}
+              </p>
+            </div>
+            <StatusBadge :tone="statusMeta(verification.status).tone">
+              {{ statusMeta(verification.status).label }}
+            </StatusBadge>
+            <ChevronRight :size="18" color="var(--color-text-disabled)" />
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -190,7 +424,7 @@ onMounted(async () => {
   color: var(--color-text-secondary);
 }
 
-.field select {
+.field input {
   height: 46px;
   padding: 0 var(--space-md);
   border: 1px solid var(--color-border);
@@ -203,6 +437,17 @@ onMounted(async () => {
 .question {
   font-size: 16px;
   font-weight: 700;
+}
+
+.back-link {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  margin-top: -6px;
 }
 
 .type-list {
@@ -284,5 +529,79 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-text-disabled);
   font-size: 13px;
+}
+
+.recent-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: 4px;
+}
+
+.recent-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.recent-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.recent-hint {
+  font-size: 11.5px;
+  color: var(--color-text-disabled);
+}
+
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.recent-row.deleting {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.recent-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-vehicle {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 </style>

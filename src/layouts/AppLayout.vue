@@ -1,20 +1,36 @@
 <script setup lang="ts">
-import { FileText, Home, ShieldCheck, ShoppingBag, User } from 'lucide-vue-next'
+import { watch } from 'vue'
+import { MessageCircle, Home, ShieldCheck, ShoppingBag, Users } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
+import { useAuthStore } from '@/stores/auth.store'
+import { useChatStore } from '@/stores/chat.store'
 import { useUserPreferenceStore } from '@/stores/user-preference.store'
 
 const route = useRoute()
 const preferenceStore = useUserPreferenceStore()
+const authStore = useAuthStore()
+const chatStore = useChatStore()
+
+// Kept alive at the layout level (not inside MessagesView) so the unread
+// badge in the bottom nav stays correct on every page, not just /messages.
+watch(
+  () => authStore.user?.id,
+  (uid) => {
+    if (uid) chatStore.subscribeConversations(uid)
+    else chatStore.stopConversationsSubscription()
+  },
+  { immediate: true },
+)
 
 const navItems = [
   { path: '/dashboard', label: '首頁', icon: Home },
   { path: '/marketplace', label: '市場', icon: ShoppingBag },
-  { path: '/verification', label: '驗證', icon: ShieldCheck },
-  { path: '/reports', label: '報告', icon: FileText },
-  { path: '/settings', label: '我的', icon: User },
+  { path: '/verification', label: '檢驗', icon: ShieldCheck },
+  { path: '/messages', label: '訊息', icon: MessageCircle },
+  { path: '/discussion', label: '討論中心', icon: Users },
 ]
 
 function isActive(path: string): boolean {

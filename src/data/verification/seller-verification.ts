@@ -22,15 +22,33 @@ const prep: VerificationItem[] = [
   item({
     id: 'PREP-01',
     title: '建立基本資料',
-    description: '建立品牌、車型、年份、里程、車牌號碼、引擎號碼／車身號碼。',
+    description: '建立品牌、車型、年份、里程、車牌號碼、引擎號碼、車身號碼。',
     type: 'form',
+    // 引擎號碼／車身號碼 together uniquely identify the physical vehicle —
+    // both required so a verification can't be archived (completeVerification)
+    // without them, and so this vehicle's future measurements reliably bind
+    // back to the same vehicle (see verification.store.ts missingRequiredItems
+    // and its PREP-01 -> Vehicle sync).
     formFields: [
       { key: 'brand', label: '品牌', type: 'text', required: true, placeholder: '例如 YAMAHA' },
       { key: 'model', label: '車型', type: 'text', required: true, placeholder: '例如 勁戰六代' },
       { key: 'year', label: '年份', type: 'number', required: true, unit: '年' },
       { key: 'mileage', label: '里程', type: 'number', required: true, unit: 'km' },
       { key: 'plate', label: '車牌號碼', type: 'text', required: true },
-      { key: 'engineNumber', label: '引擎號碼／車身號碼', type: 'text' },
+      {
+        key: 'engineNumber',
+        label: '引擎號碼',
+        type: 'text',
+        required: true,
+        placeholder: '例如 G3E5-123456',
+      },
+      {
+        key: 'chassisNumber',
+        label: '車身號碼',
+        type: 'text',
+        required: true,
+        placeholder: '例如 RH08J-098765',
+      },
     ],
     evidence: [{ kind: 'photo', label: '車輛行照', required: true }],
   }),

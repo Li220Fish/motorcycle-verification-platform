@@ -11,6 +11,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 
 import type { Verification, VerificationDraft, VerificationStatus } from '@/types/verification'
@@ -81,8 +82,36 @@ async function listByVehicle(vehicleId: string): Promise<Verification[]> {
   )
 }
 
+/**
+ * Powers the Verification tab's "最近的驗證紀錄" list. Sorted client-side
+ * rather than via `orderBy('createdAt')` in the query — same reasoning as
+ * `vehicleService.list()`: an equality filter on `userId` plus a
+ * different-field `orderBy` needs a composite index that isn't deployed to
+ * the live Firestore project, and this list is bounded/small anyway.
+ */
+async function listByUser(userId: string): Promise<Verification[]> {
+  const snapshot = await getDocs(query(collection(db, COLLECTION), where('userId', '==', userId)))
+  return snapshot.docs
+    .map((docSnapshot) => toVerification(docSnapshot.id, docSnapshot.data() as VerificationDoc))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
 async function setStatus(id: string, status: VerificationStatus): Promise<void> {
   await updateDoc(doc(db, COLLECTION, id), { status })
+}
+
+/** Deletes a verification and its answers/evidence subcollections — Firestore
+ * never cascade-deletes subcollections on its own. */
+async function remove(id: string): Promise<void> {
+  const [answersSnapshot, evidenceSnapshot] = await Promise.all([
+    getDocs(collection(db, COLLECTION, id, 'answers')),
+    getDocs(collection(db, COLLECTION, id, 'evidence')),
+  ])
+  const batch = writeBatch(db)
+  for (const docSnapshot of answersSnapshot.docs) batch.delete(docSnapshot.ref)
+  for (const docSnapshot of evidenceSnapshot.docs) batch.delete(docSnapshot.ref)
+  batch.delete(doc(db, COLLECTION, id))
+  await batch.commit()
 }
 
 async function complete(id: string): Promise<void> {
@@ -145,7 +174,9 @@ export const verificationService = {
   create,
   get,
   listByVehicle,
+  listByUser,
   setStatus,
+  remove,
   complete,
   saveTransactionDecision,
   saveAnswer,

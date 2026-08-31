@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { FileText, Home, ShieldCheck, ShoppingBag, User } from 'lucide-vue-next'
+import { MessageCircle, Home, ShieldCheck, ShoppingBag, Users } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useChatStore } from '@/stores/chat.store'
+
 const route = useRoute()
+const chatStore = useChatStore()
 
 const items = [
   { path: '/dashboard', label: '首頁', icon: Home },
   { path: '/marketplace', label: '市場', icon: ShoppingBag },
-  { path: '/verification', label: '驗證', icon: ShieldCheck, raised: true },
-  { path: '/reports', label: '報告', icon: FileText },
-  { path: '/settings', label: '我的', icon: User },
+  { path: '/verification', label: '檢驗', icon: ShieldCheck },
+  { path: '/messages', label: '訊息', icon: MessageCircle, badge: true },
+  { path: '/discussion', label: '討論中心', icon: Users },
 ]
 
 function isActive(path: string): boolean {
@@ -24,10 +27,13 @@ function isActive(path: string): boolean {
       :key="item.path"
       :to="item.path"
       class="nav-item"
-      :class="{ active: isActive(item.path), raised: item.raised }"
+      :class="{ active: isActive(item.path) }"
     >
       <span class="icon-wrap">
-        <component :is="item.icon" :size="item.raised ? 22 : 22" />
+        <component :is="item.icon" :size="21" />
+        <span v-if="item.badge && chatStore.unreadTotal > 0" class="badge">
+          {{ chatStore.unreadTotal > 99 ? '99+' : chatStore.unreadTotal }}
+        </span>
       </span>
       <span>{{ item.label }}</span>
     </RouterLink>
@@ -41,44 +47,49 @@ function isActive(path: string): boolean {
   left: 0;
   right: 0;
   display: flex;
-  justify-content: space-around;
-  align-items: flex-end;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
-  padding-top: 6px;
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding: 8px 6px max(8px, env(safe-area-inset-bottom));
   z-index: 20;
 }
 
 .nav-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   text-decoration: none;
   color: var(--color-text-disabled);
-  font-size: 11px;
-  padding: 4px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 0;
+  position: relative;
 }
 
 .nav-item.active {
   color: var(--color-primary);
 }
 
-.nav-item.raised .icon-wrap {
-  width: 44px;
-  height: 44px;
+.icon-wrap {
+  position: relative;
+  display: flex;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: var(--color-danger);
   color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: -18px;
-  box-shadow: 0 4px 12px rgba(23, 105, 232, 0.35);
-}
-
-.nav-item.raised span:last-child {
-  margin-top: 2px;
 }
 </style>

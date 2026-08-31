@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
-import VehicleMarketCard from '@/components/home/VehicleMarketCard.vue'
-import { MOCK_MARKET_LISTINGS } from '@/data/home/marketplace-mock'
+import FeaturedDealersSection from '@/components/home/FeaturedDealersSection.vue'
+import VehicleMarketRow from '@/components/home/VehicleMarketRow.vue'
+import { homeContentService } from '@/services/firebase/home-content.service'
+import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
+const listings = ref<MockMarketListing[]>([])
+
+onMounted(async () => {
+  listings.value = await homeContentService.listMarketplaceListings()
+})
 </script>
 
 <template>
@@ -14,16 +22,21 @@ const router = useRouter()
 
     <div class="content">
       <p class="demo-notice">目前為 DEMO 展示資料，真實交易市場功能尚在開發中。</p>
-      <div class="grid">
+      <!-- Main list: horizontal row, image left — image should carry more
+           weight than a squeezed 2-col grid, and a row reads faster when
+           comparing price/mileage across cards (P1 §08 of the UX report). -->
+      <div class="list">
         <button
-          v-for="listing in MOCK_MARKET_LISTINGS"
+          v-for="listing in listings"
           :key="listing.id"
-          class="grid-item"
-          @click="router.push('/dashboard')"
+          class="list-item"
+          @click="router.push(`/marketplace/${listing.id}`)"
         >
-          <VehicleMarketCard :listing="listing" />
+          <VehicleMarketRow :listing="listing" />
         </button>
       </div>
+
+      <FeaturedDealersSection />
     </div>
   </div>
 </template>
@@ -45,20 +58,17 @@ const router = useRouter()
   margin: 0;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.list {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
 }
 
-.grid-item {
+.list-item {
   background: none;
   border: none;
   padding: 0;
   text-align: left;
-}
-
-.grid-item :deep(.market-card) {
   width: 100%;
 }
 </style>

@@ -1,13 +1,122 @@
 rules_version = '2';
 
-// V0.1: any signed-in user can read/write. This is intentionally permissive
-// for skeleton testing — real per-collection authorization (who can create
-// a Verification, who can edit a Vehicle they don't own, etc.) is designed
-// before the real verification flow ships.
+// Freeze Zone: vehicles / verifications (+ answers/evidence subcollections) /
+// userPreferences / voltageSessions keep the exact V0.1 "any signed-in user
+// can read/write" behavior they always had. Do not tighten these — the
+// Verification engine's regression safety net assumes this stays unchanged.
+//
+// Everything below that is new for the Message Center / Discussion Center
+// (conversations, discussionPosts, discussionReports, users/{uid} profiles
+// and their blockedUsers/following/savedPosts subcollections) gets real
+// per-collection authorization instead of inheriting an open catch-all,
+// since it holds private 1:1 messages and user-owned state.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+    match /vehicles/{document=**} {
       allow read, write: if request.auth != null;
+    }
+
+    match /verifications/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /userPreferences/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /voltageSessions/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // --- Home/Marketplace DEMO content (seeded via scripts/seed-marketplace-mock.mjs) ---
+    // Global reference content, not user-owned — any signed-in user reads it,
+    // same open-write posture as the Freeze Zone collections above since only
+    // the seed script ever writes here.
+    match /marketplaceListings/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /featuredDealers/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /myListings/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /vehicleNews/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // --- users/{uid} profile + owned subcollections ---
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      // isBlocked() checks both directions of a pair, so reads stay open;
+      // only the owner may add/remove their own block list.
+      match /blockedUsers/{targetUid} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /following/{targetUid} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /savedPosts/{postId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // --- Message Center: conversations/{id} + messages/{id} ---
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.memberIds;
+      // Membership can't be forged or changed after creation — only the
+      // conversation's mutable fields (lastMessage, unreadCounts, tag, ...)
+      // may be updated by a member.
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.memberIds == resource.data.memberIds;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds;
+        allow create: if request.auth != null
+          && request.auth.uid == request.resource.data.senderId
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds;
+      }
+    }
+
+    // --- Discussion Center: discussionPosts/{id} + comments/{id} + likes/{uid} ---
+    match /discussionPosts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorId;
+      // The author can edit/delete freely; any other signed-in user may only
+      // ever touch likeCount/commentCount, which is exactly what the like
+      // transaction and the comment writeBatch do — never title/body/status.
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.authorId
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'commentCount']));
+      allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.authorId;
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+      }
+
+      match /likes/{uid} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    match /discussionReports/{reportId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.reporterId;
+      allow read, update, delete: if false;
     }
   }
 }

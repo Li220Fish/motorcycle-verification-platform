@@ -2,15 +2,21 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { getFlatItems, getFlowSections } from '@/data/verification'
-import type { FlatVerificationItem, VerificationSection } from '@/data/verification'
+import type {
+  FlatVerificationItem,
+  VerificationItem,
+  VerificationSection,
+} from '@/data/verification'
 import { verificationService } from '@/services/firebase/verification.service'
 import { localDraftService } from '@/services/verification/local-draft.service'
+import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Verification, VerificationDraft } from '@/types/verification'
 import type {
   AnswerResultValue,
   VerificationAnswer,
   VerificationEvidence,
 } from '@/types/verification-evidence'
+import type { VehicleDraft } from '@/types/vehicle'
 
 export interface SectionProgress {
   sectionId: string
@@ -138,6 +144,29 @@ export const useVerificationStore = defineStore('verification', () => {
     }
   }
 
+  /**
+   * PREP-01 ("建立基本資料") is the only place vehicle identity gets typed
+   * in when a verification starts from the naming step with a blank vehicle
+   * (see VerificationView's handleConfirmName) — mirror it onto the Vehicle
+   * doc itself so brand/model/engine+chassis numbers outlive this one
+   * verification and future measurements can bind back to the same vehicle.
+   */
+  async function syncBasicInfoToVehicle(
+    vehicleId: string,
+    formData: Record<string, string>,
+  ): Promise<void> {
+    const changes: Partial<VehicleDraft> = {}
+    if (formData.brand?.trim()) changes.brand = formData.brand.trim()
+    if (formData.model?.trim()) changes.model = formData.model.trim()
+    if (formData.plate?.trim()) changes.licensePlate = formData.plate.trim()
+    if (formData.engineNumber?.trim()) changes.engineNumber = formData.engineNumber.trim()
+    if (formData.chassisNumber?.trim()) changes.chassisNumber = formData.chassisNumber.trim()
+    if (formData.year?.trim()) changes.year = Number(formData.year)
+    if (formData.mileage?.trim()) changes.mileage = Number(formData.mileage)
+    if (Object.keys(changes).length === 0) return
+    await useVehicleStore().updateVehicle(vehicleId, changes)
+  }
+
   async function saveAnswer(
     itemId: string,
     result: AnswerResultValue,
@@ -147,6 +176,7 @@ export const useVerificationStore = defineStore('verification', () => {
   ): Promise<void> {
     if (!currentVerification.value) return
     const verificationId = currentVerification.value.id
+    const vehicleId = currentVerification.value.vehicleId
     const answer: VerificationAnswer = {
       itemId,
       result,
@@ -160,10 +190,20 @@ export const useVerificationStore = defineStore('verification', () => {
     localDraftService.saveAnswer(verificationId, answer)
     verificationService.saveAnswer(verificationId, answer).catch(() => {})
 
+    if (itemId === 'PREP-01' && formData) {
+      syncBasicInfoToVehicle(vehicleId, formData).catch(() => {})
+    }
+
     if (currentVerification.value.status === 'draft') {
       currentVerification.value = { ...currentVerification.value, status: 'in_progress' }
       verificationService.setStatus(verificationId, 'in_progress').catch(() => {})
     }
+  }
+
+  async function deleteVerification(id: string): Promise<void> {
+    await verificationService.remove(id)
+    verifications.value = verifications.value.filter((verification) => verification.id !== id)
+    if (currentVerification.value?.id === id) currentVerification.value = null
   }
 
   async function addEvidence(evidence: VerificationEvidence): Promise<void> {
@@ -205,9 +245,28 @@ export const useVerificationStore = defineStore('verification', () => {
     return { done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) }
   })
 
+  /**
+   * A `type: 'form'` item's `*`-marked fields (e.g. PREP-01's 引擎號碼／車身
+   * 號碼) were previously cosmetic only — any single keystroke in ANY field
+   * flipped the whole item to "answered" via handleFormDataChange. That let a
+   * verification complete/archive with its required identity fields still
+   * blank. An item now counts as answered only once every formField it marks
+   * `required` actually has a non-empty value.
+   */
+  function isAnswerComplete(item: VerificationItem, answer?: VerificationAnswer): boolean {
+    if (!answer) return false
+    if (item.type !== 'form') return true
+    const requiredKeys = (item.formFields ?? [])
+      .filter((field) => field.required)
+      .map((field) => field.key)
+    return requiredKeys.every((key) => !!answer.formData?.[key]?.trim())
+  }
+
   const missingRequiredItems = computed<MissingRequiredItem[]>(() =>
     flatItems.value
-      .filter((flat) => flat.item.required && !answers.value[flat.item.id])
+      .filter(
+        (flat) => flat.item.required && !isAnswerComplete(flat.item, answers.value[flat.item.id]),
+      )
       .map((flat) => ({
         itemId: flat.item.id,
         title: flat.item.title,
@@ -250,6 +309,7 @@ export const useVerificationStore = defineStore('verification', () => {
     fetchVerification,
     createVerification,
     completeVerification,
+    deleteVerification,
     saveTransactionDecision,
 
     answers,

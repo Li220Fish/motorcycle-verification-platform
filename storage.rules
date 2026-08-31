@@ -1,12 +1,36 @@
 rules_version = '2';
 
-// V0.1: any signed-in user can read/write any of the reserved folders
-// (vehicle-images/, verification-images/, verification-videos/, voltage-data/).
-// Per-folder / per-owner authorization is designed before the real
-// verification flow ships.
+// Freeze Zone: the original verification-evidence folders keep the exact
+// V0.1 "any signed-in user can read/write" behavior. Do not tighten these.
+//
+// New folders for the Message Center / Discussion Center get real
+// authorization: chat images are scoped to the conversation's members
+// (checked against Firestore), discussion images stay open-write like the
+// rest of V0.1 since posts themselves are public content.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
+    match /vehicle-images/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /verification-images/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /verification-videos/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /voltage-data/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /chat-media/{conversationId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.memberIds;
+    }
+
+    match /discussion-media/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
   }

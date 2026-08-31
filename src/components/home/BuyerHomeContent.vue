@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { Camera, Search, ShieldCheck, ShoppingBag } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
@@ -7,9 +8,15 @@ import QuickActionGrid from './QuickActionGrid.vue'
 import type { QuickAction } from './QuickActionGrid.vue'
 import VehicleCarousel from './VehicleCarousel.vue'
 import VehicleSearchBar from './VehicleSearchBar.vue'
-import { MOCK_MARKET_LISTINGS } from '@/data/home/marketplace-mock'
+import { homeContentService } from '@/services/firebase/home-content.service'
+import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
+const marketListings = ref<MockMarketListing[]>([])
+
+onMounted(async () => {
+  marketListings.value = await homeContentService.listMarketplaceListings()
+})
 
 function scrollToSearch(): void {
   document.getElementById('home-search')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -51,7 +58,7 @@ const actions: QuickAction[] = [
         <h2>熱門車輛</h2>
         <RouterLink to="/marketplace" class="see-all">查看全部 →</RouterLink>
       </div>
-      <VehicleCarousel :listings="MOCK_MARKET_LISTINGS" />
+      <VehicleCarousel :listings="marketListings" />
     </div>
   </div>
 </template>
