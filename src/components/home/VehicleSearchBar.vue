@@ -30,18 +30,13 @@ async function handleSearch(): Promise<void> {
 
 <template>
   <div class="search-block">
-    <form class="search-bar" @submit.prevent="handleSearch">
+    <!-- <form class="search-bar" @submit.prevent="handleSearch">
       <Search :size="18" color="var(--color-text-disabled)" />
-      <input
-        v-model="query"
-        type="search"
-        placeholder="輸入車牌、車身號碼或關鍵字"
-        aria-label="搜尋車牌、車身號碼或關鍵字"
-      />
+      <input v-model="query" type="search" placeholder="輸入查詢車名" aria-label="輸入查詢車名" />
       <button type="submit" class="search-submit" aria-label="搜尋">
         <Search :size="18" color="#fff" />
       </button>
-    </form>
+    </form> 主頁暫時不需要搜尋功能--> 
 
     <div v-if="status === 'loading'" class="search-panel loading">
       <div class="spinner" />

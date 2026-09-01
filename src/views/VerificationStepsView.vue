@@ -31,7 +31,7 @@ const completeError = ref('')
 const appearanceMapOpen = ref(false)
 
 const typeLabel: Record<string, string> = {
-  seller: '賣家驗證',
+  seller: '車輛驗證',
   buyer: '買家複驗',
   professional: '專業驗證',
 }

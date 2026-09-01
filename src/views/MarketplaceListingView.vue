@@ -4,8 +4,10 @@ import { Bike, ChevronRight, Image, Star, Store } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import BookingSheet from '@/components/marketplace/BookingSheet.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { homeContentService } from '@/services/firebase/home-content.service'
+import { listingService } from '@/services/firebase/listing.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
@@ -17,11 +19,15 @@ const chatStore = useChatStore()
 
 const listing = ref<MockMarketListing | null>(null)
 const loading = ref(true)
+const bookedTimestamps = ref<number[]>([])
 
 async function loadListing(): Promise<void> {
   loading.value = true
   listing.value = await homeContentService.getMarketplaceListing(props.id)
   loading.value = false
+  bookedTimestamps.value = (await listingService.listAppointments(props.id)).map(
+    (appointment) => appointment.scheduledAt,
+  )
 }
 
 watch(() => props.id, loadListing, { immediate: true })
@@ -88,6 +94,46 @@ async function handleChatClick(): Promise<void> {
 }
 
 const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
+
+const isOwnListing = computed(
+  () => !!listing.value?.sellerId && listing.value.sellerId === authStore.user?.id,
+)
+
+const bookingSheetOpen = ref(false)
+const bookingSubmitting = ref(false)
+
+function handleOpenBooking(): void {
+  if (isOwnListing.value) {
+    showNotice('這是您自己的刊登，無法預約看車')
+    return
+  }
+  if (!listing.value?.sellerId || !authStore.user) {
+    showNotYetAvailable('立即預約')
+    return
+  }
+  bookingSheetOpen.value = true
+}
+
+async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<void> {
+  const current = listing.value
+  if (!current || !authStore.user) return
+  bookingSubmitting.value = true
+  try {
+    await listingService.createAppointment({
+      listingId: current.id,
+      buyerId: authStore.user.id,
+      buyerName: authStore.user.displayName || authStore.user.email || '買家',
+      scheduledAt: payload.scheduledAt,
+    })
+    bookedTimestamps.value = [...bookedTimestamps.value, payload.scheduledAt]
+    bookingSheetOpen.value = false
+    showNotice('已送出預約，賣家將會與您聯繫')
+  } catch {
+    showNotice('預約失敗，請稍後再試')
+  } finally {
+    bookingSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -104,7 +150,12 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
       </div>
 
       <div class="body">
-        <h2 class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</h2>
+        <div class="title-row">
+          <h2 class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</h2>
+          <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
+            <Store :size="13" />
+          </span>
+        </div>
 
         <div class="price-row">
           <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
@@ -113,9 +164,6 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
 
         <p class="meta-row">
           {{ listing.region }}・{{ listing.district }} ・ 賣家 {{ listing.sellerName }}
-          <span v-if="listing.sellerType === 'dealer'" class="dealer-chip">
-            <Store :size="11" /> 認證車商
-          </span>
         </p>
 
         <div class="info-card">
@@ -148,10 +196,17 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
           <button class="chat-btn" :disabled="startingChat" @click="handleChatClick">
             {{ startingChat ? '開啟中...' : '聊聊' }}
           </button>
-          <PrimaryButton block @click="showNotYetAvailable('立即預約')">立即預約</PrimaryButton>
+          <PrimaryButton block :disabled="isOwnListing" @click="handleOpenBooking">
+            {{ isOwnListing ? '這是您的刊登' : '立即預約' }}
+          </PrimaryButton>
         </div>
 
         <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
+
+        <template v-if="listing.description">
+          <h3 class="section-title">車輛描述</h3>
+          <p class="description-text">{{ listing.description }}</p>
+        </template>
 
         <!-- Every listing already requires a passing MotoVerify inspection
              before it can go live, so this always has a real report. -->
@@ -165,12 +220,22 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>
 
-        <h3 class="section-title">其他照片</h3>
-        <div class="photo-grid">
-          <div v-for="index in otherPhotoPlaceholders" :key="index" class="photo-placeholder">
-            <Image :size="22" color="var(--color-text-disabled)" />
+        <template v-if="listing.photos && listing.photos.length > 0">
+          <h3 class="section-title">其他照片</h3>
+          <div class="photo-grid">
+            <div v-for="photo in listing.photos" :key="photo" class="photo-real">
+              <img :src="photo" alt="" />
+            </div>
           </div>
-        </div>
+        </template>
+        <template v-else>
+          <h3 class="section-title">其他照片</h3>
+          <div class="photo-grid">
+            <div v-for="index in otherPhotoPlaceholders" :key="index" class="photo-placeholder">
+              <Image :size="22" color="var(--color-text-disabled)" />
+            </div>
+          </div>
+        </template>
 
         <h3 class="section-title">賣家資訊</h3>
         <div class="seller-card">
@@ -185,6 +250,16 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
         </div>
       </div>
     </div>
+
+    <BookingSheet
+      :open="bookingSheetOpen"
+      :submitting="bookingSubmitting"
+      :available-dates="listing?.availableDates ?? []"
+      :time-slots="listing?.timeSlots ?? []"
+      :booked-timestamps="bookedTimestamps"
+      @close="bookingSheetOpen = false"
+      @submit="handleBookingSubmit"
+    />
   </div>
 </template>
 
@@ -228,11 +303,19 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
   gap: var(--space-sm);
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .title {
+  min-width: 0;
   font-size: 21px;
   font-weight: 800;
   color: var(--color-text-primary);
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 .price-row {
@@ -274,16 +357,16 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
   margin: 0;
 }
 
-.dealer-chip {
+.dealer-badge {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  font-weight: 700;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--color-primary);
   background: var(--color-primary-bg, #e8f1fd);
   border-radius: 999px;
-  padding: 2px 8px;
 }
 
 .info-card {
@@ -410,6 +493,27 @@ const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.photo-real {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.photo-real img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.description-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
 }
 
 .seller-card {

@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Bike, Heart } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
-import { homeContentService } from '@/services/firebase/home-content.service'
-import type { MockMyListing } from '@/data/home/my-listings-mock'
+import { listingService } from '@/services/firebase/listing.service'
+import { useAuthStore } from '@/stores/auth.store'
+import type { MockMarketListing } from '@/data/home/marketplace-mock'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const STATUS_LABEL: Record<string, string> = { reviewing: '審核中', active: '售中' }
 // Fallback for a listing with no imageUrl — deterministic per-card color so
@@ -15,17 +20,11 @@ const GRADIENTS = [
   'linear-gradient(135deg,#2f6fe8,#12306e)',
 ]
 
-const listings = ref<MockMyListing[]>([])
-const noticeMessage = ref('')
-function handleManageClick(): void {
-  noticeMessage.value = '刊登管理尚未開放'
-  setTimeout(() => {
-    noticeMessage.value = ''
-  }, 2000)
-}
+const listings = ref<MockMarketListing[]>([])
 
 onMounted(async () => {
-  listings.value = await homeContentService.listMyListings()
+  if (!authStore.user) return
+  listings.value = await listingService.listBySeller(authStore.user.id)
 })
 </script>
 
@@ -33,14 +32,14 @@ onMounted(async () => {
   <div class="section">
     <div class="section-header">
       <h2>我的刊登</h2>
-      <button class="manage-link" @click="handleManageClick">管理 ›</button>
+      <button class="manage-link" @click="router.push('/my-listings')">管理 ›</button>
     </div>
     <div class="listing-grid">
       <div
         v-for="(listing, index) in listings"
         :key="listing.id"
         class="listing-card"
-        @click="handleManageClick"
+        @click="router.push(`/my-listings/${listing.id}`)"
       >
         <div
           class="thumb"
@@ -48,16 +47,19 @@ onMounted(async () => {
             listing.imageUrl ? undefined : { background: GRADIENTS[index % GRADIENTS.length] }
           "
         >
-          <span class="status-pill">{{ STATUS_LABEL[listing.status] }}</span>
+          <span class="status-pill">{{ STATUS_LABEL.active }}</span>
           <img v-if="listing.imageUrl" :src="listing.imageUrl" class="thumb-img" alt="" />
           <Bike v-else :size="34" color="#fff" />
         </div>
-        <p class="title">{{ listing.year }} {{ listing.model }}</p>
+        <p class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</p>
         <p class="price">${{ listing.priceTwd.toLocaleString() }}</p>
-        <p class="interest"><Heart :size="12" /> {{ listing.interestCount }} 人感興趣</p>
+        <p class="interest"><Heart :size="12" /> {{ listing.sellerReviewCount }} 則評價</p>
       </div>
+      <button v-if="listings.length === 0" class="empty-card" @click="router.push('/my-listings')">
+        <Bike :size="26" color="var(--color-text-disabled)" />
+        <span>新增第一筆刊登</span>
+      </button>
     </div>
-    <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
   </div>
 </template>
 
@@ -162,10 +164,18 @@ onMounted(async () => {
   margin: 0;
 }
 
-.notice {
-  text-align: center;
-  font-size: 12px;
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 132px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: transparent;
   color: var(--color-text-secondary);
-  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 </style>

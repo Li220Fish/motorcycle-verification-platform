@@ -21,8 +21,8 @@ const b0: VerificationItem[] = [
     description: '確認驗證日期、驗證里程與目前刊登里程。',
     type: 'form',
     formFields: [
-      { key: 'verificationDate', label: '賣家驗證日期', type: 'date' },
-      { key: 'verificationMileage', label: '賣家驗證里程', type: 'number', unit: 'km' },
+      { key: 'verificationDate', label: '車輛驗證日期', type: 'date' },
+      { key: 'verificationMileage', label: '車輛驗證里程', type: 'number', unit: 'km' },
       { key: 'listingMileage', label: '目前刊登里程', type: 'number', unit: 'km' },
     ],
   }),
@@ -106,7 +106,7 @@ const b2: VerificationItem[] = [
   item({
     id: 'B2-03',
     title: '外觀照片比對',
-    description: '核對現場外觀與賣家驗證照片。',
+    description: '核對現場外觀與車輛驗證照片。',
     severity: 'important',
   }),
   item({ id: 'B2-04', title: '詢問持有時間', description: '聊天：詢問這台車買多久了。' }),
@@ -610,7 +610,7 @@ const b13: VerificationItem[] = [
 export const BUYER_VERIFICATION_SECTIONS: VerificationSection[] = [
   {
     id: 'B0',
-    title: '閱讀賣家驗證報告',
+    title: '閱讀車輛驗證報告',
     shortDescription: '看車前先掌握賣家已揭露的資訊。',
     order: 0,
     items: b0,

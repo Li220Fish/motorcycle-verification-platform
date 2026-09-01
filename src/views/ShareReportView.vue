@@ -13,7 +13,7 @@ const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 
 const typeLabel: Record<string, string> = {
-  seller: '賣家驗證報告',
+  seller: '車輛驗證報告',
   buyer: '買家複驗報告',
   professional: '專業驗證報告',
 }

@@ -108,9 +108,46 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/my-listings',
+      name: 'my-listings',
+      component: () => import('@/views/MyListingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/my-listings/:id',
+      name: 'my-listing-manage',
+      component: () => import('@/views/MyListingManageView.vue'),
+      meta: { requiresAuth: true },
+      props: true,
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/settings/account',
+      name: 'settings-account',
+      component: () => import('@/views/AccountView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/settings/notifications',
+      name: 'settings-notifications',
+      component: () => import('@/views/NotificationSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/settings/privacy',
+      name: 'settings-privacy',
+      component: () => import('@/views/PrivacyDataView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/settings/about',
+      name: 'settings-about',
+      component: () => import('@/views/AboutView.vue'),
       meta: { requiresAuth: true },
     },
     {

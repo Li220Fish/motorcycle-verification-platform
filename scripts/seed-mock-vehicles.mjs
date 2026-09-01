@@ -23,6 +23,15 @@
  * Uses the Firebase client SDK only (same pattern as
  * scripts/seed-demo-data.mjs) — no Admin SDK / service account key.
  *
+ * Idempotent: before creating each of the 5 vehicles below, deletes any
+ * existing vehicle already owned by that same account with the same
+ * brand+model (plus its verification + answers/evidence), so re-running
+ * this script replaces the demo data in place instead of duplicating it.
+ * This matters because scripts/cleanup-database.mjs no longer wipes the
+ * whole `vehicles` collection before a reseed (that used to also delete
+ * real users' own vehicles as collateral damage) — this script now owns
+ * cleaning up its own prior output.
+ *
  * Usage:
  *   ALLOW_TEST_SEED=true node scripts/seed-mock-vehicles.mjs
  */
@@ -35,10 +44,14 @@ import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   getFirestore,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore'
 
@@ -191,6 +204,39 @@ const PREP_SIMPLE_IDS = ['PREP-03', 'PREP-04', 'PREP-05']
 
 const SIMPLE_NORMAL_IDS = [...PREP_SIMPLE_IDS, ...CHK_IDS, ...APR_IDS, ...ELEC_IDS, ...ENG_IDS]
 
+/**
+ * Deletes any previously-seeded vehicle owned by `ownerUid` matching this
+ * exact brand+model (+ its verification and answers/evidence), so re-running
+ * this script replaces rather than duplicates. Filters client-side on
+ * brand/model after a single equality query on currentOwnerId, same
+ * composite-index-avoidance pattern as vehicleService.list().
+ */
+async function deleteExistingSeededVehicle(db, ownerUid, brand, model) {
+  const ownerVehicles = await getDocs(
+    query(collection(db, 'vehicles'), where('currentOwnerId', '==', ownerUid)),
+  )
+  const matches = ownerVehicles.docs.filter(
+    (d) => d.data().brand === brand && d.data().model === model,
+  )
+  for (const vehicleDoc of matches) {
+    const verifications = await getDocs(
+      query(collection(db, 'verifications'), where('vehicleId', '==', vehicleDoc.id)),
+    )
+    for (const verificationDoc of verifications.docs) {
+      const [answers, evidence] = await Promise.all([
+        getDocs(collection(db, 'verifications', verificationDoc.id, 'answers')),
+        getDocs(collection(db, 'verifications', verificationDoc.id, 'evidence')),
+      ])
+      const batch = writeBatch(db)
+      for (const answerDoc of answers.docs) batch.delete(answerDoc.ref)
+      for (const evidenceDoc of evidence.docs) batch.delete(evidenceDoc.ref)
+      batch.delete(verificationDoc.ref)
+      await batch.commit()
+    }
+    await deleteDoc(vehicleDoc.ref)
+  }
+}
+
 async function main() {
   guardEnvironment()
 
@@ -226,6 +272,7 @@ async function main() {
   const results = []
   for (const vehicle of VEHICLES) {
     const ownerUid = vehicle.ownerUid ?? sellerUid
+    await deleteExistingSeededVehicle(db, ownerUid, vehicle.brand, vehicle.model)
     const vehicleRef = await addDoc(collection(db, 'vehicles'), {
       brand: vehicle.brand,
       model: vehicle.model,

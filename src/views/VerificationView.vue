@@ -58,17 +58,17 @@ const verificationTypes: Array<{
 }> = [
   {
     type: 'seller',
-    title: '賣家驗證',
-    subtitle: 'Seller Verification',
+    title: '車輛驗證',
+    subtitle: 'Vehicle Verification',
     description: '完整檢查車況，建立可分享給買家的驗證報告。',
-    icon: UserCheck,
+    icon: ShieldCheck,
   },
   {
     type: 'buyer',
     title: '買家複驗',
     subtitle: 'Buyer Re-verification',
-    description: '查看賣家驗證資料，並確認現場車況是否一致。',
-    icon: ShieldCheck,
+    description: '查看車輛驗證資料，並確認現場車況是否一致。',
+    icon: UserCheck,
   },
 ]
 
@@ -154,7 +154,7 @@ const recentVerifications = ref<Verification[]>([])
 const loadingRecent = ref(false)
 
 const typeLabel: Record<string, string> = {
-  seller: '賣家驗證',
+  seller: '車輛驗證',
   buyer: '買家複驗',
   professional: '專業驗證',
 }

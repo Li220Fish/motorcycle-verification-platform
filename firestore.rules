@@ -68,6 +68,10 @@ service cloud.firestore {
       match /savedPosts/{postId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      match /favoriteListings/{listingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // --- Message Center: conversations/{id} + messages/{id} ---

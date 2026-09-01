@@ -1,5 +1,3 @@
-import type { UserUsageRole } from '@/types/user-preference'
-
 export type DiscussionCategory =
   '購車討論' | '賣車討論' | '保養維修' | '車款交流' | '騎乘生活' | '驗車討論' | '其他'
 
@@ -17,7 +15,6 @@ export type DiscussionSort = 'hot' | 'new' | 'featured' | 'following'
 
 export interface AuthorSnapshot {
   displayName: string
-  role?: UserUsageRole
 }
 
 export interface DiscussionMedia {

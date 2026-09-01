@@ -24,14 +24,6 @@ async function registerAndLogin(page: import('@playwright/test').Page, emailPref
   return email
 }
 
-async function pickRole(page: import('@playwright/test').Page, role: '我是買家' | '我是賣家') {
-  const roleCard = page.locator('.role-card', { hasText: role })
-  if (await roleCard.isVisible().catch(() => false)) {
-    await roleCard.click()
-    await page.waitForTimeout(500)
-  }
-}
-
 // Verification no longer requires picking a pre-existing vehicle first —
 // picking a type shows a naming step, and naming it creates the vehicle
 // behind the scenes (its real details get captured by the flow's own
@@ -55,7 +47,6 @@ async function startVerification(
 test.describe('Verification engine — freeze-zone regression', () => {
   test('Seller: free-jump across first 4 categories, Engine stays locked', async ({ page }) => {
     await registerAndLogin(page, 'regress-seller')
-    await pickRole(page, '我是賣家')
     await startVerification(page, 'seller', 'Regression Seller')
 
     // 5 category tabs, always visible, no horizontal overflow
@@ -117,7 +108,6 @@ test.describe('Verification engine — freeze-zone regression', () => {
 
   test('Seller: Engine evidence gate unlocks once required evidence exists', async ({ page }) => {
     await registerAndLogin(page, 'regress-engine')
-    await pickRole(page, '我是賣家')
     await startVerification(page, 'seller', 'Regression Engine')
 
     await page.locator('.tab', { hasText: '引擎狀況' }).click()
@@ -160,32 +150,26 @@ test.describe('Verification engine — freeze-zone regression', () => {
     expect(afterTitle).not.toBe(coldCheckTitle)
   })
 
-  test('Buyer: onsite verification entry and preset-type flow still work', async ({ page }) => {
+  test('Onsite (buyer-type) verification entry via the type picker still works', async ({
+    page,
+  }) => {
     await registerAndLogin(page, 'regress-buyer')
-    await pickRole(page, '我是賣家')
 
-    // Buyer's own "開始驗車" quick action must reach the same underlying
-    // VerificationView, preset to type=buyer, skipping the type picker.
-    // Role switching lives in Settings, not a Header Mode Pill (P0
-    // CONFIRMED-001 of the UX report) — same RoleSwitcher sheet, new entry
-    // point.
-    await page.goto('/settings')
-    await page.waitForTimeout(400)
-    await page.locator('.section-row', { hasText: '使用模式' }).click()
-    await page.waitForTimeout(300)
-    await page.locator('.sheet-option .option-title', { hasText: /^買家$/ }).click()
-    await page.waitForTimeout(300)
-    await page.goto('/dashboard')
+    // Home no longer has its own "開始驗車" quick action (removed as
+    // redundant with the bottom-nav 檢驗 tab, which is now the sole entry
+    // point) — it lands on the type picker, and the user chooses 買家複驗
+    // vs 車輛驗證 themselves.
+    await page.goto('/verification')
     await page.waitForTimeout(500)
-    await page.locator('.action-card', { hasText: '開始驗車' }).click()
-    await page.waitForURL(/\/verification\?type=buyer/, { timeout: 5000 })
-    await page.waitForTimeout(400)
 
     const typeListVisible = await page
       .locator('.type-list')
       .isVisible()
       .catch(() => false)
-    expect(typeListVisible).toBe(false)
+    expect(typeListVisible).toBe(true)
+
+    await page.locator('.type-card', { hasText: '買家複驗' }).click()
+    await page.waitForTimeout(300)
     const presetVisible = await page
       .locator('.preset-summary')
       .isVisible()
@@ -205,7 +189,6 @@ test.describe('Verification engine — freeze-zone regression', () => {
 
   test('Resume restores the exact last-visited item after reload', async ({ page }) => {
     await registerAndLogin(page, 'regress-resume')
-    await pickRole(page, '我是賣家')
     await startVerification(page, 'seller', 'Regression Resume')
     const url = page.url()
 

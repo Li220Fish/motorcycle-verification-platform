@@ -38,12 +38,32 @@ export interface MockMarketListing {
   sellerReviewCount: number
   verificationScore: number
   /** Real hotlinked photo (Wikimedia Commons) — falls back to a generic icon
-   * placeholder in the UI when absent. */
+   * placeholder in the UI when absent. Doubles as the cover photo for
+   * real user-submitted listings (see `photos` below). */
   imageUrl?: string
   /** Real test-account UID this listing's "聊聊" button opens a conversation
    * with — reuses the 3 seeded test accounts (docs/test-accounts.md) rather
    * than a fictional seller with no real Firestore Auth user behind it. */
   sellerId?: string
+  /** Seller-written free text — only present on real user-submitted listings
+   * (see listing.service.ts), absent on the seeded DEMO listings. */
+  description?: string
+  /** Additional gallery photos beyond the cover `imageUrl`, uploaded via
+   * Firebase Storage — only present on real user-submitted listings. */
+  photos?: string[]
+  /** Links back to the seller's own vehicle (see types/vehicle.ts) this
+   * listing was published from — only present on real user-submitted
+   * listings, absent on the seeded DEMO listings which have no backing
+   * vehicle record. */
+  vehicleId?: string
+  /** Dates ('YYYY-MM-DD') the seller has opened for viewing appointments —
+   * set on the listing management page, shown highlighted on the buyer's
+   * booking calendar. Only present on real user-submitted listings. */
+  availableDates?: string[]
+  /** Time-of-day slots (e.g. '10:00') offered on every date in
+   * `availableDates` — one shared set rather than per-date custom times,
+   * to keep the seller's setup to a single toggle list. */
+  timeSlots?: string[]
 }
 
 // The 3 seeded test accounts (docs/test-accounts.md) — 'individual' listings

@@ -1,13 +1,23 @@
 /**
- * Dev/QA-only cleanup for the `vehicles` and `verifications` collections
- * (+ their `answers`/`evidence` subcollections) in the live Firestore
- * project. Months of Playwright regression runs (each creating a fresh
- * throwaway account + blank vehicle + verification) and the pre-engine/
- * chassis-number naming-step flow left this collection full of vehicles
- * that can never satisfy the new archiving rule (both 引擎號碼 and 車身號碼
- * required — see seller-verification.ts PREP-01). Rather than triage which
- * of those are salvageable, this wipes both collections outright; run
- * `npm run seed:mock-vehicles` afterwards to repopulate clean demo data.
+ * Dev/QA-only cleanup for THROWAWAY vehicles/verifications created by the
+ * Playwright regression suite (tests/e2e/verification-regression.spec.ts's
+ * registerAndLogin() + naming-step flow creates a vehicle with `model` set
+ * to whatever name was typed in the naming step, e.g. "Regression Seller" —
+ * see TEST_VEHICLE_NAME_PREFIXES below).
+ *
+ * IMPORTANT: this used to wipe the ENTIRE `vehicles`/`verifications`
+ * collections unconditionally, regardless of owner. That also deleted any
+ * real vehicle a real user (or a test account) had added through the live
+ * app if this script happened to run while they were using it — a genuine
+ * incident, not hypothetical. This is now scoped to ONLY vehicles whose
+ * `model` matches a known throwaway-test naming prefix (and only those
+ * vehicles' own verifications + answers/evidence subcollections) — the 5
+ * seeded demo vehicles (real brand/model like "HONDA"/"PCX 160") and
+ * anything a real user or test account adds themselves are never touched.
+ *
+ * If a future regression spec creates named vehicles some other way, add
+ * its prefix to TEST_VEHICLE_NAME_PREFIXES rather than reverting to a full
+ * wipe.
  *
  * Does NOT touch Firebase Storage (uploaded evidence photos/videos from past
  * e2e runs are left in place — out of scope for this pass) or any other
@@ -35,6 +45,13 @@ import { collection, getDocs, getFirestore, writeBatch } from 'firebase/firestor
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
+
+const TEST_VEHICLE_NAME_PREFIXES = ['Regression', 'Archive Gate Test', 'Throwaway']
+
+function isThrowawayVehicle(data) {
+  const model = typeof data.model === 'string' ? data.model : ''
+  return TEST_VEHICLE_NAME_PREFIXES.some((prefix) => model.startsWith(prefix))
+}
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return {}
@@ -101,15 +118,19 @@ async function main() {
     `[cleanup-database] Project: ${firebaseConfig.projectId} (${confirm ? 'LIVE DELETE' : 'dry run'})`,
   )
 
-  const [vehicleSnapshot, verificationSnapshot] = await Promise.all([
-    getDocs(collection(db, 'vehicles')),
-    getDocs(collection(db, 'verifications')),
-  ])
+  const vehicleSnapshot = await getDocs(collection(db, 'vehicles'))
+  const throwawayVehicleDocs = vehicleSnapshot.docs.filter((d) => isThrowawayVehicle(d.data()))
+  const throwawayVehicleIds = new Set(throwawayVehicleDocs.map((d) => d.id))
+
+  const verificationSnapshot = await getDocs(collection(db, 'verifications'))
+  const throwawayVerificationDocs = verificationSnapshot.docs.filter((d) =>
+    throwawayVehicleIds.has(d.data().vehicleId),
+  )
 
   let answerCount = 0
   let evidenceCount = 0
   const subcollectionRefs = []
-  for (const verificationDoc of verificationSnapshot.docs) {
+  for (const verificationDoc of throwawayVerificationDocs) {
     const [answers, evidence] = await Promise.all([
       getDocs(collection(db, 'verifications', verificationDoc.id, 'answers')),
       getDocs(collection(db, 'verifications', verificationDoc.id, 'evidence')),
@@ -119,10 +140,17 @@ async function main() {
     subcollectionRefs.push(...answers.docs.map((d) => d.ref), ...evidence.docs.map((d) => d.ref))
   }
 
-  console.log(`[cleanup-database] vehicles:      ${vehicleSnapshot.size}`)
   console.log(
-    `[cleanup-database] verifications: ${verificationSnapshot.size} (answers: ${answerCount}, evidence: ${evidenceCount})`,
+    `[cleanup-database] vehicles scanned: ${vehicleSnapshot.size}, throwaway (matched test-name prefix): ${throwawayVehicleDocs.length}`,
   )
+  console.log(
+    `[cleanup-database] verifications scanned: ${verificationSnapshot.size}, throwaway: ${throwawayVerificationDocs.length} (answers: ${answerCount}, evidence: ${evidenceCount})`,
+  )
+
+  if (throwawayVehicleDocs.length === 0 && throwawayVerificationDocs.length === 0) {
+    console.log('[cleanup-database] Nothing to clean up.')
+    process.exit(0)
+  }
 
   if (!confirm) {
     console.log('[cleanup-database] Dry run only — pass --confirm to actually delete.')
@@ -132,14 +160,16 @@ async function main() {
   await deleteRefsInBatches(db, subcollectionRefs)
   await deleteRefsInBatches(
     db,
-    verificationSnapshot.docs.map((d) => d.ref),
+    throwawayVerificationDocs.map((d) => d.ref),
   )
   await deleteRefsInBatches(
     db,
-    vehicleSnapshot.docs.map((d) => d.ref),
+    throwawayVehicleDocs.map((d) => d.ref),
   )
 
-  console.log('[cleanup-database] Done — vehicles & verifications (+ subcollections) removed.')
+  console.log(
+    '[cleanup-database] Done — throwaway vehicles & verifications (+ subcollections) removed.',
+  )
   process.exit(0)
 }
 

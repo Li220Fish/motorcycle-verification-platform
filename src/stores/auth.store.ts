@@ -66,5 +66,25 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, loading, isAuthenticated, initialize, waitUntilReady, register, login, logout }
+  async function updateDisplayName(displayName: string): Promise<void> {
+    await authService.updateDisplayName(displayName)
+    if (user.value) user.value = { ...user.value, displayName, updatedAt: Date.now() }
+  }
+
+  async function sendPasswordReset(email: string): Promise<void> {
+    await authService.sendPasswordReset(email)
+  }
+
+  return {
+    user,
+    loading,
+    isAuthenticated,
+    initialize,
+    waitUntilReady,
+    register,
+    login,
+    logout,
+    updateDisplayName,
+    sendPasswordReset,
+  }
 })

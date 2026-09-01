@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import MyListingsSection from './MyListingsSection.vue'
 import VehicleCarousel from './VehicleCarousel.vue'
 import VehicleNewsSection from './VehicleNewsSection.vue'
+import VehicleSearchBar from './VehicleSearchBar.vue'
 import VehicleStatusCard from './VehicleStatusCard.vue'
 import { getFlatItems } from '@/data/verification'
 import { homeContentService } from '@/services/firebase/home-content.service'
@@ -23,39 +24,32 @@ interface VehicleWithProgress {
 }
 
 const vehiclesWithProgress = ref<VehicleWithProgress[]>([])
-const loadingProgress = ref(false)
 
 const SELLER_TOTAL = getFlatItems('seller').length
 
 async function loadVehicleProgress(): Promise<void> {
-  loadingProgress.value = true
-  try {
-    // Bounded to the 3 most recently updated vehicles — Home is an overview,
-    // not the full garage (see VehiclesView for that).
-    const targets = [...vehicleStore.vehicles].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3)
+  // Bounded to the 3 most recently updated vehicles — Home is an overview,
+  // not the full garage (see VehiclesView for that).
+  const targets = [...vehicleStore.vehicles].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3)
 
-    const entries = await Promise.all(
-      targets.map(async (vehicle): Promise<VehicleWithProgress> => {
-        try {
-          const verifications = await verificationService.listByVehicle(vehicle.id)
-          const hasCompletedVerification = verifications.some(
-            (v) => v.type === 'seller' && v.status === 'completed',
-          )
-          const active = verifications.find((v) => v.type === 'seller' && v.status !== 'completed')
-          if (!active)
-            return { vehicle, percent: null, verificationId: null, hasCompletedVerification }
-          const answers = await verificationService.listAnswers(active.id)
-          const percent = Math.round((answers.length / SELLER_TOTAL) * 100)
-          return { vehicle, percent, verificationId: active.id, hasCompletedVerification }
-        } catch {
-          return { vehicle, percent: null, verificationId: null, hasCompletedVerification: false }
-        }
-      }),
-    )
-    vehiclesWithProgress.value = entries
-  } finally {
-    loadingProgress.value = false
-  }
+  vehiclesWithProgress.value = await Promise.all(
+    targets.map(async (vehicle): Promise<VehicleWithProgress> => {
+      try {
+        const verifications = await verificationService.listByVehicle(vehicle.id)
+        const hasCompletedVerification = verifications.some(
+          (v) => v.type === 'seller' && v.status === 'completed',
+        )
+        const active = verifications.find((v) => v.type === 'seller' && v.status !== 'completed')
+        if (!active)
+          return { vehicle, percent: null, verificationId: null, hasCompletedVerification }
+        const answers = await verificationService.listAnswers(active.id)
+        const percent = Math.round((answers.length / SELLER_TOTAL) * 100)
+        return { vehicle, percent, verificationId: active.id, hasCompletedVerification }
+      } catch {
+        return { vehicle, percent: null, verificationId: null, hasCompletedVerification: false }
+      }
+    }),
+  )
 }
 
 onMounted(async () => {
@@ -83,19 +77,24 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
 </script>
 
 <template>
-  <div class="seller-home">
-    <!-- The status card IS the Home hero now — no separate marketing banner.
+  <div class="home-content">
+    <!-- The status card IS the Home hero — no separate marketing banner.
          It renders its own empty state when there's no vehicle yet. -->
     <div class="section">
       <VehicleStatusCard
         :vehicle="featuredVehicle?.vehicle ?? null"
         :status-label="featuredStatusLabel"
+        :vehicle-count="vehicleStore.vehicles.length"
       />
     </div>
 
     <div class="section">
+      <VehicleSearchBar />
+    </div>
+
+    <div class="section">
       <div class="section-header">
-        <h2>為你推薦</h2>
+        <h2>熱門車輛</h2>
         <RouterLink to="/marketplace" class="see-all">查看全部 →</RouterLink>
       </div>
       <VehicleCarousel :listings="marketListings" />
@@ -108,7 +107,7 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
 </template>
 
 <style scoped>
-.seller-home {
+.home-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);

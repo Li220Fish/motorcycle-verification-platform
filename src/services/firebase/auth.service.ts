@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -36,4 +37,13 @@ export async function logout(): Promise<void> {
 
 export function getCurrentUser(): FirebaseUser | null {
   return auth.currentUser
+}
+
+export async function updateDisplayName(displayName: string): Promise<void> {
+  if (!auth.currentUser) throw new Error('Not authenticated')
+  await updateProfile(auth.currentUser, { displayName })
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email)
 }

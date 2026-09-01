@@ -7,10 +7,8 @@ import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
-import { useUserPreferenceStore } from '@/stores/user-preference.store'
 
 const route = useRoute()
-const preferenceStore = useUserPreferenceStore()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
@@ -38,13 +36,7 @@ function isActive(path: string): boolean {
 }
 
 function showChrome(): boolean {
-  if (route.meta.requiresAuth === false || route.meta.hideChrome === true) return false
-  // Home doubles as the first-run Role Selection gate (§4 of the Home
-  // redesign spec) — that screen is a decision point, not a navigable page,
-  // so the nav shouldn't invite the user into Marketplace/Verification/etc.
-  // before any role-based content exists yet.
-  if (route.path === '/dashboard' && !preferenceStore.hasSelectedRole) return false
-  return true
+  return route.meta.requiresAuth !== false && route.meta.hideChrome !== true
 }
 </script>
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Bike, Store } from 'lucide-vue-next'
+import { Bike, Heart, Store } from 'lucide-vue-next'
 
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
-defineProps<{ listing: MockMarketListing }>()
+defineProps<{ listing: MockMarketListing; isFavorite?: boolean }>()
+defineEmits<{ toggleFavorite: [] }>()
 </script>
 
 <template>
@@ -14,26 +15,39 @@ defineProps<{ listing: MockMarketListing }>()
       <span class="demo-tag">DEMO</span>
     </div>
     <div class="info">
-      <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+      <div class="title-row">
+        <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+        <!-- Every listing already requires a passing inspection to go live,
+             so "已驗證" is no longer a differentiator — dealer-sold listings
+             get their own badge instead (see marketplace-mock.ts). Icon-only
+             and inline with the title, same treatment as the Home market
+             card (VehicleMarketCard.vue). -->
+        <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
+          <Store :size="11" />
+        </span>
+      </div>
       <p class="meta">
         {{ listing.year }} 年式 · {{ listing.mileageKm.toLocaleString() }} km · {{ listing.region }}
       </p>
       <div class="bottom-row">
         <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
-        <!-- Every listing already requires a passing inspection to go live,
-             so "已驗證" is no longer a differentiator — dealer-sold listings
-             get their own badge instead (see marketplace-mock.ts). -->
-        <span v-if="listing.sellerType === 'dealer'" class="dealer-badge">
-          <Store :size="12" /> 認證車商
-        </span>
       </div>
     </div>
+    <button
+      class="favorite-btn"
+      :class="{ active: isFavorite }"
+      :aria-label="isFavorite ? '取消收藏' : '加入我的最愛'"
+      @click.stop="$emit('toggleFavorite')"
+    >
+      <Heart :size="18" :fill="isFavorite ? 'currentColor' : 'none'" />
+    </button>
   </div>
 </template>
 
 <style scoped>
 .market-row {
   display: flex;
+  align-items: center;
   gap: var(--space-md);
   padding: var(--space-sm);
   background: var(--color-surface);
@@ -82,13 +96,33 @@ defineProps<{ listing: MockMarketListing }>()
   gap: 4px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .title {
+  min-width: 0;
   font-size: 15px;
   font-weight: 700;
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dealer-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+  background: var(--color-primary-bg, #e8f1fd);
+  border-radius: 999px;
 }
 
 .meta {
@@ -112,16 +146,20 @@ defineProps<{ listing: MockMarketListing }>()
   color: var(--color-primary);
 }
 
-.dealer-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-primary);
-  background: var(--color-primary-bg, #e8f1fd);
-  border-radius: 999px;
-  padding: 2px 8px;
+.favorite-btn {
   flex-shrink: 0;
+  align-self: flex-start;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-disabled);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.favorite-btn.active {
+  color: var(--color-danger);
 }
 </style>

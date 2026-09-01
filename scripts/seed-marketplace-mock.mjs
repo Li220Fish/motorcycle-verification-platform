@@ -1,10 +1,16 @@
 /**
  * Dev/QA-only seed script for the Home/Marketplace DEMO content — pushes
- * MOCK_MARKET_LISTINGS / MOCK_FEATURED_DEALERS / MOCK_MY_LISTINGS /
- * MOCK_VEHICLE_NEWS into their own Firestore collections
- * (marketplaceListings / featuredDealers / myListings / vehicleNews) instead
- * of leaving them as static arrays baked into the JS bundle, so the app can
- * read (and this content can be updated) without a rebuild.
+ * MOCK_MARKET_LISTINGS / MOCK_FEATURED_DEALERS / MOCK_VEHICLE_NEWS into their
+ * own Firestore collections (marketplaceListings / featuredDealers /
+ * vehicleNews) instead of leaving them as static arrays baked into the JS
+ * bundle, so the app can read (and this content can be updated) without a
+ * rebuild.
+ *
+ * "我的刊登" (My Listings) no longer has its own separate mock collection —
+ * it's real user data now, scoped by `sellerId` on `marketplaceListings`
+ * itself (see src/services/firebase/listing.service.ts and
+ * scripts/seed-my-listings.mjs for seeding the 3 test accounts' own
+ * listings).
  *
  * This mirrors the arrays in src/data/home/*.ts BY HAND — plain .mjs can't
  * import those '@/'-aliased TS modules directly (same constraint noted in
@@ -214,32 +220,6 @@ const FEATURED_DEALERS = [
   { id: 'dealer-4', name: '雙輪車坊', rating: 4.5, reviewCount: 42, region: '高雄市' },
 ]
 
-// --- Mirrors src/data/home/my-listings-mock.ts ---
-const MY_LISTINGS = [
-  {
-    id: 'my-listing-1',
-    brand: 'HONDA',
-    model: 'CB300R',
-    year: 2017,
-    priceTwd: 150000,
-    status: 'active',
-    interestCount: 14,
-    imageUrl:
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Honda_CB300R_-_Mondial_de_l%27Automobile_de_Paris_2018_-_001.jpg/960px-Honda_CB300R_-_Mondial_de_l%27Automobile_de_Paris_2018_-_001.jpg',
-  },
-  {
-    id: 'my-listing-2',
-    brand: 'YAMAHA',
-    model: 'SMAX 155',
-    year: 2018,
-    priceTwd: 62000,
-    status: 'active',
-    interestCount: 7,
-    imageUrl:
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Yamaha_SMax.jpg/960px-Yamaha_SMax.jpg',
-  },
-]
-
 // --- Mirrors src/data/home/vehicle-news-mock.ts ---
 const VEHICLE_NEWS = [
   {
@@ -305,9 +285,6 @@ async function main() {
 
   await seedCollection(db, 'featuredDealers', FEATURED_DEALERS)
   console.log(`[seed-marketplace-mock] featuredDealers: ${FEATURED_DEALERS.length} docs`)
-
-  await seedCollection(db, 'myListings', MY_LISTINGS)
-  console.log(`[seed-marketplace-mock] myListings: ${MY_LISTINGS.length} docs`)
 
   await seedCollection(db, 'vehicleNews', VEHICLE_NEWS)
   console.log(`[seed-marketplace-mock] vehicleNews: ${VEHICLE_NEWS.length} docs`)

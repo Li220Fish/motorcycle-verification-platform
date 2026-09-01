@@ -7,13 +7,33 @@ import type { Vehicle } from '@/types/vehicle'
 // `vehicle: null` renders the empty-garage state — this card IS the Home
 // hero now (no more marketing tagline banner), so it needs an empty state
 // of its own rather than falling back to a different component.
-const props = defineProps<{ vehicle: Vehicle | null; statusLabel?: string }>()
+const props = defineProps<{
+  vehicle: Vehicle | null
+  statusLabel?: string
+  vehicleCount?: number
+}>()
 
 const router = useRouter()
+
+// The whole card is the tap target now (no separate "查看車輛" button) —
+// one vehicle opens straight to its detail, multiple route to the full
+// garage list to pick which one (same idea as tapping into Marketplace to
+// choose a listing), and no vehicle yet starts the create flow.
+function handleClick(): void {
+  if (!props.vehicle) {
+    router.push('/vehicles')
+    return
+  }
+  if ((props.vehicleCount ?? 1) > 1) {
+    router.push('/vehicles')
+  } else {
+    router.push(`/vehicles/${props.vehicle.id}`)
+  }
+}
 </script>
 
 <template>
-  <div
+  <button
     class="status-card"
     :class="{ 'has-photo': !!props.vehicle?.imageUrl }"
     :style="
@@ -23,13 +43,14 @@ const router = useRouter()
           }
         : undefined
     "
+    @click="handleClick"
   >
     <Bike v-if="!props.vehicle?.imageUrl" class="bg-icon" :size="120" />
     <p class="label">我的車輛</p>
     <template v-if="props.vehicle">
       <p class="title">
         {{ props.vehicle.year ? `${props.vehicle.year} ` : '' }}{{ props.vehicle.brand }}
-        {{ props.vehicle.model }} · {{ statusLabel }}
+        {{ props.vehicle.model }}<!-- 不用加入驗證狀態 -->
       </p>
       <div class="stats-row">
         <div class="stat">
@@ -45,29 +66,33 @@ const router = useRouter()
           <span class="stat-label">平均油耗</span>
         </div>
       </div>
-      <button class="view-btn" @click="router.push(`/vehicles/${props.vehicle.id}`)">
-        查看車輛 →
-      </button>
     </template>
     <template v-else>
       <p class="title">尚未新增車輛</p>
       <p class="empty-desc">新增第一台車，開始記錄車況與驗證紀錄。</p>
-      <button class="view-btn" @click="router.push('/vehicles')">新增車輛 →</button>
     </template>
-  </div>
+  </button>
 </template>
 
 <style scoped>
 .status-card {
   position: relative;
   overflow: hidden;
+  width: 100%;
   padding: var(--space-lg);
+  border: none;
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, var(--color-primary) 0%, #1b3fae 100%);
   color: #fff;
+  font: inherit;
+  text-align: left;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.status-card:active {
+  transform: scale(0.99);
 }
 
 .status-card.has-photo {
@@ -133,19 +158,5 @@ const router = useRouter()
 .stat-label {
   font-size: 10.5px;
   color: rgba(255, 255, 255, 0.8);
-}
-
-.view-btn {
-  position: relative;
-  z-index: 1;
-  align-self: flex-start;
-  margin-top: 2px;
-  border: none;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
 }
 </style>
