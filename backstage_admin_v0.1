@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8">
+<!-- saved from url=(0051)file:///Users/archi/Downloads/motoverify-admin.html -->
+<html lang="zh-Hant"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MotoVerify 營運後台</title>
 <!--
@@ -214,7 +214,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
   <div class="brand">
     <div class="brand-mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2 4 5.5v6c0 5 3.4 9.2 8 10.5 4.6-1.3 8-5.5 8-10.5v-6z"/>
+        <path d="M12 2 4 5.5v6c0 5 3.4 9.2 8 10.5 4.6-1.3 8-5.5 8-10.5v-6z"></path>
       </svg>
     </div>
     <div>
@@ -225,7 +225,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 
   <div class="nav-group">
     <h3>總覽</h3>
-    <button class="nav-item" data-page="overview" aria-current="page"><span class="nav-label">營運總覽</span></button>
+    <button class="nav-item" data-page="overview"><span class="nav-label">營運總覽</span></button>
   </div>
 
   <div class="nav-group">
@@ -254,7 +254,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 
   <div class="nav-group">
     <h3>法遵</h3>
-    <button class="nav-item" data-page="copy"><span class="nav-label">文案守則檢查</span></button>
+    <button class="nav-item" data-page="copy" aria-current="page"><span class="nav-label">文案守則檢查</span></button>
     <button class="nav-item" data-page="consent"><span class="nav-label">個資同意管理</span></button>
   </div>
 
@@ -267,15 +267,15 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 <div class="main">
   <header class="topbar">
     <div>
-      <h1 id="pageTitle">營運總覽</h1>
-      <div class="crumb" id="pageCrumb">尚未連接資料來源</div>
+      <h1 id="pageTitle">文案守則檢查</h1>
+      <div class="crumb" id="pageCrumb">提案功能五 責任邊界</div>
     </div>
     <div class="topbar-spacer"></div>
     <div class="op">值班：<b data-field="admin.displayName">—</b>　平台管理員</div>
   </header>
 
 <!-- ================= OVERVIEW ================= -->
-<section class="page" id="page-overview">
+<section class="page" id="page-overview" hidden="">
   <dl class="strip">
     <div><dt>註冊用戶</dt><dd data-metric="users.total">—</dd><div class="note">本月新增</div></div>
     <div><dt>月活躍用戶</dt><dd data-metric="users.mau">—</dd><div class="note">佔註冊比例</div></div>
@@ -296,7 +296,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 
   <div class="split">
     <div class="panel">
-      <div class="panel-head"><h2>用戶都在用哪些畫面</h2><span class="datasrc">需先埋事件</span></div>
+      <div class="panel-head"><h2>用戶都在用哪些畫面</h2></div>
       <div class="panel-body">
         <div class="heat" data-metric="events.pageShare">
           <div class="heatrow"><span class="lbl">首頁</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
@@ -332,7 +332,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= USERS ================= -->
-<section class="page" id="page-users" hidden>
+<section class="page" id="page-users" hidden="">
   <p class="page-intro">
     個人用戶名冊，點任一列進入使用者詳情。代號由使用者自行命名、全平台唯一，類似 Instagram 的帳號名稱——
     客服用代號查最快，但代號可以被改掉，帳號的實際識別仍須以內部 id 為準，只是那個 id 不需要顯示在這個畫面上。
@@ -363,44 +363,20 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
     </div>
   </div>
 
-  <div class="guard amber">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>「最常使用」與「最有興趣車款」目前沒有資料來源</h4>
-      <p>
-        app 尚未埋任何事件追蹤，這兩欄無法計算。需要先加
-        <code>page_view</code>（畫面停留）與 <code>listing_view</code>（刊登瀏覽、收藏、聯繫）兩類事件。
-        「最有興趣車款」建議用近 30 天瀏覽次數加權收藏行為推導，資料不足時顯示「資料不足」而不是猜一個。
-      </p>
-    </div>
-  </div>
+  
 
-  <div class="guard amber">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>代號唯一性需要額外的資料結構</h4>
-      <p>
-        Firestore 沒有 unique constraint。自訂代號要另開一個 <code>handles/{handle}</code> collection 當索引，
-        用 transaction 搶佔，rules 限制只能建立不能覆寫。同時需要保留代號變更紀錄，
-        否則爭議發生後對方改掉代號就查不到了。
-      </p>
-    </div>
-  </div>
+  
 </section>
 
 <!-- ================= USER DETAIL ================= -->
-<section class="page" id="page-userdetail" hidden>
+<section class="page" id="page-userdetail" hidden="">
   <div class="panel">
     <div class="panel-head">
       <h2>使用者詳情</h2>
       <div class="spacer"></div>
       <button class="btn sm" data-goto="users">回名冊</button>
-      <button class="btn sm" disabled>寄送通知</button>
-      <button class="btn sm danger" disabled>停權</button>
+      <button class="btn sm" disabled="">寄送通知</button>
+      <button class="btn sm danger" disabled="">停權</button>
     </div>
     <div class="udetail">
       <div class="uside">
@@ -469,21 +445,8 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= BEHAVIOUR ================= -->
-<section class="page" id="page-behaviour" hidden>
-  <div class="guard amber">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>這一頁的所有數字都需要先埋事件</h4>
-      <p>
-        建議的最小事件集：<code>page_view</code>、<code>listing_view</code>、<code>listing_favorite</code>、
-        <code>listing_contact</code>、<code>verification_start</code>、<code>verification_complete</code>。
-        六個事件就能撐起這整頁，也是功能九「真實使用數據」的資料基礎。
-        另外 Firestore 不支援 group by，排行與留存需由 Cloud Functions 定期聚合寫入 <code>stats/</code>。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-behaviour" hidden="">
+  
 
   <div class="split">
     <div class="panel">
@@ -497,7 +460,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>興趣與定位是否一致</h2><span class="ref">提案 §5</span></div>
+      <div class="panel-head"><h2>興趣與定位是否一致</h2></div>
       <div class="panel-body">
         <div class="heat" data-metric="stats.priceBand">
           <div class="heatrow"><span class="lbl">十萬以上</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
@@ -527,7 +490,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= GARAGE ================= -->
-<section class="page" id="page-garage" hidden>
+<section class="page" id="page-garage" hidden="">
   <p class="page-intro">
     對應 app 首頁的「我的車輛」與車輛詳情頁。這裡管的是登記車輛本身、行照核對、里程異常與保養提醒。
   </p>
@@ -550,7 +513,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h2>行照處理原則</h2><span class="ref">提案 功能三・R3</span></div>
+    <div class="panel-head"><h2>行照處理原則</h2></div>
     <div class="panel-body">
       <div class="stack-note">
         行照僅用於驗證<b>車輛存在性</b>，不用於比對姓名。中古車在車行手上時多半尚未過戶，
@@ -562,20 +525,8 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= VERIFY ================= -->
-<section class="page" id="page-verify" hidden>
-  <div class="guard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>這個畫面沒有「判定」功能，而且不應該被加上</h4>
-      <p>
-        依提案功能五，模型只輸出 attention、不輸出 verdict。覆核人員能做的是
-        <code>確認標記</code>、<code>移除誤判</code>、<code>退回重拍</code>——沒有合格與不合格。
-        一旦後台出現判定按鈕，平台就從「提供初步篩選」變成「提供鑑定結果」。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-verify" hidden="">
+  
 
   <dl class="strip">
     <div><dt>本月檢驗</dt><dd data-metric="verifications.month">—</dd><div class="note">賣家驗證／買家複驗</div></div>
@@ -587,7 +538,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 
   <div class="panel">
     <div class="panel-head">
-      <h2>覆核佇列</h2><span class="ref app">app 檢驗頁</span>
+      <h2>覆核佇列</h2>
       <div class="spacer"></div>
       <div class="filters">
         <button class="chip" aria-pressed="true">全部</button>
@@ -623,21 +574,8 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= REPORTS ================= -->
-<section class="page" id="page-reports" hidden>
-  <div class="guard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>目前的報告頁與提案功能五直接衝突</h4>
-      <p>
-        app 的檢驗報告顯示「檢驗總評分」。提案功能五明訂
-        「對外顯示分項燈號（良好／注意／需確認），<b>不顯示總分</b>」，
-        理由是總分等同對外給出綜合判定。這兩件事不能同時成立，
-        必須擇一——這是<b>產品決策不是設定值</b>，建議在簡報前定案。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-reports" hidden="">
+  
 
   <div class="panel">
     <div class="panel-head"><h2>分項燈號分布</h2><span class="sub">本月報告</span></div>
@@ -661,7 +599,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= MARKET ================= -->
-<section class="page" id="page-market" hidden>
+<section class="page" id="page-market" hidden="">
   <p class="page-intro">
     對應 app 的交易市場頁。刊登審核只檢查必填欄位與必拍角度是否完成，車況本身不在這裡判斷，
     平台也不背書。
@@ -695,20 +633,8 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= MESSAGES ================= -->
-<section class="page" id="page-messages" hidden>
-  <div class="guard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>管理員不能瀏覽未經檢舉的對話</h4>
-      <p>
-        私訊內容只在使用者主動檢舉後才開放調閱，且僅顯示被檢舉的訊息前後各三則，調閱行為要留稽核紀錄。
-        Firestore rules 不應給 admin 直接讀 <code>conversations/{id}/messages</code> 的權限，
-        調閱要走 Cloud Function 驗證檢舉存在後才回傳。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-messages" hidden="">
+  
 
   <dl class="strip">
     <div><dt>總對話數</dt><dd data-metric="conversations.total">—</dd><div class="note">本月新增</div></div>
@@ -718,7 +644,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
   </dl>
 
   <div class="panel">
-    <div class="panel-head"><h2>檢舉待處理</h2><span class="ref app">app 訊息頁</span></div>
+    <div class="panel-head"><h2>檢舉待處理</h2></div>
     <div class="panel-body flush">
       <table data-collection="reports">
         <thead><tr><th>檢舉理由</th><th>檢舉人</th><th>被檢舉人</th><th>時間</th><th></th></tr></thead>
@@ -729,25 +655,14 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= DISCUSSION ================= -->
-<section class="page" id="page-discussion" hidden>
-  <div class="guard amber">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>測試貼文必須用環境旗標隔離</h4>
-      <p>
-        QA 用的同步測試貼文若寫進正式資料庫，一般使用者就看得到。
-        這類內容不該靠記得手動刪除，應在寫入時標記來源並由旗標控制顯示，見環境旗標頁。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-discussion" hidden="">
+  
 
   <div class="panel">
     <div class="panel-head">
-      <h2>貼文管理</h2><span class="ref app">app 討論中心</span>
+      <h2>貼文管理</h2>
       <div class="spacer"></div>
-      <button class="btn sm danger" disabled>批次刪除測試貼文</button>
+      <button class="btn sm danger" disabled="">批次刪除測試貼文</button>
     </div>
     <div class="panel-body flush">
       <table data-collection="posts">
@@ -789,17 +704,14 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= NEWS ================= -->
-<section class="page" id="page-news" hidden>
-  <p class="page-intro">
-    對應 app 首頁底部的「車訊新知」。提案功能九把內容型獲客列為第一年的核心，
-    所以這裡不只是 CMS，是獲客工具——每篇要能看到帶進多少人。
-  </p>
+<section class="page" id="page-news" hidden="">
+  <p class="page-intro"></p>
 
   <div class="panel">
     <div class="panel-head">
-      <h2>文章</h2><span class="ref app">app 首頁「車訊新知」</span>
+      <h2>文章</h2>
       <div class="spacer"></div>
-      <button class="btn sm primary" disabled>新增文章</button>
+      <button class="btn sm primary" disabled="">新增文章</button>
     </div>
     <div class="panel-body flush">
       <table data-collection="news">
@@ -809,28 +721,12 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
     </div>
   </div>
 
-  <div class="stack-note">
-    轉載他人內容需取得授權，否則只能寫摘要並連回原文。
-    提案功能九真正要的是用自己的資料產出別人沒有的內容——那種文章才有傳播性，也才是零成本獲客的來源。
-  </div>
+  
 </section>
 
 <!-- ================= PROBE ================= -->
-<section class="page" id="page-probe" hidden>
-  <div class="guard amber">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>MotoProbe 完全沒有出現在 v0.3 提案裡</h4>
-      <p>
-        app 已經有 <code>/probe</code> 的藍牙配對流程、Developer Mode 與 Mock Probe，
-        但提案的十大功能、財務模型、成本結構裡都沒有硬體這條線。
-        硬體會帶來庫存、保固、退換與 NCC 認證成本，與 §8.2「不碰貨」的原則有張力。
-        <b>簡報前必須決定它是產品的一部分還是實驗</b>，評審一定會問成本從哪裡來。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-probe" hidden="">
+  
 
   <dl class="strip">
     <div><dt>已綁定裝置</dt><dd data-metric="devices.total">—</dd><div class="note">佔用戶比例</div></div>
@@ -840,7 +736,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
   </dl>
 
   <div class="panel">
-    <div class="panel-head"><h2>裝置</h2><span class="ref new">提案未涵蓋</span></div>
+    <div class="panel-head"><h2>裝置</h2></div>
     <div class="panel-body flush">
       <table data-collection="devices">
         <thead><tr><th>裝置序號</th><th>綁定用戶</th><th>韌體</th><th>最後回報</th><th>電壓讀數</th><th>狀態</th></tr></thead>
@@ -849,35 +745,19 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
     </div>
   </div>
 
-  <div class="panel">
-    <div class="panel-head"><h2>Probe 設定</h2></div>
-    <div class="panel-body">
-      <div class="setting">
-        <div class="txt"><b>允許 Mock Probe</b><span>app 的 Developer Mode 開關。正式環境啟用會讓假讀數進入檢驗報告。</span></div>
-        <button class="tog warn" aria-pressed="false" aria-label="允許 Mock Probe"></button>
-      </div>
-      <div class="setting">
-        <div class="txt"><b>電壓讀數併入檢驗報告</b><span>影響報告的「電系狀況」分項。</span></div>
-        <button class="tog" aria-pressed="false" aria-label="電壓讀數併入報告"></button>
-      </div>
-      <div class="setting">
-        <div class="txt"><b>低電壓自動推播</b><span>讀數低於門檻時提醒車主，是留存工具。</span></div>
-        <button class="tog" aria-pressed="false" aria-label="低電壓自動推播"></button>
-      </div>
-    </div>
-  </div>
+  
 </section>
 
 <!-- ================= MODELS ================= -->
-<section class="page" id="page-models" hidden>
+<section class="page" id="page-models" hidden="">
   <p class="page-intro">
     車款主檔是提案功能一的本體，也是被形容為「最被低估的差異點」的東西。
     刊登強制從這裡選取，搜尋走 label 而非字串比對。
   </p>
 
   <div class="panel">
-    <div class="panel-head"><h2>同義詞映射</h2><span class="ref">提案 功能一</span>
-      <div class="spacer"></div><button class="btn sm primary" disabled>新增車款</button></div>
+    <div class="panel-head"><h2>同義詞映射</h2>
+      <div class="spacer"></div><button class="btn sm primary" disabled="">新增車款</button></div>
     <div class="panel-body flush">
       <table data-collection="models">
         <thead><tr><th>標準車款</th><th>廠牌 / 車系</th><th>已映射寫法</th><th>牌照</th><th>本月搜尋落空</th></tr></thead>
@@ -899,7 +779,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= PUSH ================= -->
-<section class="page" id="page-push" hidden>
+<section class="page" id="page-push" hidden="">
   <p class="page-intro">
     app 設定頁有「通知」項目。提案功能四指出真正驅動記錄行為的是到期提醒，
     所以推播不是行銷工具，是留存機制。
@@ -943,10 +823,10 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= COPY ================= -->
-<section class="page" id="page-copy" hidden>
+<section class="page" id="page-copy">
   <div class="guard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
+      <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path>
     </svg>
     <div>
       <h4>文案是法律風險最容易外洩的地方</h4>
@@ -999,20 +879,8 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= CONSENT ================= -->
-<section class="page" id="page-consent" hidden>
-  <div class="guard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>
-    </svg>
-    <div>
-      <h4>同意條款不能事後補</h4>
-      <p>
-        行照含姓名、地址、身分證字號後數碼。依提案功能八，同意必須在<b>上傳行照的當下</b>取得。
-        資料若在錯誤的同意基礎上收集，功能八與改裝精準行銷整批不可使用（風險 R4）。
-        下表按同意版本切分現有資料，是為了在需要時能夠精確排除。
-      </p>
-    </div>
-  </div>
+<section class="page" id="page-consent" hidden="">
+  
 
   <div class="panel">
     <div class="panel-head"><h2>同意版本與可用範圍</h2><span class="ref">提案 功能八</span></div>
@@ -1026,7 +894,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 
   <div class="split">
     <div class="panel">
-      <div class="panel-head"><h2>資料與隱私設定</h2><span class="ref app">app 設定頁</span></div>
+      <div class="panel-head"><h2>資料與隱私設定</h2></div>
       <div class="panel-body">
         <div class="setting">
           <div class="txt"><b>允許用戶匯出自己的資料</b><span>個資法上的查閱與複製權。app 設定頁應提供入口。</span></div>
@@ -1057,7 +925,7 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
 </section>
 
 <!-- ================= ENV FLAGS ================= -->
-<section class="page" id="page-demo" hidden>
+<section class="page" id="page-demo" hidden="">
   <p class="page-intro">
     示範資料與開發工具應由旗標控制，而不是靠記得手動刪除。簡報前用這一頁一次關閉。
   </p>
@@ -1229,5 +1097,6 @@ td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:1
   input.addEventListener("input", check);
 })();
 </script>
-</body>
-</html>
+
+
+</body></html>
