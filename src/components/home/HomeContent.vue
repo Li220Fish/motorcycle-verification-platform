@@ -8,8 +8,10 @@ import VehicleSearchBar from './VehicleSearchBar.vue'
 import VehicleStatusCard from './VehicleStatusCard.vue'
 import { getFlatItems } from '@/data/verification'
 import { homeContentService } from '@/services/firebase/home-content.service'
+import { vehicleLogService } from '@/services/firebase/vehicle-log.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import { computeAverageFuelConsumption } from '@/utils/fuel-average'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { Vehicle } from '@/types/vehicle'
 
@@ -24,13 +26,18 @@ interface VehicleWithProgress {
 }
 
 const vehiclesWithProgress = ref<VehicleWithProgress[]>([])
+const featuredAvgFuelConsumption = ref<number | null>(null)
 
 const SELLER_TOTAL = getFlatItems('seller').length
 
 async function loadVehicleProgress(): Promise<void> {
-  // Bounded to the 3 most recently updated vehicles — Home is an overview,
-  // not the full garage (see VehiclesView for that).
-  const targets = [...vehicleStore.vehicles].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3)
+  // Bounded to the first 3 — Home is an overview, not the full garage (see
+  // VehiclesView for that). vehicleStore.vehicles is already in the
+  // garage's manual order (VehiclesView's long-press-drag reorder; see
+  // vehicle.service.ts's list()), so this naturally leads with whichever
+  // vehicle the user dragged to the top, not just whichever changed most
+  // recently.
+  const targets = vehicleStore.vehicles.slice(0, 3)
 
   vehiclesWithProgress.value = await Promise.all(
     targets.map(async (vehicle): Promise<VehicleWithProgress> => {
@@ -60,10 +67,17 @@ onMounted(async () => {
       marketListings.value = listings
     }),
   ])
+  const featuredId = vehiclesWithProgress.value[0]?.vehicle.id
+  if (featuredId) {
+    const fuelLogs = await vehicleLogService.listFuelLogs(featuredId)
+    featuredAvgFuelConsumption.value = computeAverageFuelConsumption(fuelLogs)
+  }
 })
 
-// Most recently updated vehicle — featured on the Home "我的車輛" status
+// Top of the garage's manual order — featured on the Home "我的車輛" status
 // card, matching the Reference prototype's single-vehicle summary widget.
+// Falls back to newest-first for a garage nobody has reordered yet (see
+// vehicle.service.ts's byGarageOrder()).
 const featuredVehicle = computed(() => vehiclesWithProgress.value[0] ?? null)
 const featuredStatusLabel = computed(() => {
   const entry = featuredVehicle.value
@@ -85,6 +99,7 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
         :vehicle="featuredVehicle?.vehicle ?? null"
         :status-label="featuredStatusLabel"
         :vehicle-count="vehicleStore.vehicles.length"
+        :avg-fuel-consumption="featuredAvgFuelConsumption"
       />
     </div>
 

@@ -100,17 +100,18 @@ async function handlePhotoChange(event: Event): Promise<void> {
     const currentListing = listing.value
     const uploaded = await Promise.all(
       files.map((file, index) =>
-        storageService.uploadFile(
-          'vehicle-images',
+        storageService.uploadFileAtPath(
+          `marketplace/${currentListing.id}/${Date.now()}-${index}.jpg`,
           file,
-          `listing-${currentListing.id}-${Date.now()}-${index}.jpg`,
         ),
       ),
     )
-    const nextPhotos = [...(currentListing.photos ?? []), ...uploaded]
-    const nextImageUrl = currentListing.imageUrl ?? uploaded[0]
-    await listingService.update(currentListing.id, { photos: nextPhotos, imageUrl: nextImageUrl })
-    listing.value = { ...currentListing, photos: nextPhotos, imageUrl: nextImageUrl }
+    const nextPhotos = [...currentListing.vehicleSnapshot.photos, ...uploaded]
+    await listingService.updatePhotos(currentListing.id, nextPhotos)
+    listing.value = {
+      ...currentListing,
+      vehicleSnapshot: { ...currentListing.vehicleSnapshot, photos: nextPhotos },
+    }
   } finally {
     uploadingPhoto.value = false
   }
@@ -118,8 +119,13 @@ async function handlePhotoChange(event: Event): Promise<void> {
 
 async function handleSetCover(url: string): Promise<void> {
   if (!listing.value) return
-  await listingService.update(listing.value.id, { imageUrl: url })
-  listing.value = { ...listing.value, imageUrl: url }
+  const currentListing = listing.value
+  const reordered = [url, ...currentListing.vehicleSnapshot.photos.filter((p) => p !== url)]
+  await listingService.updatePhotos(currentListing.id, reordered)
+  listing.value = {
+    ...currentListing,
+    vehicleSnapshot: { ...currentListing.vehicleSnapshot, photos: reordered },
+  }
 }
 
 // A shared set of common times rather than per-date custom slots — keeps
@@ -190,12 +196,16 @@ function formatDateTime(timestamp: number): string {
     <div v-else class="content">
       <div class="photo-section">
         <div class="cover">
-          <img v-if="listing.imageUrl" :src="listing.imageUrl" alt="" />
+          <img
+            v-if="listing.vehicleSnapshot.photos[0]"
+            :src="listing.vehicleSnapshot.photos[0]"
+            alt=""
+          />
           <Bike v-else :size="48" color="var(--color-text-disabled)" />
         </div>
-        <div v-if="listing.photos && listing.photos.length > 0" class="gallery">
+        <div v-if="listing.vehicleSnapshot.photos.length > 1" class="gallery">
           <button
-            v-for="photo in listing.photos"
+            v-for="photo in listing.vehicleSnapshot.photos.slice(1)"
             :key="photo"
             class="gallery-item"
             title="設為封面照"
@@ -218,7 +228,10 @@ function formatDateTime(timestamp: number): string {
       </div>
 
       <div class="edit-card">
-        <h3 class="card-title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</h3>
+        <h3 class="card-title">
+          {{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
+          {{ listing.vehicleSnapshot.model }}
+        </h3>
 
         <label class="field">
           <span>售價 (NT$)</span>

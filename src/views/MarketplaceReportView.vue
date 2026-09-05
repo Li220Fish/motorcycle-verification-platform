@@ -26,7 +26,9 @@ watch(
 )
 
 const vehicleTitle = computed(() =>
-  listing.value ? `${listing.value.year} ${listing.value.brand} ${listing.value.model}` : '—',
+  listing.value
+    ? `${listing.value.vehicleSnapshot.manufactureYear} ${listing.value.vehicleSnapshot.brand} ${listing.value.vehicleSnapshot.model}`
+    : '—',
 )
 const inspectedDate = computed(() => (listing.value ? buildMockInspectedDate(listing.value) : '—'))
 const sections = computed(() => (listing.value ? buildMockReportSections(listing.value) : []))

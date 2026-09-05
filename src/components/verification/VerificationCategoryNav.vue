@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
 import { Check, ChevronDown, Lock } from 'lucide-vue-next'
 
 import type { VerificationSection } from '@/data/verification'
@@ -14,12 +14,29 @@ const emit = defineEmits<{ selectSection: [string]; selectItem: [string] }>()
 
 const answeredSet = computed(() => new Set(props.answeredIds))
 const listOpen = ref(false)
+const tabRefs = ref<Record<string, HTMLButtonElement | undefined>>({})
+
+function setTabRef(sectionId: string, el: Element | ComponentPublicInstance | null): void {
+  tabRefs.value[sectionId] = (el as HTMLButtonElement | null) ?? undefined
+}
 
 const activeSection = computed(
   () =>
     props.sections.find((section) => section.items.some((it) => it.id === props.currentItemId)) ??
     props.sections[0],
 )
+
+// Buyer's 6 tabs can overflow the 4-visible-at-a-time scroll row — jumping
+// into an off-screen category (e.g. via Next, or Review's "jump to missing
+// item") should bring its tab into view instead of leaving it scrolled away.
+watch(activeSection, (section) => {
+  if (!section) return
+  tabRefs.value[section.id]?.scrollIntoView({
+    behavior: 'smooth',
+    inline: 'nearest',
+    block: 'nearest',
+  })
+})
 
 const currentItem = computed(
   () => activeSection.value?.items.find((it) => it.id === props.currentItemId) ?? null,
@@ -52,6 +69,7 @@ function selectItem(itemId: string): void {
       <button
         v-for="section in sections"
         :key="section.id"
+        :ref="(el) => setTabRef(section.id, el)"
         class="tab"
         :class="{ active: section.id === activeSection?.id }"
         @click="selectSection(section)"
@@ -103,13 +121,20 @@ function selectItem(itemId: string): void {
   z-index: 5;
 }
 
-/* Fixed 5-equal-column grid so all 5 categories are ALWAYS visible at once —
-   no horizontal overflow/scroll at any of 375 / 390 / 430px widths. Every
-   Seller category title happens to be exactly 4 CJK characters, so full
-   names fit without truncation. */
+/* Single scrollable row, sized to show exactly 4 tabs at a time — Seller's 4
+   categories fill it exactly with no scrolling; Buyer's 6 (same 4 + 上路 +
+   熱車檢查) overflow and swipe horizontally instead of wrapping to a 2nd row
+   or being squeezed into illegible fractional columns. */
 .tabs {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
@@ -124,7 +149,9 @@ function selectItem(itemId: string): void {
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
+  flex: 0 0 25%;
   min-width: 0;
+  scroll-snap-align: start;
 }
 
 .tab-title {

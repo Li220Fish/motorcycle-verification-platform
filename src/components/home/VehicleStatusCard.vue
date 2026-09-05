@@ -11,6 +11,9 @@ const props = defineProps<{
   vehicle: Vehicle | null
   statusLabel?: string
   vehicleCount?: number
+  /** No longer stored on the Vehicle doc — computed by the caller from
+   * fuelLogs (see HomeContent.vue), same calc VehicleDetailView.vue uses. */
+  avgFuelConsumption?: number | null
 }>()
 
 const router = useRouter()
@@ -35,34 +38,30 @@ function handleClick(): void {
 <template>
   <button
     class="status-card"
-    :class="{ 'has-photo': !!props.vehicle?.imageUrl }"
+    :class="{ 'has-photo': !!props.vehicle?.photos[0] }"
     :style="
-      props.vehicle?.imageUrl
+      props.vehicle?.photos[0]
         ? {
-            backgroundImage: `linear-gradient(135deg, rgba(37,99,235,.88), rgba(27,63,174,.92)), url('${props.vehicle.imageUrl}')`,
+            backgroundImage: `linear-gradient(135deg, rgba(37,99,235,.88), rgba(27,63,174,.92)), url('${props.vehicle.photos[0]}')`,
           }
         : undefined
     "
     @click="handleClick"
   >
-    <Bike v-if="!props.vehicle?.imageUrl" class="bg-icon" :size="120" />
+    <Bike v-if="!props.vehicle?.photos[0]" class="bg-icon" :size="120" />
     <p class="label">我的車輛</p>
     <template v-if="props.vehicle">
       <p class="title">
-        {{ props.vehicle.year ? `${props.vehicle.year} ` : '' }}{{ props.vehicle.brand }}
-        {{ props.vehicle.model }}<!-- 不用加入驗證狀態 -->
+        {{ props.vehicle.manufactureYear ? `${props.vehicle.manufactureYear} ` : ''
+        }}{{ props.vehicle.brand }} {{ props.vehicle.model }}<!-- 不用加入驗證狀態 -->
       </p>
       <div class="stats-row">
-        <div class="stat">
-          <span class="stat-value">{{ props.vehicle.maintenanceReminderCount ?? 0 }}</span>
-          <span class="stat-label">保養提醒</span>
-        </div>
         <div class="stat">
           <span class="stat-value">{{ props.vehicle.mileage?.toLocaleString() ?? '—' }}</span>
           <span class="stat-label">總里程 km</span>
         </div>
         <div class="stat">
-          <span class="stat-value">{{ props.vehicle.avgFuelConsumption ?? '—' }}</span>
+          <span class="stat-value">{{ props.avgFuelConsumption ?? '—' }}</span>
           <span class="stat-label">平均油耗</span>
         </div>
       </div>

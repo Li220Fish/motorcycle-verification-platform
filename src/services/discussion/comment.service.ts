@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '@/services/firebase/firebase'
-import type { AuthorSnapshot, DiscussionComment } from './discussion.types'
+import type { AuthorSnapshot, DiscussionComment, PostStatus } from './discussion.types'
 
 const POSTS = 'discussionPosts'
 const COMMENTS = 'comments'
@@ -23,7 +23,8 @@ interface CommentDoc {
   authorId: string
   authorSnapshot: AuthorSnapshot
   text: string
-  status: 'published' | 'deleted'
+  status: PostStatus
+  parentCommentId?: string | null
   createdAt: Timestamp
 }
 
@@ -35,6 +36,7 @@ function toComment(id: string, data: CommentDoc): DiscussionComment {
     authorSnapshot: data.authorSnapshot,
     text: data.text,
     status: data.status,
+    parentCommentId: data.parentCommentId ?? null,
     createdAt: data.createdAt?.toMillis() ?? 0,
   }
 }
@@ -75,7 +77,8 @@ async function addComment(
     authorId,
     authorSnapshot,
     text,
-    status: 'published',
+    status: 'active',
+    parentCommentId: null,
     createdAt: serverTimestamp(),
   })
   batch.update(doc(db, POSTS, postId), { commentCount: increment(1) })

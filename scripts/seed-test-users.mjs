@@ -1,14 +1,24 @@
 /**
- * Dev/QA-only seed script for the 3 named MotoVerify test accounts.
+ * Dev/QA-only seed script for MotoVerify's 5 fixed test accounts (1 admin +
+ * 4 standard users), matching the Firebase Auth / Firestore identity split
+ * frozen in MotoVerify_Firestore_v1_Agent_Implementation.md §5: every
+ * account gets users/{authUid} + accountIds/{accountId} + publicProfiles/{accountId}.
  *
- * Uses the same Firebase *client* SDK the app itself uses (no Admin SDK, no
- * service account key) — createUserWithEmailAndPassword is a normal client
- * operation, so there is no privileged credential to protect or accidentally
- * commit here.
+ * This is currently the ONLY place in the app that builds this three-way
+ * identity chain — the general sign-up flow (touchUserProfile(), called
+ * from auth.store.ts) still writes plain users/{authUid} docs with no
+ * accountId, exactly as before this script existed. Wiring accountId
+ * claiming into general sign-up needs a real "choose your handle"
+ * onboarding screen (claimAccountId(), spec §28) — a distinct, sizeable
+ * feature, deliberately deferred rather than folded into this pass. See
+ * docs/test-accounts.md and the "Test Accounts" section of
+ * docs/firestore-v1-implementation-report.md.
  *
- * Refuses to run unless BOTH:
- *   - NODE_ENV is not "production"
- *   - ALLOW_TEST_SEED=true is explicitly set
+ * Uses the Firebase *client* SDK only (no Admin SDK, no service account key
+ * — same as every other script in this directory). Idempotent: re-running
+ * signs into existing accounts instead of failing, refreshes their
+ * users/publicProfiles documents, and refuses to silently reassign an
+ * accountId that's already claimed by a different uid.
  *
  * Usage:
  *   ALLOW_TEST_SEED=true node scripts/seed-test-users.mjs
@@ -57,27 +67,57 @@ function guardEnvironment() {
   }
 }
 
+// Fixed, frozen roster — do not add ad-hoc accounts here; agenttest is the
+// one all automation (Playwright/E2E/smoke/rules tests) should prefer, so
+// throwaway test data doesn't get scattered across the other 4 identities.
+//
+// Password is "test1234", not the literal "test" — Firebase Auth rejects
+// any password under 6 characters (auth/weak-password) with no per-project
+// override, client-SDK or otherwise. "test1234" is the smallest change that
+// still reads as obviously "test" (confirmed with the user after the first
+// live run failed on this).
+const TEST_PASSWORD = 'test1234'
+
 const ACCOUNTS = [
   {
-    email: 'buyer@motoverify.test',
-    password: 'MotoVerify123!',
-    displayName: '測試買家',
-    defaultRole: 'buyer',
-    accountType: 'individual',
+    header: 'ADMIN',
+    email: 'admin@test.com',
+    password: TEST_PASSWORD,
+    accountId: 'motoverify_admin',
+    displayName: '管理員',
+    role: 'ADMIN',
   },
   {
-    email: 'seller@motoverify.test',
-    password: 'MotoVerify123!',
-    displayName: '測試賣家',
-    defaultRole: 'seller',
-    accountType: 'individual',
+    header: 'USER 1',
+    email: 'user1@test.com',
+    password: TEST_PASSWORD,
+    accountId: 'user1',
+    displayName: '用戶1',
+    role: 'STANDARD',
   },
   {
-    email: 'dealer@motoverify.test',
-    password: 'MotoVerify123!',
-    displayName: 'MotoVerify 車商',
-    defaultRole: 'professional_seller',
-    accountType: 'dealer',
+    header: 'USER 2',
+    email: 'user2@test.com',
+    password: TEST_PASSWORD,
+    accountId: 'user2',
+    displayName: '用戶2',
+    role: 'STANDARD',
+  },
+  {
+    header: 'USER 3',
+    email: 'user3@test.com',
+    password: TEST_PASSWORD,
+    accountId: 'user3',
+    displayName: '用戶3',
+    role: 'STANDARD',
+  },
+  {
+    header: 'AGENT TEST',
+    email: 'agent@test.com',
+    password: TEST_PASSWORD,
+    accountId: 'agenttest',
+    displayName: 'Agent測試帳號',
+    role: 'STANDARD',
   },
 ]
 
@@ -101,31 +141,50 @@ async function seedAccount(auth, db, account) {
     await updateProfile(auth.currentUser, { displayName: account.displayName })
   }
 
-  const userRef = doc(db, 'users', uid)
-  const existing = await getDoc(userRef)
-  await setDoc(
-    userRef,
-    {
-      uid,
-      email: account.email,
-      displayName: account.displayName,
-      photoURL: null,
-      defaultRole: account.defaultRole,
-      currentRole: account.defaultRole,
-      accountType: account.accountType,
-      region: 'TW',
-      createdAt: existing.exists() ? existing.data().createdAt : serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      lastSeenAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  // accountIds/{accountId} — permanently unique (spec §5.3). Never
+  // reassign silently: if it already points at a *different* uid, stop
+  // hard rather than guess which side is stale.
+  const accountIdRef = doc(db, 'accountIds', account.accountId)
+  const existingAccountId = await getDoc(accountIdRef)
+  if (existingAccountId.exists()) {
+    const boundUid = existingAccountId.data().authUid
+    if (boundUid !== uid) {
+      throw new Error(
+        `accountIds/${account.accountId} already points to uid=${boundUid}, but ` +
+          `${account.email} resolved to uid=${uid}. Refusing to overwrite — resolve manually.`,
+      )
+    }
+  } else {
+    await setDoc(accountIdRef, { authUid: uid, createdAt: serverTimestamp() })
+  }
 
-  await setDoc(
-    doc(db, 'userPreferences', uid),
-    { currentRole: account.defaultRole, updatedAt: Date.now() },
-    { merge: true },
-  )
+  // users/{authUid} — exact schema from spec §5.1. Not a merge: this is the
+  // canonical rebuild of a fixed seed account's profile, so it also heals a
+  // doc that picked up stray fields (uid/updatedAt) from touchUserProfile()
+  // if someone signed into this email through the regular app in between.
+  const userRef = doc(db, 'users', uid)
+  const existingUser = await getDoc(userRef)
+  const existingCreatedAt = existingUser.data()?.createdAt
+  await setDoc(userRef, {
+    accountId: account.accountId,
+    email: account.email,
+    displayName: account.displayName,
+    photoUrl: null,
+    accountTier: 'standard',
+    region: null,
+    lastSeenAt: serverTimestamp(),
+    createdAt: existingCreatedAt ?? serverTimestamp(),
+  })
+
+  // publicProfiles/{accountId} — exact schema from spec §5.2. No email/uid/
+  // region — this is the only doc other users are meant to read.
+  const publicProfileRef = doc(db, 'publicProfiles', account.accountId)
+  await setDoc(publicProfileRef, {
+    accountId: account.accountId,
+    displayName: account.displayName,
+    photoUrl: null,
+    accountTier: 'standard',
+  })
 
   await signOut(auth)
 
@@ -164,19 +223,23 @@ async function main() {
     const result = await seedAccount(auth, db, account)
     results.push(result)
     console.log(
-      `[seed-test-users] ${result.isNew ? 'created' : 'reused'} ${result.email} -> uid=${result.uid} role=${result.defaultRole}`,
+      `[seed-test-users] ${result.isNew ? 'created' : 'reused'} ${result.email} -> uid=${result.uid} accountId=${result.accountId}`,
     )
   }
 
-  console.log('\n[seed-test-users] Done. Accounts:')
-  console.table(
-    results.map((r) => ({
-      email: r.email,
-      uid: r.uid,
-      role: r.defaultRole,
-      status: r.isNew ? 'created' : 'reused',
-    })),
-  )
+  console.log('\n================================')
+  console.log('MotoVerify Test Users')
+  console.log('================================\n')
+  for (const r of results) {
+    console.log(r.header)
+    console.log(`Email: ${r.email}`)
+    console.log(`Password: ${r.password}`)
+    console.log(`Account ID: ${r.accountId}`)
+    console.log(`Firebase UID: ${r.uid}`)
+    console.log(`Role: ${r.role}`)
+    console.log('')
+  }
+  console.log('================================')
 
   process.exit(0)
 }

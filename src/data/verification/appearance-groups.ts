@@ -17,8 +17,8 @@ export interface AppearanceCaptureGroup {
 export const APPEARANCE_CAPTURE_GROUPS: AppearanceCaptureGroup[] = [
   {
     id: 'front',
-    label: '車頭',
-    itemIds: ['APR-front'],
+    label: '車頭／儀表板',
+    itemIds: ['APR-dashboard'],
     highlight: { x: 225, y: 28, w: 65, h: 50 },
   },
   {
@@ -42,25 +42,31 @@ export const APPEARANCE_CAPTURE_GROUPS: AppearanceCaptureGroup[] = [
   {
     id: 'front-wheel-group',
     label: '前輪組',
-    itemIds: ['APR-front-wheel', 'APR-front-fork', 'APR-front-brake'],
+    itemIds: ['APR-front-wheel', 'APR-front-suspension', 'APR-front-brake'],
     highlight: { x: 205, y: 78, w: 80, h: 68 },
   },
   {
     id: 'rear-wheel-group',
     label: '後輪組',
-    itemIds: ['APR-rear-wheel', 'APR-rear-fork', 'APR-rear-brake'],
+    itemIds: ['APR-rear-wheel', 'APR-rear-suspension', 'APR-rear-brake'],
     highlight: { x: 15, y: 78, w: 80, h: 68 },
   },
   {
     id: 'engine',
     label: '引擎',
-    itemIds: ['APR-engine-left', 'APR-engine-right', 'APR-engine-bottom', 'APR-cvt', 'APR-exhaust'],
+    itemIds: [
+      'APR-engine-left',
+      'APR-engine-right',
+      'APR-engine-bottom',
+      'APR-transmission-chain',
+      'APR-exhaust',
+    ],
     highlight: { x: 95, y: 92, w: 110, h: 45 },
   },
   {
     id: 'frame-other',
     label: '車架與其他',
-    itemIds: ['APR-triple-clamp', 'APR-under-seat', 'APR-vin', 'APR-modifications'],
+    itemIds: ['APR-triple-clamp', 'APR-seat', 'APR-vin', 'APR-modifications'],
     highlight: { x: 88, y: 38, w: 132, h: 98 },
   },
 ]

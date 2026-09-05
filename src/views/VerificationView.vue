@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import VehicleCard from '@/components/common/VehicleCard.vue'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
@@ -38,16 +39,27 @@ const existingVehicleId = computed<string | null>(() => {
   return typeof value === 'string' && value ? value : null
 })
 
-// Otherwise verification no longer requires picking a pre-existing vehicle
-// first — the user just names this verification, and the actual vehicle
-// details get captured by the flow's own first step (PREP-01 "建立基本資
-// 料"). Set by clicking a type card when there's no `presetType`.
+// Otherwise the user picks which of their own vehicles this verification is
+// for (measurement needs a real vehicle to attach evidence/answers to, not
+// just a name) — a garage-empty user can still fall back to naming a bare
+// Vehicle record inline, filling in brand/model/plate/engine+chassis numbers
+// later via Vehicle edit, since the 45-step checklist has no vehicle-identity
+// form step of its own. Set by clicking a type card when there's no
+// `presetType`.
 const selectedType = ref<VerificationType | null>(null)
 const effectiveType = computed<VerificationType | null>(
   () => presetType.value ?? selectedType.value,
 )
 const verificationName = ref('')
 const canStartNamed = computed(() => verificationName.value.trim().length > 0 && !submitting.value)
+
+// Toggled on by "+ 新增車輛" (or forced true once the garage is confirmed
+// empty) to fall back to the bare-name creation path below instead of the
+// picker.
+const creatingNewVehicle = ref(false)
+const showVehiclePicker = computed(
+  () => vehicleStore.vehicles.length > 0 && !creatingNewVehicle.value,
+)
 
 const verificationTypes: Array<{
   type: VerificationType
@@ -113,6 +125,24 @@ async function handleStartExisting(type: VerificationType): Promise<void> {
   }
 }
 
+/** Picker path (no `existingVehicleId`, but the user has a garage to choose
+ * from) — same as `handleStartExisting`, just sourced from a click on one of
+ * `vehicleStore.vehicles` instead of the route query. */
+async function handleStartWithVehicle(vehicleId: string): Promise<void> {
+  const type = effectiveType.value
+  if (!type || !authStore.user) return
+  submitting.value = true
+  errorMessage.value = ''
+  try {
+    const id = await createVerificationRecord(vehicleId, type)
+    router.push(`/verification/${id}`)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+  } finally {
+    submitting.value = false
+  }
+}
+
 /** Picking a type either starts immediately (vehicle already known) or just
  * records the choice so the naming step can render next. */
 function handlePickType(type: VerificationType): void {
@@ -134,8 +164,9 @@ async function handleConfirmName(): Promise<void> {
     const vehicleId = await vehicleStore.createVehicle({
       brand: '',
       model: name,
-      year: null,
+      manufactureYear: null,
       mileage: null,
+      photos: [],
     })
     const id = await createVerificationRecord(vehicleId, type)
     router.push(`/verification/${id}`)
@@ -332,11 +363,13 @@ onMounted(async () => {
         </div>
       </template>
 
-      <!-- No existing vehicle, type decided (preset or just picked): name
-           this verification, then create the vehicle + verification and
-           jump straight into the flow — its own first step (建立基本資料)
-           is where the real vehicle details get captured, so nothing here
-           needs to duplicate that. -->
+      <!-- No existing vehicle, type decided (preset or just picked): pick
+           which of the user's own vehicles this verification is for —
+           measurement needs a real vehicle to attach evidence/answers to.
+           Falls back to naming a bare vehicle inline when the garage is
+           empty (or the user explicitly wants a new one); brand/model/
+           plate/engine+chassis numbers stay blank until edited separately —
+           the checklist itself has no vehicle-identity step anymore. -->
       <template v-else>
         <div v-if="effectiveTypeMeta" class="preset-summary">
           <div class="type-icon">
@@ -348,22 +381,51 @@ onMounted(async () => {
           </div>
         </div>
 
-        <label class="field">
-          <span>幫這次驗車取個名字</span>
-          <input
-            v-model="verificationName"
-            type="text"
-            placeholder="例如：小紅、我的勁戰六代"
-            maxlength="30"
-          />
-        </label>
+        <template v-if="showVehiclePicker">
+          <p class="question">選擇要驗證的車輛</p>
+          <div class="vehicle-list">
+            <div
+              v-for="vehicle in vehicleStore.vehicles"
+              :key="vehicle.id"
+              class="vehicle-pick-row"
+              :class="{ disabled: submitting }"
+              role="button"
+              tabindex="0"
+              @click="!submitting && handleStartWithVehicle(vehicle.id)"
+              @keydown.enter="!submitting && handleStartWithVehicle(vehicle.id)"
+            >
+              <VehicleCard :vehicle="vehicle" />
+            </div>
+          </div>
+          <button class="back-link" @click="creatingNewVehicle = true">+ 新增車輛</button>
+        </template>
+
+        <template v-else>
+          <label class="field">
+            <span>幫這次驗車取個名字</span>
+            <input
+              v-model="verificationName"
+              type="text"
+              placeholder="例如：小紅、我的勁戰六代"
+              maxlength="30"
+            />
+          </label>
+          <button
+            v-if="vehicleStore.vehicles.length > 0"
+            class="back-link"
+            @click="creatingNewVehicle = false"
+          >
+            ‹ 選擇現有車輛
+          </button>
+
+          <PrimaryButton block :disabled="!canStartNamed" @click="handleConfirmName">
+            {{ submitting ? '處理中...' : '開始' }}
+          </PrimaryButton>
+        </template>
+
         <button v-if="!presetType" class="back-link" @click="selectedType = null">
           ‹ 重新選擇類型
         </button>
-
-        <PrimaryButton block :disabled="!canStartNamed" @click="handleConfirmName">
-          {{ submitting ? '處理中...' : '開始' }}
-        </PrimaryButton>
       </template>
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -454,6 +516,21 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.vehicle-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.vehicle-pick-row {
+  cursor: pointer;
+}
+
+.vehicle-pick-row.disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .preset-summary {

@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import type { DiscussionSort } from '@/services/discussion/discussion.types'
 
-const FILTERS: { value: DiscussionSort; label: string }[] = [
+// 車輛新知 isn't a post sort — it swaps the whole panel below this chip-row
+// for VehicleKnowledgeSection instead of the post feed (see DiscussionView.vue)
+// — but it reads as just one more chip alongside 熱門/最新/精選/追蹤中.
+export type DiscussionViewMode = DiscussionSort | 'vehicleKnowledge'
+
+const FILTERS: { value: DiscussionViewMode; label: string }[] = [
   { value: 'hot', label: '熱門' },
   { value: 'new', label: '最新' },
   { value: 'featured', label: '精選' },
   { value: 'following', label: '追蹤中' },
+  { value: 'vehicleKnowledge', label: '車輛資訊' },
 ]
 
-defineProps<{ modelValue: DiscussionSort }>()
-defineEmits<{ 'update:modelValue': [DiscussionSort] }>()
+defineProps<{ modelValue: DiscussionViewMode }>()
+defineEmits<{ 'update:modelValue': [DiscussionViewMode] }>()
 </script>
 
 <template>

@@ -43,11 +43,13 @@ function handleUnavailableLogin(providerName: string): void {
 // template section that uses it) out of production builds.
 const isDev = !import.meta.env.PROD
 const quickLoginAccounts = [
-  { label: '測試買家', email: 'buyer@motoverify.test' },
-  { label: '測試賣家', email: 'seller@motoverify.test' },
-  { label: 'MotoVerify 車商', email: 'dealer@motoverify.test' },
+  { label: '管理員', email: 'admin@test.com' },
+  { label: '用戶1', email: 'user1@test.com' },
+  { label: '用戶2', email: 'user2@test.com' },
+  { label: '用戶3', email: 'user3@test.com' },
+  { label: 'Agent測試帳號', email: 'agent@test.com' },
 ]
-const TEST_PASSWORD = 'MotoVerify123!'
+const TEST_PASSWORD = 'test1234'
 
 async function quickLogin(accountEmail: string): Promise<void> {
   errorMessage.value = ''

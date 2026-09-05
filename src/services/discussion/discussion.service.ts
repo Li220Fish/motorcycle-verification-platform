@@ -88,7 +88,7 @@ async function createPost(input: CreatePostInput): Promise<string> {
     likeCount: 0,
     commentCount: 0,
     featured: false,
-    status: 'published',
+    status: 'active',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -111,7 +111,7 @@ async function createPostWithId(id: string, input: CreatePostInput): Promise<voi
     likeCount: 0,
     commentCount: 0,
     featured: false,
-    status: 'published',
+    status: 'active',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -145,7 +145,7 @@ function subscribePosts(
   if (sort === 'hot') {
     q = query(
       base,
-      where('status', '==', 'published'),
+      where('status', '==', 'active'),
       orderBy('likeCount', 'desc'),
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE),
@@ -153,7 +153,7 @@ function subscribePosts(
   } else if (sort === 'featured') {
     q = query(
       base,
-      where('status', '==', 'published'),
+      where('status', '==', 'active'),
       where('featured', '==', true),
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE),
@@ -166,18 +166,13 @@ function subscribePosts(
     }
     q = query(
       base,
-      where('status', '==', 'published'),
+      where('status', '==', 'active'),
       where('authorId', 'in', ids),
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE),
     )
   } else {
-    q = query(
-      base,
-      where('status', '==', 'published'),
-      orderBy('createdAt', 'desc'),
-      limit(PAGE_SIZE),
-    )
+    q = query(base, where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
   }
 
   return onSnapshot(

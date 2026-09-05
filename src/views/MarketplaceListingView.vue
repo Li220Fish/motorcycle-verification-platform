@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Bike, ChevronRight, Image, Star, Store } from 'lucide-vue-next'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { Bike, ChevronRight, Heart, Image, Star, Store } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import BookingSheet from '@/components/marketplace/BookingSheet.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
-import { homeContentService } from '@/services/firebase/home-content.service'
+import { chatService } from '@/services/chat/chat.service'
 import { listingService } from '@/services/firebase/listing.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
+import type { Unsubscribe } from 'firebase/firestore'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -20,17 +21,43 @@ const chatStore = useChatStore()
 const listing = ref<MockMarketListing | null>(null)
 const loading = ref(true)
 const bookedTimestamps = ref<number[]>([])
+const isFavorite = ref(false)
+
+// Live subscription (not a one-time fetch) so favoriteCount — and anything
+// else about the listing — updates in real time while this page is open,
+// e.g. another buyer favoriting it while this one is looking.
+let unsubscribeListing: Unsubscribe | null = null
 
 async function loadListing(): Promise<void> {
   loading.value = true
-  listing.value = await homeContentService.getMarketplaceListing(props.id)
-  loading.value = false
+  unsubscribeListing?.()
+  unsubscribeListing = listingService.subscribeListing(props.id, (updated) => {
+    listing.value = updated
+    loading.value = false
+  })
   bookedTimestamps.value = (await listingService.listAppointments(props.id)).map(
     (appointment) => appointment.scheduledAt,
   )
+  if (authStore.user) {
+    isFavorite.value = (await listingService.listFavoriteIds(authStore.user.id)).includes(props.id)
+  }
 }
 
 watch(() => props.id, loadListing, { immediate: true })
+
+onUnmounted(() => unsubscribeListing?.())
+
+async function handleToggleFavorite(): Promise<void> {
+  if (!authStore.user) return
+  const uid = authStore.user.id
+  if (isFavorite.value) {
+    isFavorite.value = false
+    await listingService.removeFavorite(uid, props.id)
+  } else {
+    isFavorite.value = true
+    await listingService.addFavorite(uid, props.id)
+  }
+}
 
 // Fallback for a listing with no imageUrl — no real photo exists for that
 // DEMO listing, so a colored gradient + icon stands in for one, consistently
@@ -95,6 +122,16 @@ async function handleChatClick(): Promise<void> {
 
 const otherPhotoPlaceholders = Array.from({ length: 8 }, (_, index) => index)
 
+const reportPath = computed(() => {
+  const current = listing.value
+  const firstVerificationId = current?.verificationIds[0]
+  if (!current || !firstVerificationId) return `/marketplace/${props.id}/report`
+  const snapshot = current.vehicleSnapshot
+  const params = new URLSearchParams({ brand: snapshot.brand, model: snapshot.model })
+  if (snapshot.manufactureYear) params.set('year', String(snapshot.manufactureYear))
+  return `/verification/${firstVerificationId}/report?${params.toString()}`
+})
+
 const isOwnListing = computed(
   () => !!listing.value?.sellerId && listing.value.sellerId === authStore.user?.id,
 )
@@ -114,9 +151,18 @@ function handleOpenBooking(): void {
   bookingSheetOpen.value = true
 }
 
+function formatDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('zh-TW', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<void> {
   const current = listing.value
-  if (!current || !authStore.user) return
+  if (!current?.sellerId || !authStore.user) return
   bookingSubmitting.value = true
   try {
     await listingService.createAppointment({
@@ -126,6 +172,24 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
       scheduledAt: payload.scheduledAt,
     })
     bookedTimestamps.value = [...bookedTimestamps.value, payload.scheduledAt]
+
+    // Create the conversation right away (not just when "聊聊" is tapped) so
+    // the seller has somewhere to see and respond to this booking — without
+    // this, a buyer who never separately opens chat would leave the seller
+    // with no way to approve/decline it (see ChatRoomView.vue's banner).
+    const conversationId = await chatStore.findOrCreateConversation(
+      { displayName: authStore.user.displayName || authStore.user.email || '使用者' },
+      current.sellerId,
+      { displayName: current.sellerName },
+      { listingId: current.id },
+    )
+    await chatService.sendSystemNote(
+      conversationId,
+      authStore.user.id,
+      [current.sellerId],
+      `買家預約了看車時間：${formatDateTime(payload.scheduledAt)}，請至對話上方確認是否同意。`,
+    )
+
     bookingSheetOpen.value = false
     showNotice('已送出預約，賣家將會與您聯繫')
   } catch {
@@ -143,15 +207,26 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
     <p v-if="loading" class="state-text">載入中...</p>
     <p v-else-if="!listing" class="state-text">找不到這台車輛。</p>
     <div v-else class="content">
-      <div class="hero" :style="listing.imageUrl ? undefined : { background: heroGradient }">
-        <span class="demo-tag">DEMO</span>
-        <img v-if="listing.imageUrl" :src="listing.imageUrl" class="hero-img" alt="" />
+      <div
+        class="hero"
+        :style="listing.vehicleSnapshot.photos[0] ? undefined : { background: heroGradient }"
+      >
+        <span v-if="listing.verificationIds.length === 0" class="demo-tag">DEMO</span>
+        <img
+          v-if="listing.vehicleSnapshot.photos[0]"
+          :src="listing.vehicleSnapshot.photos[0]"
+          class="hero-img"
+          alt=""
+        />
         <Bike v-else :size="64" color="rgba(255,255,255,0.85)" />
       </div>
 
       <div class="body">
         <div class="title-row">
-          <h2 class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</h2>
+          <h2 class="title">
+            {{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
+            {{ listing.vehicleSnapshot.model }}
+          </h2>
           <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
             <Store :size="13" />
           </span>
@@ -164,30 +239,39 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
 
         <p class="meta-row">
           {{ listing.region }}・{{ listing.district }} ・ 賣家 {{ listing.sellerName }}
+          <button
+            class="favorite-inline-btn"
+            :class="{ active: isFavorite }"
+            :aria-label="isFavorite ? '取消收藏' : '加入我的最愛'"
+            @click="handleToggleFavorite"
+          >
+            <Heart :size="15" :fill="isFavorite ? 'currentColor' : 'none'" />
+            <span>{{ listing.favoriteCount ?? 0 }}</span>
+          </button>
         </p>
 
         <div class="info-card">
           <h3 class="card-title">車輛資訊</h3>
           <div class="info-row">
             <span>排氣量</span>
-            <span>{{ listing.displacementCc }}cc</span>
+            <span>{{ listing.vehicleSnapshot.displacementCc }}cc</span>
           </div>
           <div class="info-row">
             <span>變速系統</span>
-            <span>{{ listing.transmission }}</span>
+            <span>{{ listing.vehicleSnapshot.transmission }}</span>
           </div>
           <div class="info-row">
             <span>車身顏色</span>
-            <span>{{ listing.color }}</span>
+            <span>{{ listing.vehicleSnapshot.color }}</span>
           </div>
           <div class="info-row">
             <span>里程數</span>
-            <span>{{ listing.mileageKm.toLocaleString() }} km</span>
+            <span>{{ listing.vehicleSnapshot.mileage.toLocaleString() }} km</span>
           </div>
           <div class="info-row">
             <span>是否改裝</span>
-            <span class="tag" :class="listing.modified ? 'warning' : 'success'">
-              {{ listing.modified ? '曾改裝' : '原廠無改裝' }}
+            <span class="tag" :class="listing.vehicleSnapshot.modified ? 'warning' : 'success'">
+              {{ listing.vehicleSnapshot.modified ? '曾改裝' : '原廠無改裝' }}
             </span>
           </div>
         </div>
@@ -209,9 +293,11 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
         </template>
 
         <!-- Every listing already requires a passing MotoVerify inspection
-             before it can go live, so this always has a real report. -->
+             before it can go live. Real listings route to their actual
+             verification report; the seeded DEMO listings (no backing
+             verification) fall back to the fabricated demo report. -->
         <h3 class="section-title">驗車報告</h3>
-        <button class="report-card" @click="router.push(`/marketplace/${listing.id}/report`)">
+        <button class="report-card" @click="router.push(reportPath)">
           <span class="score-badge">{{ listing.verificationScore }}</span>
           <span class="report-info">
             <span class="report-title">車輛檢驗報告</span>
@@ -220,10 +306,14 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>
 
-        <template v-if="listing.photos && listing.photos.length > 0">
+        <template v-if="listing.vehicleSnapshot.photos.length > 1">
           <h3 class="section-title">其他照片</h3>
           <div class="photo-grid">
-            <div v-for="photo in listing.photos" :key="photo" class="photo-real">
+            <div
+              v-for="photo in listing.vehicleSnapshot.photos.slice(1)"
+              :key="photo"
+              class="photo-real"
+            >
               <img :src="photo" alt="" />
             </div>
           </div>
@@ -355,6 +445,22 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
   font-size: 13.5px;
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+.favorite-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.favorite-inline-btn.active {
+  color: var(--color-danger);
 }
 
 .dealer-badge {

@@ -1,16 +1,30 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, X } from 'lucide-vue-next'
 
 import StatusBadge from '@/components/common/StatusBadge.vue'
 
 export interface ReportItem {
   id: string
   title: string
-  description: string
   badgeLabel: string
   badgeTone: 'success' | 'warning' | 'neutral' | 'danger' | 'primary'
   note?: string
+  /** The Trusted Backend's own judgement text (Answer.aiResult.details.note)
+   *  — always shown separately from `note` (the User's own field), per
+   *  every Group A/B/C/Audio spec's UI Contract: "AI 判定說明" vs "使用者
+   *  補充" must never be merged into one field. */
+  aiNote?: string | null
+  /** Set once a Group A/B/C `unsure` item is still on its first of 2
+   *  allowed attempts — governs whether the retry CTA renders at all. */
+  canRetry?: boolean
+  photos?: string[]
+  /** Nests this item under a sub-header when set (e.g. the Engine Audio+IMU
+   *  session grouping: ENG-03/04 under "啟動檢測", etc. — spec §44: "Capture
+   *  UI = 3 Session" but "Report = 6 個檢測結果", shown nested, not flat). A
+   *  sub-header renders once, right before the first item carrying its
+   *  label — consecutive items sharing the same label just group under it. */
+  groupLabel?: string
 }
 
 export interface ReportSection {
@@ -35,6 +49,14 @@ defineProps<{
 const expandedSectionId = ref<string | null>(null)
 function toggleSection(sectionId: string): void {
   expandedSectionId.value = expandedSectionId.value === sectionId ? null : sectionId
+}
+
+const activeImageUrl = ref<string | null>(null)
+function openImage(url: string): void {
+  activeImageUrl.value = url
+}
+function closeImage(): void {
+  activeImageUrl.value = null
 }
 </script>
 
@@ -68,17 +90,46 @@ function toggleSection(sectionId: string): void {
 
         <Transition name="expand">
           <div v-if="expandedSectionId === section.id" class="item-list">
-            <div v-for="item in section.items" :key="item.id" class="item-row">
-              <div class="item-text">
-                <p class="item-title">{{ item.title }}</p>
-                <p class="item-description">{{ item.description }}</p>
-                <p v-if="item.note" class="item-note">備註：{{ item.note }}</p>
+            <template v-for="(item, itemIndex) in section.items" :key="item.id">
+              <p
+                v-if="
+                  item.groupLabel && item.groupLabel !== section.items[itemIndex - 1]?.groupLabel
+                "
+                class="group-header"
+              >
+                {{ item.groupLabel }}
+              </p>
+              <div class="item-row" :class="{ grouped: !!item.groupLabel }">
+                <div class="item-text">
+                  <p class="item-title">{{ item.title }}</p>
+                  <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
+                  <p v-if="item.note" class="item-note">使用者補充：{{ item.note }}</p>
+                  <div v-if="item.photos && item.photos.length > 0" class="item-photos">
+                    <button
+                      v-for="(photo, index) in item.photos"
+                      :key="index"
+                      type="button"
+                      class="item-photo-thumb"
+                      aria-label="查看照片"
+                      @click="openImage(photo)"
+                    >
+                      <img :src="photo" alt="" />
+                    </button>
+                  </div>
+                </div>
+                <StatusBadge :tone="item.badgeTone">{{ item.badgeLabel }}</StatusBadge>
               </div>
-              <StatusBadge :tone="item.badgeTone">{{ item.badgeLabel }}</StatusBadge>
-            </div>
+            </template>
           </div>
         </Transition>
       </div>
+    </div>
+
+    <div v-if="activeImageUrl" class="lightbox-overlay" @click="closeImage">
+      <img :src="activeImageUrl" class="lightbox-img" alt="" @click.stop />
+      <button class="lightbox-close" aria-label="關閉" @click="closeImage">
+        <X :size="22" />
+      </button>
     </div>
   </div>
 </template>
@@ -198,12 +249,25 @@ function toggleSection(sectionId: string): void {
   border-top: 1px solid var(--color-border);
 }
 
+.group-header {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md) 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-disabled);
+  letter-spacing: 0.02em;
+}
+
 .item-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
+}
+
+.item-row.grouped {
+  padding-left: calc(var(--space-md) + var(--space-sm));
 }
 
 .item-row:not(:last-child) {
@@ -221,16 +285,72 @@ function toggleSection(sectionId: string): void {
   color: var(--color-text-primary);
 }
 
-.item-description {
+.item-ai-note {
   margin: 2px 0 0;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
+  font-size: 12px;
+  color: var(--color-text-primary);
 }
 
 .item-note {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.item-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.item-photo-thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.item-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: var(--space-lg);
+  background: rgba(15, 23, 42, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .expand-enter-active,

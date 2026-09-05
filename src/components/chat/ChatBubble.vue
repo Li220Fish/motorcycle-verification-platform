@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Bike, ShieldCheck } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useStorageUrl } from '@/composables/useStorageUrl'
 import { formatRelativeTime } from '@/utils/format-time'
 import { vehicleService } from '@/services/firebase/vehicle.service'
 import { verificationService } from '@/services/firebase/verification.service'
@@ -15,6 +16,12 @@ const props = defineProps<{ message: ChatMessage; mine: boolean; read: boolean }
 const router = useRouter()
 const vehicle = ref<Vehicle | null>(null)
 const verification = ref<Verification | null>(null)
+
+// message.imageUrl is a Storage object path for real uploads (see
+// storageService.uploadChatImage) — resolved to a fresh, rules-checked URL
+// here rather than bound to directly.
+const imagePath = computed(() => props.message.imageUrl)
+const resolvedImageUrl = useStorageUrl(imagePath)
 
 async function loadRichContent(): Promise<void> {
   if (props.message.type === 'vehicle' && props.message.vehicleId) {
@@ -39,7 +46,7 @@ watch(() => props.message.id, loadRichContent)
 
     <template v-else-if="message.type === 'image'">
       <div class="bubble image-bubble" :class="mine ? 'mine' : 'them'">
-        <img :src="message.imageUrl" alt="聊天圖片" />
+        <img v-if="resolvedImageUrl" :src="resolvedImageUrl" alt="聊天圖片" />
       </div>
     </template>
 
@@ -54,7 +61,7 @@ watch(() => props.message.id, loadRichContent)
           <span class="rich-title">{{
             vehicle ? `${vehicle.brand} ${vehicle.model}` : '車輛資訊'
           }}</span>
-          <span class="rich-sub">{{ vehicle?.year ?? '' }} · 點擊查看車輛</span>
+          <span class="rich-sub">{{ vehicle?.manufactureYear ?? '' }} · 點擊查看車輛</span>
         </span>
       </button>
     </template>
@@ -121,6 +128,10 @@ watch(() => props.message.id, loadRichContent)
   background: var(--color-primary);
   color: #fff;
   border-bottom-right-radius: 5px;
+}
+
+.bubble.mine:not(.image-bubble):not(.rich-card) {
+  max-width: 40vw;
 }
 
 .image-bubble {

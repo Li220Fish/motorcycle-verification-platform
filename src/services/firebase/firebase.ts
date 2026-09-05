@@ -1,6 +1,7 @@
 import { type FirebaseApp, initializeApp } from 'firebase/app'
 import { type Auth, getAuth } from 'firebase/auth'
 import { type Firestore, getFirestore } from 'firebase/firestore'
+import { type Functions, getFunctions } from 'firebase/functions'
 import { type FirebaseStorage, getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
@@ -17,3 +18,6 @@ export const firebaseApp: FirebaseApp = initializeApp(firebaseConfig)
 export const auth: Auth = getAuth(firebaseApp)
 export const db: Firestore = getFirestore(firebaseApp)
 export const storage: FirebaseStorage = getStorage(firebaseApp)
+/** Trusted Backend (functions/) — Gemini Vision/Audio inspection, OCR
+ *  routing, IMU analysis. Default region (us-central1) on both sides. */
+export const functions: Functions = getFunctions(firebaseApp)

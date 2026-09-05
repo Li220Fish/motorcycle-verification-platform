@@ -24,16 +24,24 @@ import type {
   ConversationContext,
   ConversationTag,
   MemberSnapshot,
+  MessageType,
 } from './chat.types'
 
 const COLLECTION = 'conversations'
+
+interface LastMessageDoc {
+  type: MessageType
+  text: string
+  senderId: string
+  createdAt: Timestamp
+}
 
 interface ConversationDoc {
   memberIds: string[]
   memberSnapshots: Record<string, MemberSnapshot>
   context?: ConversationContext
   tag: ConversationTag
-  lastMessage: Conversation['lastMessage']
+  lastMessage: LastMessageDoc | null
   lastMessageAt: Timestamp | null
   unreadCounts: Record<string, number>
   lastReadAtBy: Record<string, Timestamp>
@@ -54,8 +62,28 @@ function toConversation(id: string, data: ConversationDoc): Conversation {
     memberSnapshots: data.memberSnapshots,
     context: data.context,
     tag: data.tag,
-    lastMessage: data.lastMessage ?? null,
-    lastMessageAt: data.lastMessageAt?.toMillis() ?? 0,
+    // `?.toMillis?.()` (not just `?.toMillis()`) throughout: a document
+    // written before chat.service.ts's serverTimestamp() fix (or by
+    // scripts/seed-demo-data.mjs, which has its own independent
+    // sendMessage() still using Date.now()) has a plain number here, not a
+    // Timestamp — calling .toMillis() on a number throws, which silently
+    // broke the whole onSnapshot callback (conversationsLoaded never
+    // resolves) since Firestore's success callback has no surrounding
+    // try/catch. Caught by actually running the regression suite, not by
+    // typecheck — TS only validates the declared type, not real data shape.
+    lastMessage: data.lastMessage
+      ? {
+          ...data.lastMessage,
+          createdAt:
+            typeof data.lastMessage.createdAt === 'number'
+              ? data.lastMessage.createdAt
+              : (data.lastMessage.createdAt?.toMillis?.() ?? 0),
+        }
+      : null,
+    lastMessageAt:
+      typeof data.lastMessageAt === 'number'
+        ? data.lastMessageAt
+        : (data.lastMessageAt?.toMillis?.() ?? 0),
     unreadCounts: data.unreadCounts ?? {},
     lastReadAtBy,
     mutedBy: data.mutedBy ?? [],

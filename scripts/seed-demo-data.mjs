@@ -22,6 +22,7 @@ import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   getFirestore,
@@ -128,7 +129,7 @@ async function sendMessage(sender, conversationId, otherUid, fields, previewText
       type: fields.type,
       text: previewText,
       senderId: sender.uid,
-      createdAt: Date.now(),
+      createdAt: serverTimestamp(),
     },
     lastMessageAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -150,7 +151,7 @@ async function createPost(author, input) {
     likeCount: 0,
     commentCount: 0,
     featured: input.featured ?? false,
-    status: 'published',
+    status: 'active',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -176,7 +177,8 @@ async function commentOnPost(author, postId, text) {
     authorId: author.uid,
     authorSnapshot: { displayName: author.displayName },
     text,
-    status: 'published',
+    status: 'active',
+    parentCommentId: null,
     createdAt: serverTimestamp(),
   })
   batch.update(doc(author.db, 'discussionPosts', postId), { commentCount: increment(1) })
@@ -220,13 +222,29 @@ async function main() {
 
   // 1. A demo vehicle + a completed seller verification, owned by the
   //    seller test account, so the shared "verification report" message has
-  //    something real to point at.
+  //    something real to point at. Idempotent — delete any previous run's
+  //    demo vehicle (same owner+model) first, same pattern as
+  //    scripts/seed-mock-vehicles.mjs, so re-running doesn't accumulate
+  //    duplicates.
+  const existingDemoVehicles = await getDocs(
+    query(collection(seller.db, 'vehicles'), where('currentOwnerId', '==', seller.uid)),
+  )
+  for (const d of existingDemoVehicles.docs) {
+    if (d.data().model !== '勁戰六代 (Demo)') continue
+    const oldVerifications = await getDocs(
+      query(collection(seller.db, 'verifications'), where('vehicleId', '==', d.id)),
+    )
+    for (const v of oldVerifications.docs) await deleteDoc(v.ref)
+    await deleteDoc(d.ref)
+  }
+
   const vehicleRef = await addDoc(collection(seller.db, 'vehicles'), {
     brand: 'YAMAHA',
     model: '勁戰六代 (Demo)',
-    year: 2023,
+    manufactureYear: 2023,
     mileage: 3200,
     licensePlate: 'DEMO-001',
+    photos: [],
     currentOwnerId: seller.uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -237,12 +255,21 @@ async function main() {
     type: 'seller',
     status: 'completed',
     mileage: 3200,
+    isPublic: false,
+    protocolVersion: 1,
+    schemaVersion: 1,
     createdAt: serverTimestamp(),
   })
   await updateDoc(doc(seller.db, 'verifications', verificationRef.id), {
     status: 'completed',
     completedAt: serverTimestamp(),
   })
+  // Made public before sharing it in chat below — the buyer opening this
+  // report from ChatBubble.vue's rich-card preview reads verifications/{id}
+  // directly, which is owner-only until isPublic flips true (mirrors
+  // listingService.publish()'s real flow, just done directly here since
+  // there's no listing behind this demo verification).
+  await updateDoc(doc(seller.db, 'verifications', verificationRef.id), { isPublic: true })
   console.log(`[seed-demo-data] demo vehicle=${vehicleRef.id} verification=${verificationRef.id}`)
 
   // 2. Buyer <-> Seller "交易中" conversation about that vehicle.

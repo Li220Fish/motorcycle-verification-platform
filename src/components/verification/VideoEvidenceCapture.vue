@@ -71,10 +71,11 @@ async function handleConfirm(): Promise<void> {
   try {
     let remoteUrl: string | undefined
     try {
-      remoteUrl = await storageService.uploadFile(
-        'verification-videos',
+      remoteUrl = await storageService.uploadEvidenceFile(
+        props.verificationId,
+        props.itemId,
         capturedBlob,
-        `${props.itemId}-${Date.now()}.mp4`,
+        'mp4',
       )
     } catch {
       remoteUrl = undefined

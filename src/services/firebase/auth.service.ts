@@ -1,10 +1,13 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
+  verifyBeforeUpdateEmail,
   type User as FirebaseUser,
 } from 'firebase/auth'
 
@@ -42,6 +45,23 @@ export function getCurrentUser(): FirebaseUser | null {
 export async function updateDisplayName(displayName: string): Promise<void> {
   if (!auth.currentUser) throw new Error('Not authenticated')
   await updateProfile(auth.currentUser, { displayName })
+}
+
+/**
+ * Changing the Auth email is security-sensitive and Firebase requires a
+ * recent sign-in for it — re-authenticate with the current password first,
+ * then send a verification link to the NEW address (`verifyBeforeUpdateEmail`,
+ * the non-deprecated replacement for `updateEmail`; it also keeps working on
+ * projects with Email Enumeration Protection enabled, unlike `updateEmail`).
+ * `auth.currentUser.email` only actually changes once the user clicks that
+ * link — same "check your inbox" flow as `sendPasswordReset` already uses.
+ */
+export async function updateEmail(newEmail: string, currentPassword: string): Promise<void> {
+  const user = auth.currentUser
+  if (!user || !user.email) throw new Error('Not authenticated')
+  const credential = EmailAuthProvider.credential(user.email, currentPassword)
+  await reauthenticateWithCredential(user, credential)
+  await verifyBeforeUpdateEmail(user, newEmail)
 }
 
 export async function sendPasswordReset(email: string): Promise<void> {

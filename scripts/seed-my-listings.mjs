@@ -14,10 +14,11 @@
  * pair rather than duplicating on re-run (same pattern as
  * scripts/seed-mock-vehicles.mjs).
  *
- * Uses the Firebase client SDK only — firestore.rules leaves
- * `marketplaceListings` (and `vehicles`/`verifications`) open to any
- * signed-in user, so a single sign-in as 測試賣家 can read every account's
- * vehicles/verifications and write listings on their behalf.
+ * Uses the Firebase client SDK only, signed in as the seeded admin account —
+ * firestore.rules scopes `vehicles`/`verifications` to their owner (+ admin),
+ * and a listing's create rule requires `sellerId==caller` OR admin, neither
+ * of which a single non-admin sign-in could satisfy across all 3 target
+ * accounts at once.
  *
  * Usage:
  *   ALLOW_TEST_SEED=true node scripts/seed-my-listings.mjs
@@ -29,13 +30,14 @@ import path from 'node:path'
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'
 import {
-  addDoc,
   collection,
   deleteDoc,
+  doc,
   getDocs,
   getFirestore,
   query,
   serverTimestamp,
+  setDoc,
   where,
 } from 'firebase/firestore'
 
@@ -144,7 +146,7 @@ function generateAvailableDates(daysAhead, stepDays) {
 const DEFAULT_AVAILABLE_DATES = generateAvailableDates(21, 3)
 const DEFAULT_TIME_SLOTS = ['10:00', '11:30', '14:00', '16:00', '18:00']
 
-async function computeVerificationScore(db, vehicleId) {
+async function findCompletedVerification(db, vehicleId) {
   const verificationsSnapshot = await getDocs(
     query(collection(db, 'verifications'), where('vehicleId', '==', vehicleId)),
   )
@@ -155,9 +157,13 @@ async function computeVerificationScore(db, vehicleId) {
   const answersSnapshot = await getDocs(collection(db, 'verifications', completed.id, 'answers'))
   const answers = answersSnapshot.docs.map((d) => d.data())
   const eligible = answers.filter((answer) => answer.result !== 'not_applicable')
-  if (eligible.length === 0) return 100
-  const normalCount = eligible.filter((answer) => answer.result === 'normal').length
-  return Math.round((normalCount / eligible.length) * 100)
+  const score =
+    eligible.length === 0
+      ? 100
+      : Math.round(
+          (eligible.filter((answer) => answer.result === 'normal').length / eligible.length) * 100,
+        )
+  return { verificationId: completed.id, score }
 }
 
 async function deleteExistingListing(db, sellerId, vehicleId) {
@@ -193,7 +199,7 @@ async function main() {
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getFirestore(app)
-  await signInWithEmailAndPassword(auth, 'seller@motoverify.test', 'MotoVerify123!')
+  await signInWithEmailAndPassword(auth, 'admin@test.com', 'test1234')
 
   console.log(`[seed-my-listings] Seeding into Firebase project: ${firebaseConfig.projectId}`)
 
@@ -212,33 +218,38 @@ async function main() {
       continue
     }
     const vehicle = vehicleDoc.data()
-    const verificationScore = await computeVerificationScore(db, vehicleDoc.id)
-    if (verificationScore === null) {
+    const completed = await findCompletedVerification(db, vehicleDoc.id)
+    if (completed === null) {
       console.warn(
         `[seed-my-listings] Skipped ${target.sellerName}: ${target.vehicleBrand} ${target.vehicleModel} has no completed 車輛驗證.`,
       )
       continue
     }
+    const { verificationId, score: verificationScore } = completed
 
     await deleteExistingListing(db, target.sellerId, vehicleDoc.id)
 
-    const listingRef = await addDoc(collection(db, 'marketplaceListings'), {
-      brand: vehicle.brand,
-      model: vehicle.model,
-      year: vehicle.year,
-      mileageKm: vehicle.mileage,
+    const listingId = doc(collection(db, 'marketplaceListings')).id
+    await setDoc(doc(db, 'marketplaceListings', listingId), {
+      status: 'published',
       vehicleId: vehicleDoc.id,
+      verificationIds: [verificationId],
       priceTwd: target.priceTwd,
       region: target.region,
       district: target.district,
       transferable: target.transferable,
-      displacementCc: target.displacementCc,
-      transmission: target.transmission,
-      color: target.color,
-      modified: target.modified,
       description: target.description,
-      imageUrl: vehicle.imageUrl,
-      photos: [],
+      vehicleSnapshot: {
+        brand: vehicle.brand,
+        model: vehicle.model,
+        manufactureYear: vehicle.manufactureYear ?? null,
+        mileage: vehicle.mileage ?? 0,
+        displacementCc: target.displacementCc,
+        transmission: target.transmission,
+        color: target.color,
+        modified: target.modified,
+        photos: vehicle.photos ?? [],
+      },
       availableDates: DEFAULT_AVAILABLE_DATES,
       timeSlots: DEFAULT_TIME_SLOTS,
       sellerId: target.sellerId,
@@ -247,18 +258,24 @@ async function main() {
       sellerRating: 5,
       sellerReviewCount: 0,
       verificationScore,
+      favoriteCount: 0,
+      appointmentCount: 0,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      publishedAt: serverTimestamp(),
     })
+    // isPublic must be true for a published listing's report to actually be
+    // readable by anyone other than the seller — same invariant
+    // listingService.publish() enforces for a real user's own flow.
+    await setDoc(doc(db, 'verifications', verificationId), { isPublic: true }, { merge: true })
 
     results.push({
       seller: target.sellerName,
       vehicle: `${vehicle.brand} ${vehicle.model}`,
-      listingId: listingRef.id,
+      listingId,
       verificationScore,
     })
     console.log(
-      `[seed-my-listings] ${target.sellerName} -> listing=${listingRef.id} (${vehicle.brand} ${vehicle.model}, score ${verificationScore})`,
+      `[seed-my-listings] ${target.sellerName} -> listing=${listingId} (${vehicle.brand} ${vehicle.model}, score ${verificationScore})`,
     )
   }
 

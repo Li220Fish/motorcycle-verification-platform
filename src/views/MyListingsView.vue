@@ -26,6 +26,7 @@ const errorMessage = ref('')
 
 interface EligibleVehicle {
   vehicle: Vehicle
+  verificationId: string
   verificationScore: number
 }
 const eligibleVehicles = ref<EligibleVehicle[]>([])
@@ -78,7 +79,7 @@ async function loadEligibleVehicles(): Promise<void> {
               (eligible.filter((answer) => answer.result === 'normal').length / eligible.length) *
                 100,
             )
-      candidates.push({ vehicle, verificationScore: score })
+      candidates.push({ vehicle, verificationId: completed.id, verificationScore: score })
     }
     eligibleVehicles.value = candidates
   } finally {
@@ -132,20 +133,24 @@ async function handleSubmit(): Promise<void> {
   submitting.value = true
   errorMessage.value = ''
   try {
+    const listingId = listingService.reserveListingId()
     const uploadedUrls = await Promise.all(
       photoFiles.value.map((file, index) =>
-        storageService.uploadFile('vehicle-images', file, `listing-${Date.now()}-${index}.jpg`),
+        storageService.uploadFileAtPath(
+          `marketplace/${listingId}/${Date.now()}-${index}.jpg`,
+          file,
+        ),
       ),
     )
-    const coverImage = uploadedUrls[0] ?? entry.vehicle.imageUrl ?? undefined
-    const galleryPhotos = uploadedUrls.slice(1)
+    const photos = uploadedUrls.length > 0 ? uploadedUrls : (entry.vehicle.photos ?? [])
 
-    await listingService.create({
+    await listingService.create(listingId, {
       brand: entry.vehicle.brand,
       model: entry.vehicle.model,
-      year: entry.vehicle.year ?? new Date().getFullYear(),
+      year: entry.vehicle.manufactureYear ?? new Date().getFullYear(),
       mileageKm: entry.vehicle.mileage ?? 0,
       vehicleId: entry.vehicle.id,
+      verificationId: entry.verificationId,
       priceTwd: form.priceTwd as number,
       region: form.region.trim(),
       district: form.district.trim(),
@@ -155,8 +160,7 @@ async function handleSubmit(): Promise<void> {
       color: form.color.trim(),
       modified: form.modified,
       description: form.description.trim(),
-      imageUrl: coverImage,
-      photos: galleryPhotos,
+      photos,
       sellerId: authStore.user.id,
       sellerName: authStore.user.displayName || authStore.user.email || '賣家',
       sellerType: 'individual',
@@ -164,6 +168,9 @@ async function handleSubmit(): Promise<void> {
       sellerReviewCount: 0,
       verificationScore: entry.verificationScore,
     })
+    // Stays a single-click flow for the seller even though the data model
+    // stages through draft first — see listingService.publish()'s doc comment.
+    await listingService.publish(listingId, [entry.verificationId])
     showForm.value = false
     resetForm()
     await loadListings()
@@ -208,7 +215,7 @@ async function handleSubmit(): Promise<void> {
                 :key="entry.vehicle.id"
                 :value="entry.vehicle.id"
               >
-                {{ entry.vehicle.year }} {{ entry.vehicle.brand }}
+                {{ entry.vehicle.manufactureYear }} {{ entry.vehicle.brand }}
                 {{ entry.vehicle.model }}（驗證分數 {{ entry.verificationScore }}）
               </option>
             </select>
@@ -309,11 +316,18 @@ async function handleSubmit(): Promise<void> {
           @click="router.push(`/my-listings/${listing.id}`)"
         >
           <span class="thumb">
-            <img v-if="listing.imageUrl" :src="listing.imageUrl" alt="" />
+            <img
+              v-if="listing.vehicleSnapshot.photos[0]"
+              :src="listing.vehicleSnapshot.photos[0]"
+              alt=""
+            />
             <Bike v-else :size="24" color="var(--color-text-disabled)" />
           </span>
           <span class="info">
-            <span class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</span>
+            <span class="title"
+              >{{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
+              {{ listing.vehicleSnapshot.model }}</span
+            >
             <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
           </span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />

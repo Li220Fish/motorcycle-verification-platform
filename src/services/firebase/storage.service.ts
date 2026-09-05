@@ -2,29 +2,14 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
 import { storage } from './firebase'
 
-export type StorageFolder =
-  | 'vehicle-images'
-  | 'verification-images'
-  | 'verification-videos'
-  | 'verification-audio'
-  | 'voltage-data'
-
-function buildPath(folder: StorageFolder, fileName: string): string {
-  const safeName = `${Date.now()}-${fileName}`
-  return `${folder}/${safeName}`
-}
-
-async function uploadFile(folder: StorageFolder, file: Blob, fileName: string): Promise<string> {
-  const storageRef = ref(storage, buildPath(folder, fileName))
-  const snapshot = await uploadBytes(storageRef, file)
-  return getDownloadURL(snapshot.ref)
+function timestampedName(fileName: string): string {
+  return `${Date.now()}-${fileName}`
 }
 
 /**
- * For paths with their own required nesting (chat-media/{conversationId}/...,
- * discussion-media/{postId}/...) instead of the flat folder/filename layout
- * `uploadFile` uses — the caller builds the full path so storage.rules can
- * authorize per-conversation / per-post writes.
+ * Public content — marketplace listing photos, discussion post images. The
+ * returned value IS the permanent download URL, persisted directly into
+ * Firestore. No confidentiality requirement, unlike uploadPrivateFile below.
  */
 async function uploadFileAtPath(path: string, file: Blob): Promise<string> {
   const storageRef = ref(storage, path)
@@ -32,21 +17,85 @@ async function uploadFileAtPath(path: string, file: Blob): Promise<string> {
   return getDownloadURL(snapshot.ref)
 }
 
+/**
+ * Private content (verification evidence, chat images). Returns the Storage
+ * OBJECT PATH, not a download URL — a getDownloadURL() result embeds a
+ * permanent token that bypasses storage.rules forever for anyone who ever
+ * obtains that string, even after the caller's access is revoked. Persist
+ * the path; resolve a fresh, rules-checked URL at display time via
+ * resolveDownloadUrl() (see src/composables/useStorageUrl.ts).
+ */
+async function uploadPrivateFile(path: string, file: Blob): Promise<string> {
+  const storageRef = ref(storage, path)
+  await uploadBytes(storageRef, file)
+  return path
+}
+
+/** Resolves a Storage object path (from uploadPrivateFile) to a fresh
+ * download URL. Re-checked against storage.rules on every call — never
+ * cache/persist the result past the current session. */
+async function resolveDownloadUrl(path: string): Promise<string> {
+  return getDownloadURL(ref(storage, path))
+}
+
+async function uploadEvidenceFile(
+  verificationId: string,
+  itemId: string,
+  file: Blob,
+  extension: string,
+): Promise<string> {
+  return uploadPrivateFile(
+    `verifications/${verificationId}/evidence/${timestampedName(`${itemId}.${extension}`)}`,
+    file,
+  )
+}
+
 async function uploadChatImage(
   conversationId: string,
+  uid: string,
   messageId: string,
   file: Blob,
 ): Promise<string> {
-  return uploadFileAtPath(`chat-media/${conversationId}/${messageId}/image.jpg`, file)
+  return uploadPrivateFile(`conversations/${conversationId}/${uid}/${messageId}/image.jpg`, file)
 }
 
 async function uploadDiscussionImage(postId: string, imageId: string, file: Blob): Promise<string> {
-  return uploadFileAtPath(`discussion-media/${postId}/${imageId}.jpg`, file)
+  return uploadFileAtPath(`discussion/${postId}/${imageId}.jpg`, file)
+}
+
+/** Owner's own gallery photos — non-sensitive, public URL like marketplace
+ * photos (storage.rules already reserves vehicles/{id}/** for this). */
+async function uploadVehiclePhoto(
+  vehicleId: string,
+  file: Blob,
+  extension: string,
+): Promise<string> {
+  return uploadFileAtPath(
+    `vehicles/${vehicleId}/photos/${timestampedName(`photo.${extension}`)}`,
+    file,
+  )
+}
+
+/** 行照 (registration certificate) photo — read only by the Trusted Backend's
+ * verifyVehicleRegistrationDocument (which fetches it by URL for OCR). */
+async function uploadVehicleRegistrationDocument(
+  vehicleId: string,
+  file: Blob,
+  extension: string,
+): Promise<string> {
+  return uploadFileAtPath(
+    `vehicles/${vehicleId}/registration/${timestampedName(`document.${extension}`)}`,
+    file,
+  )
 }
 
 export const storageService = {
-  uploadFile,
   uploadFileAtPath,
+  uploadPrivateFile,
+  resolveDownloadUrl,
+  uploadEvidenceFile,
   uploadChatImage,
   uploadDiscussionImage,
+  uploadVehiclePhoto,
+  uploadVehicleRegistrationDocument,
 }

@@ -1,18 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { FileText } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
 import { homeContentService } from '@/services/firebase/home-content.service'
+import { formatRelativeTime } from '@/utils/format-time'
 import type { MockVehicleNews } from '@/data/home/vehicle-news-mock'
 
+const router = useRouter()
 const newsItems = ref<MockVehicleNews[]>([])
-const noticeMessage = ref('')
-function handleNewsClick(): void {
-  noticeMessage.value = '車訊內容尚未開放'
-  setTimeout(() => {
-    noticeMessage.value = ''
-  }, 2000)
-}
 
 onMounted(async () => {
   newsItems.value = await homeContentService.listVehicleNews()
@@ -25,18 +21,22 @@ onMounted(async () => {
       <h2>車訊新知</h2>
     </div>
     <div class="news-list">
-      <button v-for="news in newsItems" :key="news.id" class="news-row" @click="handleNewsClick">
+      <button
+        v-for="news in newsItems"
+        :key="news.id"
+        class="news-row"
+        @click="router.push(`/vehicle-news/${news.id}`)"
+      >
         <div class="icon-wrap"><FileText :size="20" color="var(--color-text-disabled)" /></div>
         <div class="news-info">
           <p class="title">{{ news.title }}</p>
           <p class="meta">
             <span class="category-tag">{{ news.category }}</span>
-            {{ news.source }} · {{ news.relativeTime }}
+            {{ news.sourceName }} · {{ formatRelativeTime(news.publishedAt) }}
           </p>
         </div>
       </button>
     </div>
-    <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
   </div>
 </template>
 
@@ -116,12 +116,5 @@ onMounted(async () => {
   background: var(--color-primary-bg, #e8f1fd);
   border-radius: 999px;
   padding: 1px 8px;
-}
-
-.notice {
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin: 0;
 }
 </style>

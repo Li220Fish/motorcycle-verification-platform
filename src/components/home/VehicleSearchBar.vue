@@ -1,31 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { AlertTriangle, Search, ShieldCheck } from 'lucide-vue-next'
+import { AlertTriangle, ShieldCheck } from 'lucide-vue-next'
 
-import { vehicleSearchService } from '@/services/search/vehicle-search.service'
 import type { VehicleSearchResult } from '@/services/search/vehicle-search.service'
 
+// Search is temporarily disabled on the Home page (see the commented-out
+// <form> below) — query/status/results/errorMessage stay wired into the
+// panels below for when it's re-enabled, but nothing currently drives them
+// away from their idle defaults.
 const query = ref('')
 const status = ref<'idle' | 'loading' | 'done' | 'error'>('idle')
 const results = ref<VehicleSearchResult[]>([])
 const errorMessage = ref('')
-
-async function handleSearch(): Promise<void> {
-  const trimmed = query.value.trim()
-  if (!trimmed) {
-    status.value = 'idle'
-    return
-  }
-  status.value = 'loading'
-  errorMessage.value = ''
-  try {
-    results.value = await vehicleSearchService.search(trimmed)
-    status.value = 'done'
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '搜尋失敗'
-    status.value = 'error'
-  }
-}
 </script>
 
 <template>
@@ -36,7 +22,7 @@ async function handleSearch(): Promise<void> {
       <button type="submit" class="search-submit" aria-label="搜尋">
         <Search :size="18" color="#fff" />
       </button>
-    </form> 主頁暫時不需要搜尋功能--> 
+    </form> 主頁暫時不需要搜尋功能-->
 
     <div v-if="status === 'loading'" class="search-panel loading">
       <div class="spinner" />

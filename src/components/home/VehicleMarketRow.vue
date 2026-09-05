@@ -10,13 +10,18 @@ defineEmits<{ toggleFavorite: [] }>()
 <template>
   <div class="market-row">
     <div class="thumb">
-      <img v-if="listing.imageUrl" :src="listing.imageUrl" class="thumb-img" alt="" />
+      <img
+        v-if="listing.vehicleSnapshot.photos[0]"
+        :src="listing.vehicleSnapshot.photos[0]"
+        class="thumb-img"
+        alt=""
+      />
       <Bike v-else :size="32" color="var(--color-text-disabled)" />
-      <span class="demo-tag">DEMO</span>
+      <span v-if="listing.verificationIds.length === 0" class="demo-tag">DEMO</span>
     </div>
     <div class="info">
       <div class="title-row">
-        <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+        <p class="title">{{ listing.vehicleSnapshot.brand }} {{ listing.vehicleSnapshot.model }}</p>
         <!-- Every listing already requires a passing inspection to go live,
              so "已驗證" is no longer a differentiator — dealer-sold listings
              get their own badge instead (see marketplace-mock.ts). Icon-only
@@ -27,7 +32,8 @@ defineEmits<{ toggleFavorite: [] }>()
         </span>
       </div>
       <p class="meta">
-        {{ listing.year }} 年式 · {{ listing.mileageKm.toLocaleString() }} km · {{ listing.region }}
+        {{ listing.vehicleSnapshot.manufactureYear }} 年式 ·
+        {{ listing.vehicleSnapshot.mileage.toLocaleString() }} km · {{ listing.region }}
       </p>
       <div class="bottom-row">
         <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>

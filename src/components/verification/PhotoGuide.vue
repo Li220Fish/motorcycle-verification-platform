@@ -3,31 +3,28 @@ import { computed } from 'vue'
 import { Bike } from 'lucide-vue-next'
 
 import MotorcycleDiagram from './MotorcycleDiagram.vue'
-import { getAppearanceGroup, getAppearanceGroupId } from '@/data/verification/appearance-groups'
+import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
 
 const props = defineProps<{
   label: string
   /** When this belongs to the 車身外觀 photo checklist, shows the shared
-   * motorcycle silhouette with THIS part's region highlighted instead of a
-   * generic icon — every appearance item no longer shares one indistinct
-   * picture (P1 §10 of the UX report). */
+   * motorcycle silhouette with THIS exact photo's own position highlighted
+   * (not just its Capture Map group's broader region) instead of a generic
+   * icon — every one of the 20 appearance items gets its own target. */
   itemId?: string
 }>()
 
-const appearanceGroup = computed(() => {
-  const groupId = props.itemId ? getAppearanceGroupId(props.itemId) : null
-  return groupId ? getAppearanceGroup(groupId) : null
-})
+const photoSlot = computed(() => (props.itemId ? getPhotoSlotByItemId(props.itemId) : undefined))
 
 const highlight = computed(() => {
-  const group = appearanceGroup.value
-  return group ? [{ id: group.id, label: group.label, ...group.highlight }] : []
+  const slot = photoSlot.value
+  return slot ? [{ id: slot.id, label: slot.label, ...slot.highlight }] : []
 })
 </script>
 
 <template>
   <div class="photo-guide">
-    <div v-if="appearanceGroup" class="frame diagram-frame">
+    <div v-if="photoSlot" class="frame diagram-frame">
       <MotorcycleDiagram :highlights="highlight" />
     </div>
     <div v-else class="frame">

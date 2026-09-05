@@ -22,7 +22,7 @@ export interface DiscussionMedia {
   storagePath: string
 }
 
-export type PostStatus = 'published' | 'deleted'
+export type PostStatus = 'active' | 'hidden' | 'deleted'
 
 export interface DiscussionPost {
   id: string
@@ -46,7 +46,9 @@ export interface DiscussionComment {
   authorId: string
   authorSnapshot: AuthorSnapshot
   text: string
-  status: 'published' | 'deleted'
+  status: PostStatus
+  /** No threaded-reply UI yet — always null, reserved by the schema. */
+  parentCommentId: string | null
   createdAt: number
 }
 

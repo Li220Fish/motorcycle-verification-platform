@@ -73,7 +73,9 @@ onMounted(loadReports)
           <span class="thumb"><FileText :size="20" color="var(--color-text-disabled)" /></span>
           <span class="info">
             <span class="title">{{ entry.vehicle.brand }} {{ entry.vehicle.model }}</span>
-            <span class="sub">{{ entry.vehicle.licensePlate ?? entry.vehicle.year }}</span>
+            <span class="sub">{{
+              entry.vehicle.licensePlate ?? entry.vehicle.manufactureYear
+            }}</span>
           </span>
         </button>
       </div>

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { User as FirebaseUser } from 'firebase/auth'
 
 import * as authService from '@/services/firebase/auth.service'
+import { userProfileService } from '@/services/firebase/user-profile.service'
 import type { User } from '@/types/user'
 
 function toAppUser(firebaseUser: FirebaseUser): User {
@@ -33,6 +34,14 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = firebaseUser ? toAppUser(firebaseUser) : null
       loading.value = false
       resolveReady()
+      if (firebaseUser) {
+        void userProfileService.touchUserProfile(
+          firebaseUser.uid,
+          firebaseUser.email ?? '',
+          firebaseUser.displayName,
+          firebaseUser.photoURL,
+        )
+      }
     })
   }
 
@@ -68,7 +77,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function updateDisplayName(displayName: string): Promise<void> {
     await authService.updateDisplayName(displayName)
-    if (user.value) user.value = { ...user.value, displayName, updatedAt: Date.now() }
+    if (user.value) {
+      user.value = { ...user.value, displayName, updatedAt: Date.now() }
+      void userProfileService.touchUserProfile(user.value.id, user.value.email, displayName)
+    }
+  }
+
+  /** Does NOT update `user.value.email` — the address only actually changes
+   * once the user clicks the verification link Firebase sends them, at which
+   * point the next auth state refresh (e.g. next login) picks it up. */
+  async function updateEmail(newEmail: string, currentPassword: string): Promise<void> {
+    await authService.updateEmail(newEmail, currentPassword)
   }
 
   async function sendPasswordReset(email: string): Promise<void> {
@@ -85,6 +104,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     updateDisplayName,
+    updateEmail,
     sendPasswordReset,
   }
 })

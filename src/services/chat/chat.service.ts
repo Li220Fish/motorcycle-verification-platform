@@ -22,7 +22,6 @@ const MESSAGES = 'messages'
 const PAGE_SIZE = 30
 
 interface MessageDoc {
-  conversationId: string
   senderId: string
   type: MessageType
   text?: string
@@ -35,7 +34,6 @@ interface MessageDoc {
 function toMessage(id: string, data: MessageDoc): ChatMessage {
   return {
     id,
-    conversationId: data.conversationId,
     senderId: data.senderId,
     type: data.type,
     text: data.text,
@@ -114,8 +112,6 @@ interface SendMessageInput {
   type: MessageType
   text?: string
   imageUrl?: string
-  vehicleId?: string
-  verificationId?: string
   previewText: string
   messageId?: string
 }
@@ -131,13 +127,10 @@ async function send(input: SendMessageInput): Promise<void> {
     ? doc(messagesCollection(input.conversationId), input.messageId)
     : doc(messagesCollection(input.conversationId))
   batch.set(messageRef, {
-    conversationId: input.conversationId,
     senderId: input.senderId,
     type: input.type,
     ...(input.text !== undefined ? { text: input.text } : {}),
     ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
-    ...(input.vehicleId !== undefined ? { vehicleId: input.vehicleId } : {}),
-    ...(input.verificationId !== undefined ? { verificationId: input.verificationId } : {}),
     createdAt: serverTimestamp(),
   })
 
@@ -151,7 +144,7 @@ async function send(input: SendMessageInput): Promise<void> {
       type: input.type,
       text: input.previewText,
       senderId: input.senderId,
-      createdAt: Date.now(),
+      createdAt: serverTimestamp(),
     },
     lastMessageAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -188,32 +181,6 @@ async function sendImage(
   })
 }
 
-async function sendVehicle(
-  conversationId: string,
-  senderId: string,
-  otherMemberIds: string[],
-  vehicleId: string,
-  previewText: string,
-) {
-  await send({ conversationId, senderId, otherMemberIds, type: 'vehicle', vehicleId, previewText })
-}
-
-async function sendVerificationReport(
-  conversationId: string,
-  senderId: string,
-  otherMemberIds: string[],
-  verificationId: string,
-) {
-  await send({
-    conversationId,
-    senderId,
-    otherMemberIds,
-    type: 'verification_report',
-    verificationId,
-    previewText: '[驗證報告]',
-  })
-}
-
 async function sendSystemNote(
   conversationId: string,
   senderId: string,
@@ -229,7 +196,5 @@ export const chatService = {
   reserveMessageId,
   sendText,
   sendImage,
-  sendVehicle,
-  sendVerificationReport,
   sendSystemNote,
 }

@@ -4,8 +4,6 @@ import { ref } from 'vue'
 import { cameraService } from '@/services/media/camera.service'
 import { storageService } from '@/services/firebase/storage.service'
 
-const props = defineProps<{ folder: 'vehicle-images' | 'verification-images' }>()
-
 const previewUrl = ref('')
 const errorMessage = ref('')
 const uploading = ref(false)
@@ -30,10 +28,9 @@ async function handleUpload(): Promise<void> {
   errorMessage.value = ''
   try {
     const blob = await fetch(capturedBlobUrl).then((response) => response.blob())
-    uploadedUrl.value = await storageService.uploadFile(
-      props.folder,
+    uploadedUrl.value = await storageService.uploadFileAtPath(
+      `dev-test/photo-${Date.now()}.jpg`,
       blob,
-      `photo-${Date.now()}.jpg`,
     )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Upload failed'

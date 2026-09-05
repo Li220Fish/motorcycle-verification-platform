@@ -117,7 +117,12 @@ export const useChatStore = defineStore('chat', () => {
     sendError.value = ''
     try {
       const messageId = chatService.reserveMessageId(conversation.id)
-      const imageUrl = await storageService.uploadChatImage(conversation.id, messageId, file)
+      const imageUrl = await storageService.uploadChatImage(
+        conversation.id,
+        currentUid.value,
+        messageId,
+        file,
+      )
       await chatService.sendImage(
         conversation.id,
         currentUid.value,
@@ -129,29 +134,6 @@ export const useChatStore = defineStore('chat', () => {
       sendError.value = error instanceof Error ? error.message : '圖片上傳失敗'
       throw error
     }
-  }
-
-  async function sendVehicle(vehicleId: string, previewText: string): Promise<void> {
-    const conversation = currentConversation.value
-    if (!conversation || !currentUid.value) return
-    await chatService.sendVehicle(
-      conversation.id,
-      currentUid.value,
-      otherMemberIds(conversation),
-      vehicleId,
-      previewText,
-    )
-  }
-
-  async function sendVerificationReport(verificationId: string): Promise<void> {
-    const conversation = currentConversation.value
-    if (!conversation || !currentUid.value) return
-    await chatService.sendVerificationReport(
-      conversation.id,
-      currentUid.value,
-      otherMemberIds(conversation),
-      verificationId,
-    )
   }
 
   async function markCurrentConversationRead(): Promise<void> {
@@ -186,8 +168,6 @@ export const useChatStore = defineStore('chat', () => {
     findOrCreateConversation,
     sendText,
     sendImageFile,
-    sendVehicle,
-    sendVerificationReport,
     markCurrentConversationRead,
     setMuted,
     setArchived,

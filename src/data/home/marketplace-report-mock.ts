@@ -10,10 +10,10 @@ import type { MockMarketListing } from './marketplace-mock'
  * `verificationScore` as a badge before you ever open the report — this
  * builds the same 5-category/70-item breakdown the real 檢驗報告 screen
  * shows for an actual vehicle (see VerificationReportView.vue), reusing the
- * real Seller flow's item titles/descriptions so the two screens read
- * identically, just fed by fabricated per-item results instead of real
- * verification answers. Deterministic per listing id (not Math.random) so
- * the same listing always shows the same report on reload.
+ * real Seller flow's item titles so the two screens read identically, just
+ * fed by fabricated per-item results instead of real verification answers.
+ * Deterministic per listing id (not Math.random) so the same listing always
+ * shows the same report on reload.
  */
 
 const ATTENTION_NOTES = [
@@ -55,7 +55,6 @@ export function buildMockReportSections(listing: MockMarketListing): ReportSecti
     bucket.items.push({
       id: flat.item.id,
       title: flat.item.title,
-      description: flat.item.description,
       badgeLabel: RESULT_LABEL[result],
       badgeTone: RESULT_TONE[result],
       note: flagged ? ATTENTION_NOTES[Math.floor(random() * ATTENTION_NOTES.length)] : undefined,

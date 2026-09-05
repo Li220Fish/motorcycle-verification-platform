@@ -21,10 +21,17 @@ async function ensurePermission(): Promise<void> {
   if (!granted.value) throw new Error('Microphone permission was denied.')
 }
 
-async function start(): Promise<void> {
+/** Exposed so a capture flow can do its own upfront "準備中…" permission
+ *  check (see EngineInspectionFlow.vue) before running a countdown, instead
+ *  of only discovering a denied permission after the countdown finishes. */
+async function checkPermission(): Promise<void> {
   await ensurePermission()
   const canRecord = await VoiceRecorder.canDeviceVoiceRecord()
   if (!canRecord.value) throw new Error('This device cannot record audio.')
+}
+
+async function start(): Promise<void> {
+  await checkPermission()
   const result = await VoiceRecorder.startRecording()
   if (!result.value) throw new Error('Failed to start recording.')
 }
@@ -36,4 +43,4 @@ async function stop(): Promise<AudioRecordingResult> {
   return { blob: base64ToBlob(recordDataBase64, mimeType), durationMs: msDuration }
 }
 
-export const audioRecorderService = { start, stop }
+export const audioRecorderService = { start, stop, checkPermission }

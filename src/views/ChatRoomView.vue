@@ -4,18 +4,18 @@ import { Ban, EyeOff, Flag, MoreVertical } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
-import ChatAttachmentSheet from '@/components/chat/ChatAttachmentSheet.vue'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatDateDivider from '@/components/chat/ChatDateDivider.vue'
 import ChatInputBar from '@/components/chat/ChatInputBar.vue'
 import { conversationService } from '@/services/chat/conversation.service'
 import { homeContentService } from '@/services/firebase/home-content.service'
+import { listingService } from '@/services/firebase/listing.service'
 import { vehicleService } from '@/services/firebase/vehicle.service'
-import { verificationService } from '@/services/firebase/verification.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { formatDateDivider } from '@/utils/format-time'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
+import type { ListingAppointment } from '@/types/listing-appointment'
 import type { Vehicle } from '@/types/vehicle'
 
 const props = defineProps<{ conversationId: string }>()
@@ -25,13 +25,14 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 
 const sending = ref(false)
-const attachmentSheetOpen = ref(false)
 const menuOpen = ref(false)
 const actionError = ref('')
 const contextVehicle = ref<Vehicle | null>(null)
 const contextListing = ref<MockMarketListing | null>(null)
 const messageLog = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const relevantAppointment = ref<ListingAppointment | null>(null)
+const decidingAppointment = ref(false)
 
 const otherId = computed(() => {
   const conversation = chatStore.currentConversation
@@ -87,6 +88,73 @@ async function loadContextListing(): Promise<void> {
     : null
 }
 
+const isSeller = computed(
+  () => !!contextListing.value?.sellerId && contextListing.value.sellerId === authStore.user?.id,
+)
+
+function formatDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('zh-TW', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** The relevant buyer's most recent booking for this conversation's
+ * listing — an older, already-resolved appointment shouldn't keep showing a
+ * stale banner once a newer one exists. "The relevant buyer" depends on
+ * which side of the conversation is looking: the seller cares about the
+ * other participant's booking, but a buyer viewing their own conversation
+ * with the seller IS that buyer — `otherId` there points at the seller, not
+ * at them, so it can't be used for both sides. */
+async function loadAppointment(): Promise<void> {
+  const listingId = contextListing.value?.id
+  const myUid = authStore.user?.id
+  if (!listingId || !myUid) {
+    relevantAppointment.value = null
+    return
+  }
+  const buyerId = isSeller.value ? otherId.value : myUid
+  if (!buyerId) {
+    relevantAppointment.value = null
+    return
+  }
+  const appointments = await listingService.listAppointments(listingId).catch(() => [])
+  const buyerAppointments = appointments
+    .filter((appointment) => appointment.buyerId === buyerId)
+    .sort((a, b) => b.createdAt - a.createdAt)
+  relevantAppointment.value = buyerAppointments[0] ?? null
+}
+
+async function handleApprove(): Promise<void> {
+  const appointment = relevantAppointment.value
+  if (!appointment || !isSeller.value) return
+  decidingAppointment.value = true
+  try {
+    await listingService.updateAppointmentStatus(appointment.listingId, appointment.id, 'approved')
+    relevantAppointment.value = { ...appointment, status: 'approved' }
+  } finally {
+    decidingAppointment.value = false
+  }
+}
+
+async function handleDecline(): Promise<void> {
+  const appointment = relevantAppointment.value
+  if (!appointment || !isSeller.value) return
+  decidingAppointment.value = true
+  try {
+    await listingService.updateAppointmentStatus(appointment.listingId, appointment.id, 'declined')
+    relevantAppointment.value = { ...appointment, status: 'declined' }
+    await chatStore.sendText(
+      `很抱歉，賣家婉拒了 ${formatDateTime(appointment.scheduledAt)} 的看車預約，歡迎在這裡討論其他時間。`,
+    )
+    await scrollToBottom()
+  } finally {
+    decidingAppointment.value = false
+  }
+}
+
 async function handleSend(text: string): Promise<void> {
   sending.value = true
   try {
@@ -100,7 +168,6 @@ async function handleSend(text: string): Promise<void> {
 }
 
 function handlePickImage(): void {
-  attachmentSheetOpen.value = false
   fileInput.value?.click()
 }
 
@@ -118,34 +185,6 @@ async function handleFileChange(event: Event): Promise<void> {
   } finally {
     sending.value = false
   }
-}
-
-async function handleShareVehicle(): Promise<void> {
-  attachmentSheetOpen.value = false
-  const vehicle = contextVehicle.value
-  if (!vehicle) {
-    actionError.value = '此對話沒有關聯車輛可分享'
-    return
-  }
-  await chatStore.sendVehicle(vehicle.id, `${vehicle.brand} ${vehicle.model}`)
-  await scrollToBottom()
-}
-
-async function handleShareReport(): Promise<void> {
-  attachmentSheetOpen.value = false
-  const vehicleId = chatStore.currentConversation?.context?.vehicleId
-  if (!vehicleId || !authStore.user) {
-    actionError.value = '此對話沒有關聯車輛，無法分享驗證報告'
-    return
-  }
-  const verifications = await verificationService.listByVehicle(vehicleId).catch(() => [])
-  const report = verifications.find((v) => v.type === 'seller' && v.status === 'completed')
-  if (!report) {
-    actionError.value = '尚未有已完成的驗證報告可分享'
-    return
-  }
-  await chatStore.sendVerificationReport(report.id)
-  await scrollToBottom()
 }
 
 async function handleBlock(): Promise<void> {
@@ -181,6 +220,7 @@ watch(
 
 watch(() => chatStore.currentConversation?.context?.vehicleId, loadContextVehicle)
 watch(() => chatStore.currentConversation?.context?.listingId, loadContextListing)
+watch([contextListing, otherId], loadAppointment)
 
 onMounted(async () => {
   chatStore.openConversation(props.conversationId)
@@ -202,6 +242,32 @@ onUnmounted(() => {
       </template>
     </AppHeader>
 
+    <div
+      v-if="relevantAppointment?.status === 'pending' && isSeller"
+      class="appointment-banner pending"
+    >
+      <p class="ab-text">買家提出看車預約：{{ formatDateTime(relevantAppointment.scheduledAt) }}</p>
+      <div class="ab-actions">
+        <button class="ab-decline" :disabled="decidingAppointment" @click="handleDecline">
+          婉拒
+        </button>
+        <button class="ab-approve" :disabled="decidingAppointment" @click="handleApprove">
+          同意
+        </button>
+      </div>
+    </div>
+    <div
+      v-else-if="relevantAppointment?.status === 'pending' && !isSeller"
+      class="appointment-banner pending"
+    >
+      <p class="ab-text">
+        已送出看車預約：{{ formatDateTime(relevantAppointment.scheduledAt) }}，等待賣家確認。
+      </p>
+    </div>
+    <div v-else-if="relevantAppointment?.status === 'approved'" class="appointment-banner approved">
+      <p class="ab-text">雙方面交時間為 {{ formatDateTime(relevantAppointment.scheduledAt) }}</p>
+    </div>
+
     <div v-if="chatStore.currentConversation" class="tag-row">
       <span class="tag">{{ chatStore.currentConversation.tag }}</span>
     </div>
@@ -219,7 +285,9 @@ onUnmounted(() => {
       class="vehicle-context"
       @click="router.push(`/marketplace/${contextListing.id}`)"
     >
-      <span class="vc-title">{{ contextListing.brand }} {{ contextListing.model }}</span>
+      <span class="vc-title"
+        >{{ contextListing.vehicleSnapshot.brand }} {{ contextListing.vehicleSnapshot.model }}</span
+      >
       <span class="vc-link">查看刊登 →</span>
     </button>
 
@@ -256,25 +324,13 @@ onUnmounted(() => {
     <p v-if="actionError" class="action-error">{{ actionError }}</p>
     <p v-if="chatStore.sendError" class="action-error">{{ chatStore.sendError }}</p>
 
-    <ChatInputBar
-      :sending="sending"
-      @send="handleSend"
-      @open-attachments="attachmentSheetOpen = true"
-    />
+    <ChatInputBar :sending="sending" @send="handleSend" @pick-image="handlePickImage" />
     <input
       ref="fileInput"
       type="file"
       accept="image/*"
       class="hidden-file"
       @change="handleFileChange"
-    />
-
-    <ChatAttachmentSheet
-      v-if="attachmentSheetOpen"
-      @close="attachmentSheetOpen = false"
-      @pick-image="handlePickImage"
-      @share-vehicle="handleShareVehicle"
-      @share-report="handleShareReport"
     />
   </div>
 </template>
@@ -296,6 +352,69 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.appointment-banner {
+  margin: 8px var(--space-md) 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.appointment-banner.pending {
+  background: var(--color-warning-bg);
+}
+
+.appointment-banner.approved {
+  background: var(--color-success-bg);
+}
+
+.ab-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.appointment-banner.pending .ab-text {
+  color: var(--color-warning);
+}
+
+.appointment-banner.approved .ab-text {
+  color: var(--color-success);
+}
+
+.ab-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.ab-actions button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ab-decline {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.ab-approve {
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.ab-actions button:disabled {
+  opacity: 0.6;
 }
 
 .tag-row {

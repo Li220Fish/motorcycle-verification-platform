@@ -20,8 +20,10 @@
  * TS module directly, so if that flow definition changes, update this list
  * to match.
  *
- * Uses the Firebase client SDK only (same pattern as
- * scripts/seed-demo-data.mjs) — no Admin SDK / service account key.
+ * Uses the Firebase client SDK only, signed in as the seeded admin account —
+ * these vehicles/verifications are owned/verified by 3 different test
+ * accounts from one session, which only admin's create-rule bypass allows
+ * (see firestore.rules' vehicles/verifications create rules).
  *
  * Idempotent: before creating each of the 5 vehicles below, deletes any
  * existing vehicle already owned by that same account with the same
@@ -84,12 +86,13 @@ function guardEnvironment() {
   }
 }
 
-// The other 2 seeded test accounts (docs/test-accounts.md) — most vehicles
-// stay owned by 測試賣家 (who also performs every seeded verification below,
+// The 3 seeded test accounts (docs/test-accounts.md) — most vehicles stay
+// owned by 測試賣家 (who also performs every seeded verification below,
 // regardless of current owner — that's "who verified it", not "who owns it
 // now"), but one each goes to 測試買家 and MotoVerify 車商 so every test
 // account has at least one real vehicle to look at, without inventing new
 // mock data (per the request — reusing these same 5 vehicles).
+const SELLER_UID = 'C4Rn3b9vpoXn2mRoL8WJUnFOg9k1'
 const BUYER_UID = 'e399kAhI9PNTmC2RqRT3K6tdiRq1'
 const DEALER_UID = 'WfRtacVURlSxRIrrtBsVX7E651c2'
 
@@ -259,12 +262,8 @@ async function main() {
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getFirestore(app)
-  const credential = await signInWithEmailAndPassword(
-    auth,
-    'seller@motoverify.test',
-    'MotoVerify123!',
-  )
-  const sellerUid = credential.user.uid
+  await signInWithEmailAndPassword(auth, 'admin@test.com', 'test1234')
+  const sellerUid = SELLER_UID
 
   console.log(`[seed-mock-vehicles] Seeding into Firebase project: ${firebaseConfig.projectId}`)
   console.log(`[seed-mock-vehicles] Verifier: seller@motoverify.test (${sellerUid})`)
@@ -276,12 +275,12 @@ async function main() {
     const vehicleRef = await addDoc(collection(db, 'vehicles'), {
       brand: vehicle.brand,
       model: vehicle.model,
-      year: vehicle.year,
+      manufactureYear: vehicle.year,
       mileage: vehicle.mileage,
       licensePlate: vehicle.licensePlate,
       engineNumber: vehicle.engineNumber,
       chassisNumber: vehicle.chassisNumber,
-      imageUrl: vehicle.imageUrl,
+      photos: [vehicle.imageUrl],
       currentOwnerId: ownerUid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

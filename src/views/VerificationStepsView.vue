@@ -4,17 +4,26 @@ import { useRouter } from 'vue-router'
 
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
 import ElectricalLightsCheck from '@/components/verification/ElectricalLightsCheck.vue'
+import EngineInspectionFlow from '@/components/verification/engine/EngineInspectionFlow.vue'
+import EnvironmentCaptureSession from '@/components/verification/environment/EnvironmentCaptureSession.vue'
+import ColdTouchCapture from '@/components/verification/environment/ColdTouchCapture.vue'
 import RideSafetyGate from '@/components/verification/RideSafetyGate.vue'
 import VerificationCategoryNav from '@/components/verification/VerificationCategoryNav.vue'
 import VerificationItem from '@/components/verification/VerificationItem.vue'
 import VerificationLayout from '@/components/verification/VerificationLayout.vue'
 import VerificationReview from '@/components/verification/VerificationReview.vue'
-import { getAppearanceGroup, getAppearanceGroupId } from '@/data/verification/appearance-groups'
+import { getAppearanceGroup } from '@/data/verification/appearance-groups'
+// getAppearanceGroupId is only consumed by the Capture Map auto-reopen logic
+// in handleNext, which is commented out below — its import is dropped here
+// only to avoid an unused-import lint error; re-add `, getAppearanceGroupId`
+// to this import when that block is restored.
+import { ENGINE_SESSION_ITEM_IDS } from '@/data/verification/engine-session'
 import { SELLER_ELECTRIC_LIGHT_ITEM_IDS } from '@/data/verification/seller-verification'
 import { localDraftService } from '@/services/verification/local-draft.service'
 import { useVerificationStore } from '@/stores/verification.store'
 
 const APPEARANCE_SECTION_ID = 'seller-appearance'
+const ENGINE_SESSION_LAST_ITEM_ID = 'ENG-08'
 
 const props = defineProps<{ id: string }>()
 
@@ -28,6 +37,11 @@ const completing = ref(false)
 const completeError = ref('')
 // Capture Map hub for 車身外觀 (P1 §10 of the UX report) — a UI-only mode
 // flag; the 20 underlying APR-* items and their linear order are untouched.
+// Disabled 2026-09 per user request — they want to shoot straight through
+// the 20 photos without returning to the hub after each one. The map UX
+// itself is still considered good, so nothing here was deleted: every place
+// that would flip this flag to `true`, plus the "← 返回拍攝地圖" button, is
+// commented out below instead. Uncomment those spots to bring it back.
 const appearanceMapOpen = ref(false)
 
 const typeLabel: Record<string, string> = {
@@ -76,11 +90,38 @@ const needsRideSafetyGate = computed(
 
 const isAppearanceSection = computed(() => currentFlat.value?.section.id === APPEARANCE_SECTION_ID)
 
-// P0: within a lockedOrder section (引擎狀況) "下一步" must be a real gate,
-// not just hidden step-chips — see isItemAdvanceReady in the store.
-const nextDisabled = computed(
-  () => !!currentFlat.value && !verificationStore.isItemAdvanceReady(currentFlat.value),
+// ENG-03..08 (啟動馬達聲音..油門轉動運轉穩定度) render as one consolidated
+// 3-session flow (EngineInspectionFlow.vue) instead of 6 separate one-item
+// screens — see MotoVerify_Engine_Audio_IMU_UI_Agent_Implementation.md.
+// ENG-01/02 (引擎觸感/冷車檢查) are untouched, still plain VerificationItem.
+const isEngineSessionGroup = computed(
+  () => !!currentFlat.value && ENGINE_SESSION_ITEM_IDS.includes(currentFlat.value.item.id),
 )
+const engineSessionRecording = ref(false)
+
+// Step 3 / Step 39 (Environment/Cold-State spec) — single-item custom
+// capture screens, same "swap in at this level" pattern as the lights/engine
+// groups above, just without any multi-item grouping logic since each is
+// exactly one VerificationItem.
+const isEnvironmentSession = computed(() => currentFlat.value?.item.id === 'PREP-03')
+const isColdTouchSession = computed(() => currentFlat.value?.item.id === 'ENG-02')
+const environmentRecording = ref(false)
+const coldTouchRecording = ref(false)
+
+// P0: within a lockedOrder section (引擎狀況) "下一步" must be a real gate,
+// not just hidden step-chips — see isItemAdvanceReady in the store. The
+// Engine session group is a single bundle: ready only once ALL 6 underlying
+// items are answered, not just whichever one `currentIndex` happens to sit
+// on (that index barely moves while the consolidated flow is active).
+const nextDisabled = computed(() => {
+  if (isEngineSessionGroup.value) {
+    return !ENGINE_SESSION_ITEM_IDS.every((itemId) => {
+      const flat = verificationStore.flatItems.find((candidate) => candidate.item.id === itemId)
+      return !!flat && verificationStore.isItemAdvanceReady(flat)
+    })
+  }
+  return !!currentFlat.value && !verificationStore.isItemAdvanceReady(currentFlat.value)
+})
 const nextDisabledHint = computed(
   () => currentFlat.value?.item.lockedHint ?? '請先完成本項目所需的照片／錄影／錄音，才能繼續。',
 )
@@ -110,6 +151,15 @@ function handlePrev(): void {
       (flat) => flat.item.id === SELLER_ELECTRIC_LIGHT_ITEM_IDS[0],
     )
     currentIndex.value = Math.max(firstLightIndex - 1, 0)
+    return
+  }
+  if (isEngineSessionGroup.value) {
+    // Same idea — leave the whole 3-session flow as one unit, landing back
+    // on ENG-02 (冷車檢查), not mid-flow.
+    const firstEngineIndex = verificationStore.flatItems.findIndex(
+      (flat) => flat.item.id === ENGINE_SESSION_ITEM_IDS[0],
+    )
+    currentIndex.value = Math.max(firstEngineIndex - 1, 0)
     return
   }
   currentIndex.value -= 1
@@ -144,20 +194,33 @@ function handleNext(): void {
     }
     return
   }
-  if (currentIndex.value < verificationStore.flatItems.length - 1) {
-    const nextIndex = currentIndex.value + 1
-    const nextFlat = verificationStore.flatItems[nextIndex]
-    // Crossing INTO 車身外觀, or from one Capture Map group into a different
-    // one, re-opens the hub instead of silently walking into the next photo
-    // — the map is the free-select mechanism for this category, not a
-    // one-time landing page.
-    if (nextFlat.section.id === APPEARANCE_SECTION_ID) {
-      const currentGroupId = currentFlat.value
-        ? getAppearanceGroupId(currentFlat.value.item.id)
-        : null
-      const nextGroupId = getAppearanceGroupId(nextFlat.item.id)
-      if (currentGroupId !== nextGroupId) appearanceMapOpen.value = true
+  if (isEngineSessionGroup.value) {
+    // nextDisabled above already guarantees all 6 items are done before this
+    // can be reached — jump straight past the whole group (mirrors isLightsGroup).
+    const lastEngineIndex = verificationStore.flatItems.findIndex(
+      (flat) => flat.item.id === ENGINE_SESSION_LAST_ITEM_ID,
+    )
+    if (lastEngineIndex !== -1 && lastEngineIndex < verificationStore.flatItems.length - 1) {
+      currentIndex.value = lastEngineIndex + 1
+    } else {
+      showReview.value = true
     }
+    return
+  }
+  if (currentIndex.value < verificationStore.flatItems.length - 1) {
+    const nextIndex = verificationStore.resolveNextIndex(currentIndex.value)
+    // Capture Map hub disabled (see appearanceMapOpen's declaration above) —
+    // this used to re-open the hub when crossing INTO 車身外觀, or from one
+    // Capture Map group into a different one. Uncomment to restore it
+    // (including the `nextFlat` lookup below).
+    // const nextFlat = verificationStore.flatItems[nextIndex]
+    // if (nextFlat.section.id === APPEARANCE_SECTION_ID) {
+    //   const currentGroupId = currentFlat.value
+    //     ? getAppearanceGroupId(currentFlat.value.item.id)
+    //     : null
+    //   const nextGroupId = getAppearanceGroupId(nextFlat.item.id)
+    //   if (currentGroupId !== nextGroupId) appearanceMapOpen.value = true
+    // }
     currentIndex.value = nextIndex
   } else {
     showReview.value = true
@@ -190,11 +253,12 @@ function handleSelectAppearanceGroup(groupId: string): void {
   handleJumpTo(firstUnanswered ?? group.itemIds[0])
 }
 
-// Bookmark navigation — only offered on the Seller flow for now (see
-// verification-steps route/SELLER_VERIFICATION_SECTIONS). Jumping to a
-// category resumes at its first unanswered item, same as the overall
-// resumeIndex behaviour.
-const showCategoryNav = computed(() => verificationStore.flowKind === 'seller')
+// Bookmark navigation — both flows have real, distinct categories now that
+// Buyer shares Seller's first 4 sections outright (see
+// buyer-verification.ts) instead of one flat 14-section B0..B13 list.
+// Jumping to a category resumes at its first unanswered item, same as the
+// overall resumeIndex behaviour.
+const showCategoryNav = computed(() => true)
 const answeredIds = computed(() => Object.keys(verificationStore.answers))
 
 function handleJumpToSection(sectionId: string): void {
@@ -203,16 +267,17 @@ function handleJumpToSection(sectionId: string): void {
   const firstUnanswered = section.items.find((it) => !verificationStore.answers[it.id])
   const targetId = (firstUnanswered ?? section.items[0]).id
 
-  // Jumping to 車身外觀 via the category tab always opens the Capture Map
-  // hub, never a specific photo item directly — see handleJumpTo, which
-  // would otherwise force appearanceMapOpen back to false.
-  if (sectionId === APPEARANCE_SECTION_ID) {
-    const index = verificationStore.flatItems.findIndex((flat) => flat.item.id === targetId)
-    if (index !== -1) currentIndex.value = index
-    showReview.value = false
-    appearanceMapOpen.value = true
-    return
-  }
+  // Capture Map hub disabled (see appearanceMapOpen's declaration above) —
+  // this used to always open the hub when jumping to 車身外觀 via the
+  // category tab, instead of a specific photo item directly. Uncomment to
+  // restore it.
+  // if (sectionId === APPEARANCE_SECTION_ID) {
+  //   const index = verificationStore.flatItems.findIndex((flat) => flat.item.id === targetId)
+  //   if (index !== -1) currentIndex.value = index
+  //   showReview.value = false
+  //   appearanceMapOpen.value = true
+  //   return
+  // }
   handleJumpTo(targetId)
 }
 
@@ -289,6 +354,11 @@ onMounted(() => {
     :next-label="currentIndex === verificationStore.flatItems.length - 1 ? '前往檢視' : '下一步'"
     :next-disabled="nextDisabled"
     :next-disabled-hint="nextDisabledHint"
+    :hide-footer="
+      (isEngineSessionGroup && engineSessionRecording) ||
+      (isEnvironmentSession && environmentRecording) ||
+      (isColdTouchSession && coldTouchRecording)
+    "
     @back="handleBack"
     @prev="handlePrev"
     @next="handleNext"
@@ -314,11 +384,31 @@ onMounted(() => {
       :verification-id="id"
       :items="lightsGroupItems"
     />
+    <EnvironmentCaptureSession
+      v-else-if="isEnvironmentSession"
+      :verification-id="id"
+      @recording-active="environmentRecording = $event"
+    />
+    <ColdTouchCapture
+      v-else-if="isColdTouchSession"
+      :verification-id="id"
+      @recording-active="coldTouchRecording = $event"
+    />
+    <EngineInspectionFlow
+      v-else-if="isEngineSessionGroup"
+      :verification-id="id"
+      @advance="handleNext"
+      @recording-active="engineSessionRecording = $event"
+    />
     <template v-else>
+      <!-- Capture Map hub disabled (see appearanceMapOpen's declaration in
+           the script above) — this button used to reopen it. Uncomment to
+           restore it.
       <button v-if="isAppearanceSection" class="back-to-map-btn" @click="appearanceMapOpen = true">
         ← 返回拍攝地圖
       </button>
-      <VerificationItem :verification-id="id" :item="currentFlat.item" />
+      -->
+      <VerificationItem :verification-id="id" :item="currentFlat.item" @advance="handleNext" />
     </template>
   </VerificationLayout>
   <p v-else class="loading-text">載入中...</p>

@@ -9,6 +9,7 @@ import VehicleMarketRow from '@/components/home/VehicleMarketRow.vue'
 import MarketplaceFilterSheet from '@/components/marketplace/MarketplaceFilterSheet.vue'
 import {
   DEFAULT_MARKETPLACE_FILTERS,
+  PRICE_FILTER_MAX,
   type MarketplaceFilters,
 } from '@/components/marketplace/marketplace-filters'
 import { homeContentService } from '@/services/firebase/home-content.service'
@@ -54,6 +55,12 @@ const activeFilterCount = computed(() => {
   if (filters.value.sellerType !== 'all') count += 1
   if (filters.value.transferableOnly) count += 1
   if (filters.value.sortBy !== 'default') count += 1
+  if (
+    filters.value.priceRange[0] !== DEFAULT_MARKETPLACE_FILTERS.priceRange[0] ||
+    filters.value.priceRange[1] !== DEFAULT_MARKETPLACE_FILTERS.priceRange[1]
+  ) {
+    count += 1
+  }
   return count
 })
 
@@ -65,12 +72,18 @@ const listings = computed(() => {
     if (activeTab.value === 'favorites' && !favoriteIds.value.has(listing.id)) return false
     if (keyword) {
       const haystack =
-        `${listing.brand} ${listing.model} ${listing.region} ${listing.district}`.toLowerCase()
+        `${listing.vehicleSnapshot.brand} ${listing.vehicleSnapshot.model} ${listing.region} ${listing.district}`.toLowerCase()
       if (!haystack.includes(keyword)) return false
     }
     if (filters.value.sellerType !== 'all' && listing.sellerType !== filters.value.sellerType)
       return false
     if (filters.value.transferableOnly && !listing.transferable) return false
+    const [priceMin, priceMax] = filters.value.priceRange
+    if (listing.priceTwd < priceMin) return false
+    // priceMax at the slider's own ceiling means "or more" (see
+    // marketplace-filters.ts), not a hard cap — otherwise a listing priced
+    // above PRICE_FILTER_MAX would be hidden by leaving the slider untouched.
+    if (priceMax < PRICE_FILTER_MAX && listing.priceTwd > priceMax) return false
     return true
   })
   switch (filters.value.sortBy) {
@@ -81,7 +94,7 @@ const listings = computed(() => {
       result = [...result].sort((a, b) => b.priceTwd - a.priceTwd)
       break
     case 'mileage-asc':
-      result = [...result].sort((a, b) => a.mileageKm - b.mileageKm)
+      result = [...result].sort((a, b) => a.vehicleSnapshot.mileage - b.vehicleSnapshot.mileage)
       break
     case 'score-desc':
       result = [...result].sort((a, b) => b.verificationScore - a.verificationScore)
@@ -96,8 +109,6 @@ const listings = computed(() => {
     <AppHeader title="交易市場" />
 
     <div class="content">
-      <p class="demo-notice">目前為 DEMO 展示資料，真實交易市場功能尚在開發中。</p>
-
       <div class="tab-row">
         <button
           class="tab-btn"

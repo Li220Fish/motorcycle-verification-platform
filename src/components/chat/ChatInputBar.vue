@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Plus, Send } from 'lucide-vue-next'
 
 const props = defineProps<{ sending: boolean }>()
-const emit = defineEmits<{ send: [string]; openAttachments: [] }>()
+const emit = defineEmits<{ send: [string]; pickImage: [] }>()
 
 const text = ref('')
 
@@ -17,7 +17,7 @@ function submit(): void {
 
 <template>
   <div class="input-bar">
-    <button class="icon-button" aria-label="附加內容" @click="$emit('openAttachments')">
+    <button class="icon-button" aria-label="傳送照片" @click="$emit('pickImage')">
       <Plus :size="20" />
     </button>
     <input v-model="text" placeholder="輸入訊息..." @keydown.enter="submit" />

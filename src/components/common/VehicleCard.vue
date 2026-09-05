@@ -15,16 +15,17 @@ defineEmits<{ more: [] }>()
 <template>
   <div class="vehicle-card">
     <div class="thumb">
-      <img v-if="vehicle.imageUrl" :src="vehicle.imageUrl" class="thumb-img" alt="" />
+      <img v-if="vehicle.photos[0]" :src="vehicle.photos[0]" class="thumb-img" alt="" />
       <Bike v-else :size="32" color="var(--color-text-disabled)" />
     </div>
     <div class="info">
       <p class="brand">{{ vehicle.brand }}</p>
       <p class="model">{{ vehicle.model }}</p>
       <p class="meta">
-        <span v-if="vehicle.year">{{ vehicle.year }} 年式</span>
+        <span v-if="vehicle.manufactureYear">{{ vehicle.manufactureYear }} 年式</span>
         <span v-if="vehicle.mileage !== null"
-          >{{ vehicle.year ? ' · ' : '' }}{{ vehicle.mileage?.toLocaleString() }} km</span
+          >{{ vehicle.manufactureYear ? ' · ' : ''
+          }}{{ vehicle.mileage?.toLocaleString() }} km</span
         >
       </p>
       <StatusBadge v-if="badge" tone="primary">{{ badge }}</StatusBadge>

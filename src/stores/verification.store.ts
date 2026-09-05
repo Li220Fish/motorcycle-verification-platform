@@ -7,16 +7,23 @@ import type {
   VerificationItem,
   VerificationSection,
 } from '@/data/verification'
+import {
+  analyzeDocumentMaintenance,
+  analyzeInspectionGroupA,
+  analyzeInspectionGroupB,
+  analyzeInspectionGroupC,
+  analyzeOcrChassis,
+  analyzeOcrDashboard,
+  analyzeOcrPlate,
+} from '@/services/firebase/ai-analysis.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { localDraftService } from '@/services/verification/local-draft.service'
-import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Verification, VerificationDraft } from '@/types/verification'
 import type {
   AnswerResultValue,
   VerificationAnswer,
   VerificationEvidence,
 } from '@/types/verification-evidence'
-import type { VehicleDraft } from '@/types/vehicle'
 
 export interface SectionProgress {
   sectionId: string
@@ -144,44 +151,18 @@ export const useVerificationStore = defineStore('verification', () => {
     }
   }
 
-  /**
-   * PREP-01 ("建立基本資料") is the only place vehicle identity gets typed
-   * in when a verification starts from the naming step with a blank vehicle
-   * (see VerificationView's handleConfirmName) — mirror it onto the Vehicle
-   * doc itself so brand/model/engine+chassis numbers outlive this one
-   * verification and future measurements can bind back to the same vehicle.
-   */
-  async function syncBasicInfoToVehicle(
-    vehicleId: string,
-    formData: Record<string, string>,
-  ): Promise<void> {
-    const changes: Partial<VehicleDraft> = {}
-    if (formData.brand?.trim()) changes.brand = formData.brand.trim()
-    if (formData.model?.trim()) changes.model = formData.model.trim()
-    if (formData.plate?.trim()) changes.licensePlate = formData.plate.trim()
-    if (formData.engineNumber?.trim()) changes.engineNumber = formData.engineNumber.trim()
-    if (formData.chassisNumber?.trim()) changes.chassisNumber = formData.chassisNumber.trim()
-    if (formData.year?.trim()) changes.year = Number(formData.year)
-    if (formData.mileage?.trim()) changes.mileage = Number(formData.mileage)
-    if (Object.keys(changes).length === 0) return
-    await useVehicleStore().updateVehicle(vehicleId, changes)
-  }
-
   async function saveAnswer(
     itemId: string,
     result: AnswerResultValue,
     note?: string,
-    cannotCheckReason?: string,
     formData?: Record<string, string>,
   ): Promise<void> {
     if (!currentVerification.value) return
     const verificationId = currentVerification.value.id
-    const vehicleId = currentVerification.value.vehicleId
     const answer: VerificationAnswer = {
       itemId,
       result,
       note,
-      cannotCheckReason,
       formData,
       updatedAt: Date.now(),
     }
@@ -189,10 +170,6 @@ export const useVerificationStore = defineStore('verification', () => {
     answers.value = { ...answers.value, [itemId]: answer }
     localDraftService.saveAnswer(verificationId, answer)
     verificationService.saveAnswer(verificationId, answer).catch(() => {})
-
-    if (itemId === 'PREP-01' && formData) {
-      syncBasicInfoToVehicle(vehicleId, formData).catch(() => {})
-    }
 
     if (currentVerification.value.status === 'draft') {
       currentVerification.value = { ...currentVerification.value, status: 'in_progress' }
@@ -211,6 +188,79 @@ export const useVerificationStore = defineStore('verification', () => {
     evidenceByItem.value = { ...evidenceByItem.value, [evidence.itemId]: [...list, evidence] }
     localDraftService.saveEvidence(evidence.verificationId, evidence)
     verificationService.saveEvidence(evidence).catch(() => {})
+    void maybeTriggerGroupAnalysis(evidence.itemId)
+  }
+
+  // Group A/B/C Evidence Views (Routing Map §9/§13/§15 trigger conditions —
+  // "只有全部所需 Evidence Ready 才 call") — expressed here in this
+  // project's OWN photo-slot itemIds (APR-*), not the routing map's view
+  // names, since that's what evidenceByItem is actually keyed by. Fired
+  // fire-and-forget from the one choke point every photo capture already
+  // goes through (addEvidence), rather than scattered across UI components.
+  const GROUP_A_TRIGGER_ITEM_IDS = ['APR-left-side', 'APR-right-side', 'APR-rear', 'APR-seat']
+  const GROUP_B_TRIGGER_ITEM_IDS = [
+    'APR-front-wheel',
+    'APR-rear-wheel',
+    'APR-front-suspension',
+    'APR-rear-suspension',
+    'APR-front-brake',
+    'APR-rear-brake',
+    'APR-triple-clamp',
+  ]
+  // Always includes APR-transmission-chain — the 45-step checklist requires
+  // this photo from every vehicle regardless of type (unchanged this pass),
+  // so evidence for it always exists; the Backend alone decides whether a
+  // scooter's photo is actually used or the item comes back not_applicable
+  // (Group C spec §16/§23), never the client.
+  const GROUP_C_TRIGGER_ITEM_IDS = [
+    'APR-engine-left',
+    'APR-engine-right',
+    'APR-engine-bottom',
+    'APR-transmission-chain',
+    'APR-exhaust',
+  ]
+
+  function hasEvidence(itemId: string): boolean {
+    return (evidenceByItem.value[itemId]?.length ?? 0) > 0
+  }
+
+  async function maybeTriggerGroupAnalysis(changedItemId: string): Promise<void> {
+    const verificationId = currentVerification.value?.id
+    if (!verificationId) return
+
+    if (
+      GROUP_A_TRIGGER_ITEM_IDS.includes(changedItemId) &&
+      GROUP_A_TRIGGER_ITEM_IDS.every(hasEvidence)
+    ) {
+      analyzeInspectionGroupA(verificationId).catch(() => {})
+    }
+    if (
+      GROUP_B_TRIGGER_ITEM_IDS.includes(changedItemId) &&
+      GROUP_B_TRIGGER_ITEM_IDS.every(hasEvidence)
+    ) {
+      analyzeInspectionGroupB(verificationId).catch(() => {})
+    }
+    if (
+      GROUP_C_TRIGGER_ITEM_IDS.includes(changedItemId) &&
+      GROUP_C_TRIGGER_ITEM_IDS.every(hasEvidence)
+    ) {
+      analyzeInspectionGroupC(verificationId).catch(() => {})
+    }
+
+    // OCR routes (Routing Map §11/§12/§21) — single-photo groups, fire the
+    // instant that one photo exists.
+    if (changedItemId === 'APR-dashboard') analyzeOcrDashboard(verificationId).catch(() => {})
+    if (changedItemId === 'APR-plate') analyzeOcrPlate(verificationId).catch(() => {})
+    if (changedItemId === 'APR-vin') analyzeOcrChassis(verificationId).catch(() => {})
+
+    // Step 1 (歷史工單) — placeholder routing only, per spec §4/§71 (no
+    // Maintenance Document Prompt/Schema Frozen yet).
+    if (changedItemId === 'PREP-01') {
+      const latestEvidenceId = evidenceByItem.value['PREP-01']?.slice(-1)[0]?.id
+      if (latestEvidenceId) {
+        analyzeDocumentMaintenance(verificationId, latestEvidenceId).catch(() => {})
+      }
+    }
   }
 
   function removeEvidenceLocally(itemId: string, evidenceId: string): void {
@@ -221,6 +271,38 @@ export const useVerificationStore = defineStore('verification', () => {
     if (currentVerification.value) {
       localDraftService.removeEvidence(currentVerification.value.id, evidenceId)
     }
+  }
+
+  /**
+   * Advances past `fromIndex`, honoring that item's `branch` rule if its
+   * saved answer matches one — e.g. ELEC-10 "電系是否有改裝" answered 沒有
+   * jumps straight to ENG-01, skipping ELEC-11..13. Whatever sits between
+   * `fromIndex` and the branch target gets auto-answered `not_applicable`
+   * (only if not already answered — a user who free-jumped back and filled
+   * one in manually keeps that answer) so overallProgress/missingRequiredItems
+   * treat them as done-and-excluded rather than perpetually incomplete.
+   * Plain +1 (or "flow finished") when there's no branch, or the saved
+   * answer doesn't match any of the item's branch rules.
+   */
+  function resolveNextIndex(fromIndex: number): number {
+    const items = flatItems.value
+    const from = items[fromIndex]
+    const fallback = fromIndex + 1
+    if (!from) return fallback
+
+    const answer = answers.value[from.item.id]
+    const rule = from.item.branch?.find((candidate) => candidate.value === answer?.result)
+    if (!rule) return fallback
+
+    const targetIndex = items.findIndex((flat) => flat.item.id === rule.skipToItemId)
+    if (targetIndex === -1 || targetIndex <= fromIndex) return fallback
+
+    for (let i = fromIndex + 1; i < targetIndex; i++) {
+      const skipped = items[i].item
+      if (answers.value[skipped.id]) continue
+      void saveAnswer(skipped.id, 'not_applicable')
+    }
+    return targetIndex
   }
 
   /** First unanswered item — used to resume a draft where the user left off (§35). */
@@ -246,12 +328,14 @@ export const useVerificationStore = defineStore('verification', () => {
   })
 
   /**
-   * A `type: 'form'` item's `*`-marked fields (e.g. PREP-01's 引擎號碼／車身
-   * 號碼) were previously cosmetic only — any single keystroke in ANY field
-   * flipped the whole item to "answered" via handleFormDataChange. That let a
-   * verification complete/archive with its required identity fields still
-   * blank. An item now counts as answered only once every formField it marks
-   * `required` actually has a non-empty value.
+   * A `type: 'form'` item's `*`-marked fields were previously cosmetic
+   * only — any single keystroke in ANY field flipped the whole item to
+   * "answered" via handleFormDataChange. That let a verification
+   * complete/archive with its required fields still blank. An item now
+   * counts as answered only once every formField it marks `required`
+   * actually has a non-empty value. (No current item uses `type: 'form'`
+   * — the 45-step checklist has none — this stays generic for whenever
+   * one is added back.)
    */
   function isAnswerComplete(item: VerificationItem, answer?: VerificationAnswer): boolean {
     if (!answer) return false
@@ -294,10 +378,23 @@ export const useVerificationStore = defineStore('verification', () => {
 
     const captured = evidenceByItem.value[item.id] ?? []
     return requiredEvidence.every((requirement) => {
-      // MotionEvidenceCapture has no dedicated EvidenceType — it reuses
-      // 'manual' for sensor readings (see MotionEvidenceCapture.vue).
-      const evidenceType = requirement.kind === 'motion' ? 'manual' : requirement.kind
-      return captured.some((evidence) => evidence.type === evidenceType)
+      // 'motion'-kind requirements (ENG-07/ENG-08, the only ones in any
+      // lockedOrder section) are actually captured through
+      // EngineInspectionFlow.vue, which writes real evidence as
+      // `type: 'imu'` (see its ENGINE_SESSION_ITEM_IDS capture path) — NOT
+      // 'manual'. Checking only 'manual' here (matching the older, now
+      // effectively unreachable MotionEvidenceCapture.vue path for these two
+      // items) permanently failed this check for every user, since the
+      // captured evidence's type never actually matched — silently blocking
+      // "下一步"/"繼續驗車" at the end of 引擎狀況 forever, even with every
+      // item genuinely answered and evidenced. Reproduced live on a real
+      // in-progress verification before this fix. Accepting either type
+      // keeps MotionEvidenceCapture.vue's write shape valid too, in case it
+      // ever becomes reachable again.
+      if (requirement.kind === 'motion') {
+        return captured.some((evidence) => evidence.type === 'imu' || evidence.type === 'manual')
+      }
+      return captured.some((evidence) => evidence.type === requirement.kind)
     })
   }
 
@@ -322,6 +419,7 @@ export const useVerificationStore = defineStore('verification', () => {
     saveAnswer,
     addEvidence,
     removeEvidenceLocally,
+    resolveNextIndex,
     resumeIndex,
     sectionProgress,
     overallProgress,

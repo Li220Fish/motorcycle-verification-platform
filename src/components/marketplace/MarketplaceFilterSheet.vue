@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
 
+import PriceRangeSlider from './PriceRangeSlider.vue'
 import {
   DEFAULT_MARKETPLACE_FILTERS,
+  PRICE_FILTER_MAX,
+  PRICE_FILTER_MIN,
+  PRICE_FILTER_STEP,
   type MarketplaceFilters,
   type MarketplaceSortOption,
   type SellerTypeFilter,
@@ -44,6 +48,17 @@ function handleReset(): void {
           <button class="close-btn" aria-label="關閉" @click="$emit('close')">
             <X :size="16" />
           </button>
+        </div>
+
+        <div class="filter-group">
+          <p class="group-title">價格範圍</p>
+          <PriceRangeSlider
+            :model-value="modelValue.priceRange"
+            :min="PRICE_FILTER_MIN"
+            :max="PRICE_FILTER_MAX"
+            :step="PRICE_FILTER_STEP"
+            @update:model-value="update({ priceRange: $event })"
+          />
         </div>
 
         <div class="filter-group">

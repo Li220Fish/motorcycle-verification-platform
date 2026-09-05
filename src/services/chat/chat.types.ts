@@ -43,7 +43,6 @@ export type MessageType = 'text' | 'image' | 'vehicle' | 'verification_report' |
 
 export interface ChatMessage {
   id: string
-  conversationId: string
   senderId: string
   type: MessageType
   text?: string

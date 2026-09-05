@@ -42,10 +42,9 @@ async function handleUpload(): Promise<void> {
   uploading.value = true
   errorMessage.value = ''
   try {
-    uploadedUrl.value = await storageService.uploadFile(
-      'verification-audio',
+    uploadedUrl.value = await storageService.uploadFileAtPath(
+      `dev-test/audio-${Date.now()}.aac`,
       capturedBlob,
-      `audio-${Date.now()}.aac`,
     )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Upload failed'

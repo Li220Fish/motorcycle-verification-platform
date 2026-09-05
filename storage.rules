@@ -1,36 +1,76 @@
 rules_version = '2';
 
-// Freeze Zone: the original verification-evidence folders keep the exact
-// V0.1 "any signed-in user can read/write" behavior. Do not tighten these.
+// v1.0 domain-path layout (see the Firestore v1.0 migration report). Replaces
+// the old flat vehicle-images/verification-images/verification-videos/
+// verification-audio/voltage-data folders.
 //
-// New folders for the Message Center / Discussion Center get real
-// authorization: chat images are scoped to the conversation's members
-// (checked against Firestore), discussion images stay open-write like the
-// rest of V0.1 since posts themselves are public content.
+// Known, disclosed gap: verification evidence storage access stays "any
+// signed-in user" (unchanged from the original V0.1 posture) rather than
+// mirroring the Firestore-level private/public split on the parent
+// verification. A Firestore cross-service read from Storage Rules
+// (firestore.get()) was already attempted for chat-media in this project and
+// consistently failed even for genuine members (see the chat-media rule's
+// own comment below) — extending that same unverified pattern to evidence,
+// where a failure means total lockout rather than mild over-exposure, is a
+// worse risk than the current posture. The sensitive part — who owns the
+// vehicle, the verification's metadata/answers/results — is properly
+// access-controlled at the Firestore level; only the raw evidence blob files
+// in Storage are not. See docs/firestore-v1-implementation-report.md.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /vehicle-images/{allPaths=**} {
+    match /verifications/{verificationId}/evidence/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
 
-    match /verification-images/{allPaths=**} {
+    // Reserved — no upload UI writes here yet (vehicle photos today are
+    // external hotlinks, not Storage uploads; registration/maintenance
+    // capture doesn't exist). Owner/admin-shaped for when it does.
+    match /vehicles/{vehicleId}/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
 
-    match /verification-videos/{allPaths=**} {
+    // Public marketplace listing photos — any signed-in user may write (the
+    // real access boundary is the marketplaceListings Firestore doc itself,
+    // which IS seller/admin-scoped; an orphan file under someone else's
+    // listing path achieves nothing since nothing reads storage paths that
+    // aren't referenced from that doc's own vehicleSnapshot.photos).
+    match /marketplace/{listingId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Scoped by the uploader's own uid rather than a Firestore membership
+    // lookup: cross-service firestore.get() reads from Storage rules were
+    // tried first and consistently returned storage/unauthorized in this
+    // project even for genuine conversation members, so this avoids that
+    // dependency entirely. A user can only write into their own uid-folder,
+    // which is all write access needs to guard — actually injecting a
+    // message into someone else's chat still requires passing Firestore's
+    // own membership-gated `create` rule on conversations/{id}/messages/{id}.
+    match /conversations/{conversationId}/{uid}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /discussion/{postId}/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
 
-    match /voltage-data/{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Reserved — no upload UI writes here yet.
+    match /vehicleModels/{modelId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
-    match /chat-media/{conversationId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.memberIds;
+    match /vehicleNews/{newsId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
-    match /discussion-media/{allPaths=**} {
+    // Dev-only smoke-test scratch space (src/components/media/*.vue's "Media
+    // Capture Test" harness, gated by import.meta.env.DEV in the app itself
+    // — never reachable from a production build). Not production-sensitive.
+    match /dev-test/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
   }

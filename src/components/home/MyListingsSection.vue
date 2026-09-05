@@ -44,14 +44,26 @@ onMounted(async () => {
         <div
           class="thumb"
           :style="
-            listing.imageUrl ? undefined : { background: GRADIENTS[index % GRADIENTS.length] }
+            listing.vehicleSnapshot.photos[0]
+              ? undefined
+              : { background: GRADIENTS[index % GRADIENTS.length] }
           "
         >
-          <span class="status-pill">{{ STATUS_LABEL.active }}</span>
-          <img v-if="listing.imageUrl" :src="listing.imageUrl" class="thumb-img" alt="" />
+          <span class="status-pill">{{
+            STATUS_LABEL[listing.status === 'published' ? 'active' : 'reviewing']
+          }}</span>
+          <img
+            v-if="listing.vehicleSnapshot.photos[0]"
+            :src="listing.vehicleSnapshot.photos[0]"
+            class="thumb-img"
+            alt=""
+          />
           <Bike v-else :size="34" color="#fff" />
         </div>
-        <p class="title">{{ listing.year }} {{ listing.brand }} {{ listing.model }}</p>
+        <p class="title">
+          {{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
+          {{ listing.vehicleSnapshot.model }}
+        </p>
         <p class="price">${{ listing.priceTwd.toLocaleString() }}</p>
         <p class="interest"><Heart :size="12" /> {{ listing.sellerReviewCount }} 則評價</p>
       </div>

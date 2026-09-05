@@ -13,6 +13,12 @@ const saving = ref(false)
 const saveMessage = ref('')
 const saveIsError = ref(false)
 
+const newEmail = ref(authStore.user?.email ?? '')
+const currentPassword = ref('')
+const savingEmail = ref(false)
+const emailMessage = ref('')
+const emailIsError = ref(false)
+
 const sendingReset = ref(false)
 const resetMessage = ref('')
 
@@ -32,6 +38,16 @@ const canSave = computed(
     displayName.value.trim() !== (authStore.user?.displayName ?? ''),
 )
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const canSaveEmail = computed(
+  () =>
+    !savingEmail.value &&
+    EMAIL_PATTERN.test(newEmail.value.trim()) &&
+    newEmail.value.trim() !== (authStore.user?.email ?? '') &&
+    currentPassword.value.length > 0,
+)
+
 async function handleSave(): Promise<void> {
   saving.value = true
   saveMessage.value = ''
@@ -47,6 +63,31 @@ async function handleSave(): Promise<void> {
     setTimeout(() => {
       saveMessage.value = ''
     }, 2500)
+  }
+}
+
+async function handleSaveEmail(): Promise<void> {
+  savingEmail.value = true
+  emailMessage.value = ''
+  try {
+    await authStore.updateEmail(newEmail.value.trim(), currentPassword.value)
+    emailIsError.value = false
+    emailMessage.value = `已寄出驗證信到 ${newEmail.value.trim()}，請至新信箱完成驗證後才會生效`
+    currentPassword.value = ''
+  } catch (error) {
+    emailIsError.value = true
+    const code = (error as { code?: string }).code
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      emailMessage.value = '目前密碼不正確'
+    } else if (code === 'auth/email-already-in-use') {
+      emailMessage.value = '此 Email 已被其他帳號使用'
+    } else if (code === 'auth/invalid-email') {
+      emailMessage.value = 'Email 格式不正確'
+    } else {
+      emailMessage.value = '更新失敗，請稍後再試'
+    }
+  } finally {
+    savingEmail.value = false
   }
 }
 
@@ -84,11 +125,23 @@ async function handleSendReset(): Promise<void> {
       </PrimaryButton>
       <p v-if="saveMessage" class="feedback" :class="{ error: saveIsError }">{{ saveMessage }}</p>
 
+      <label class="field">
+        <span>電子郵件</span>
+        <input v-model="newEmail" type="email" placeholder="輸入新的電子郵件" />
+      </label>
+      <label class="field">
+        <span>目前密碼（變更 Email 需要驗證身份）</span>
+        <input v-model="currentPassword" type="password" placeholder="輸入目前密碼" />
+      </label>
+
+      <PrimaryButton block :disabled="!canSaveEmail" @click="handleSaveEmail">
+        {{ savingEmail ? '更新中...' : '更新 Email' }}
+      </PrimaryButton>
+      <p v-if="emailMessage" class="feedback" :class="{ error: emailIsError }">
+        {{ emailMessage }}
+      </p>
+
       <div class="info-card">
-        <div class="info-row">
-          <span>Email</span>
-          <span>{{ authStore.user?.email }}</span>
-        </div>
         <div class="info-row">
           <span>使用者 ID</span>
           <span class="mono">{{ authStore.user?.id }}</span>

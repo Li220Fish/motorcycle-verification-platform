@@ -5,18 +5,25 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VerificationProgress from './VerificationProgress.vue'
 
-defineProps<{
-  title: string
-  sectionTitle: string
-  done: number
-  total: number
-  percent: number
-  canGoPrev: boolean
-  nextLabel?: string
-  nextDisabled?: boolean
-  /** WHY "下一步" is disabled — shown above the footer, not just an inert button. */
-  nextDisabledHint?: string
-}>()
+withDefaults(
+  defineProps<{
+    title: string
+    sectionTitle: string
+    done: number
+    total: number
+    percent: number
+    canGoPrev: boolean
+    nextLabel?: string
+    nextDisabled?: boolean
+    /** WHY "下一步" is disabled — shown above the footer, not just an inert button. */
+    nextDisabledHint?: string
+    /** Hides Prev/Next entirely — used while EngineInspectionFlow has an
+     *  active recording in progress (spec §40: no navigation during
+     *  Recording besides its own internal Cancel). */
+    hideFooter?: boolean
+  }>(),
+  { nextLabel: undefined, nextDisabled: false, nextDisabledHint: undefined, hideFooter: false },
+)
 
 defineEmits<{ back: []; prev: []; next: []; review: [] }>()
 </script>
@@ -42,7 +49,7 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
       <slot />
     </div>
 
-    <div class="footer">
+    <div v-if="!hideFooter" class="footer">
       <p v-if="nextDisabled && nextDisabledHint" class="locked-hint">🔒 {{ nextDisabledHint }}</p>
       <div class="footer-buttons">
         <PrimaryButton variant="secondary" :disabled="!canGoPrev" @click="$emit('prev')"

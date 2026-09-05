@@ -23,10 +23,10 @@
  * e2e runs are left in place — out of scope for this pass) or any other
  * collection (conversations, discussionPosts, users, ...).
  *
- * Uses the Firebase client SDK only, signed in as the seeded 測試賣家
- * account — the Firestore rules leave `vehicles`/`verifications` open to any
- * signed-in user (see the Freeze Zone comment in firestore.rules), so this
- * needs no Admin SDK / service account key.
+ * Uses the Firebase client SDK only, signed in as the seeded admin account —
+ * this script scans `vehicles` across every owner looking for throwaway test
+ * data, which the v1.0 schema's owner-scoped rules only allow for admin (no
+ * Admin SDK / service account key needed either way).
  *
  * Same production guard as scripts/seed-test-users.mjs. Dry-run by default —
  * pass --confirm to actually delete.
@@ -48,9 +48,18 @@ const rootDir = path.resolve(__dirname, '..')
 
 const TEST_VEHICLE_NAME_PREFIXES = ['Regression', 'Archive Gate Test', 'Throwaway']
 
+// Checks both `model` (the naming-only verification flow's field, e.g.
+// "Regression Seller") AND `brand` (ad-hoc scratch vehicles created via the
+// 我的車輛/新增車輛 form, which put the marker in brand instead — e.g.
+// brand: "Throwaway", model: "FuelAvg E2E"). A vehicle matching on either
+// field left a real orphan in the live project once already because this
+// only checked `model` — see git history for the incident.
 function isThrowawayVehicle(data) {
   const model = typeof data.model === 'string' ? data.model : ''
-  return TEST_VEHICLE_NAME_PREFIXES.some((prefix) => model.startsWith(prefix))
+  const brand = typeof data.brand === 'string' ? data.brand : ''
+  return TEST_VEHICLE_NAME_PREFIXES.some(
+    (prefix) => model.startsWith(prefix) || brand.startsWith(prefix),
+  )
 }
 
 function loadEnvFile(filePath) {
@@ -112,7 +121,7 @@ async function main() {
   const app = initializeApp(firebaseConfig)
   const auth = getAuth(app)
   const db = getFirestore(app)
-  await signInWithEmailAndPassword(auth, 'seller@motoverify.test', 'MotoVerify123!')
+  await signInWithEmailAndPassword(auth, 'admin@test.com', 'test1234')
 
   console.log(
     `[cleanup-database] Project: ${firebaseConfig.projectId} (${confirm ? 'LIVE DELETE' : 'dry run'})`,
@@ -140,8 +149,27 @@ async function main() {
     subcollectionRefs.push(...answers.docs.map((d) => d.ref), ...evidence.docs.map((d) => d.ref))
   }
 
+  // Deleting a vehicle doc does not delete its own subcollections (fuel-up /
+  // maintenance logs, added alongside Vehicle Detail's editable identity
+  // fields) — orphaned but still-billed Firestore docs otherwise.
+  let fuelLogCount = 0
+  let maintenanceLogCount = 0
+  const vehicleSubcollectionRefs = []
+  for (const vehicleDoc of throwawayVehicleDocs) {
+    const [fuelLogs, maintenanceLogs] = await Promise.all([
+      getDocs(collection(db, 'vehicles', vehicleDoc.id, 'fuelLogs')),
+      getDocs(collection(db, 'vehicles', vehicleDoc.id, 'maintenanceLogs')),
+    ])
+    fuelLogCount += fuelLogs.size
+    maintenanceLogCount += maintenanceLogs.size
+    vehicleSubcollectionRefs.push(
+      ...fuelLogs.docs.map((d) => d.ref),
+      ...maintenanceLogs.docs.map((d) => d.ref),
+    )
+  }
+
   console.log(
-    `[cleanup-database] vehicles scanned: ${vehicleSnapshot.size}, throwaway (matched test-name prefix): ${throwawayVehicleDocs.length}`,
+    `[cleanup-database] vehicles scanned: ${vehicleSnapshot.size}, throwaway (matched test-name prefix): ${throwawayVehicleDocs.length} (fuel logs: ${fuelLogCount}, maintenance logs: ${maintenanceLogCount})`,
   )
   console.log(
     `[cleanup-database] verifications scanned: ${verificationSnapshot.size}, throwaway: ${throwawayVerificationDocs.length} (answers: ${answerCount}, evidence: ${evidenceCount})`,
@@ -158,6 +186,7 @@ async function main() {
   }
 
   await deleteRefsInBatches(db, subcollectionRefs)
+  await deleteRefsInBatches(db, vehicleSubcollectionRefs)
   await deleteRefsInBatches(
     db,
     throwawayVerificationDocs.map((d) => d.ref),

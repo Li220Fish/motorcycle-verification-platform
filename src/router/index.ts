@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { isAdminSession } from '@/admin/services/admin-auth.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 const router = createRouter({
@@ -182,6 +183,46 @@ const router = createRouter({
       meta: { requiresAuth: true },
       props: true,
     },
+    {
+      path: '/vehicle-news/:newsId',
+      name: 'vehicle-news',
+      component: () => import('@/views/VehicleNewsView.vue'),
+      meta: { requiresAuth: true },
+      props: true,
+    },
+    // --- MotoVerify 營運後台 (/admin) — see docs/admin-backend.md. Entirely
+    // separate from the mobile app's views/components/design tokens; only
+    // the Firestore `db` handle and a few read-only type contracts are
+    // shared (src/admin/services/admin-data.service.ts). Auth is handled in
+    // the router.beforeEach below, not via `meta.requiresAuth` — an admin
+    // session is a specific Firebase Auth uid, not "any signed-in user".
+    {
+      path: '/admin/login',
+      name: 'admin-login',
+      component: () => import('@/admin/AdminLoginView.vue'),
+      meta: { hideChrome: true },
+    },
+    {
+      path: '/admin/users/:uid',
+      name: 'admin-user-detail',
+      component: () => import('@/admin/AdminDashboardView.vue'),
+      meta: { hideChrome: true },
+      props: (route) => ({ page: 'userdetail', uid: route.params.uid }),
+    },
+    {
+      path: '/admin/verifications/:id',
+      name: 'admin-verification-detail',
+      component: () => import('@/admin/AdminDashboardView.vue'),
+      meta: { hideChrome: true },
+      props: (route) => ({ page: 'verifydetail', id: route.params.id }),
+    },
+    {
+      path: '/admin/:page?',
+      name: 'admin-dashboard',
+      component: () => import('@/admin/AdminDashboardView.vue'),
+      meta: { hideChrome: true },
+      props: (route) => ({ page: route.params.page || 'overview' }),
+    },
   ],
 })
 
@@ -189,6 +230,13 @@ router.beforeEach(async (to) => {
   const authStore = useAuthStore()
   authStore.initialize()
   await authStore.waitUntilReady()
+
+  if (to.path.startsWith('/admin')) {
+    if (to.name === 'admin-login') {
+      return isAdminSession() ? { name: 'admin-dashboard' } : true
+    }
+    return isAdminSession() ? true : { name: 'admin-login' }
+  }
 
   const requiresAuth = to.meta.requiresAuth !== false
   if (requiresAuth && !authStore.isAuthenticated) {

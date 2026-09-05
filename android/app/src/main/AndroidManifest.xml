@@ -39,4 +39,25 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Step 3 / Step 39 (Environment/Cold-State capture) use getUserMedia()
+         video+audio via the WebView (video-recorder.service.ts) — Capacitor's
+         BridgeWebChromeClient already handles the runtime permission prompt
+         for this (onPermissionRequest), it just needs CAMERA declared here
+         to be grantable at all. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- BridgeWebChromeClient.onPermissionRequest() requests CAMERA +
+         RECORD_AUDIO + MODIFY_AUDIO_SETTINGS together as one all-or-nothing
+         batch for any getUserMedia() call that includes audio (see
+         node_modules/@capacitor/android's BridgeWebChromeClient.java). Since
+         MODIFY_AUDIO_SETTINGS wasn't declared here, Android could never
+         report it granted, so the combined check always failed and denied
+         the WHOLE request — including camera — even though CAMERA and
+         RECORD_AUDIO were both actually granted. Reproduced live on-device
+         (getUserMedia rejected with NotAllowedError: Permission denied
+         despite CAMERA/RECORD_AUDIO showing granted=true via `adb shell
+         dumpsys package`) before adding this. MODIFY_AUDIO_SETTINGS is a
+         normal (not dangerous) permission — declaring it is enough, no
+         runtime prompt needed for it specifically. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

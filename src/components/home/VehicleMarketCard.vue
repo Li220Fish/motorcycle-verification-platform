@@ -9,12 +9,17 @@ defineProps<{ listing: MockMarketListing }>()
 <template>
   <div class="market-card">
     <div class="thumb">
-      <img v-if="listing.imageUrl" :src="listing.imageUrl" class="thumb-img" alt="" />
+      <img
+        v-if="listing.vehicleSnapshot.photos[0]"
+        :src="listing.vehicleSnapshot.photos[0]"
+        class="thumb-img"
+        alt=""
+      />
       <Bike v-else :size="30" color="var(--color-text-disabled)" />
-      <span class="demo-tag">DEMO</span>
+      <span v-if="listing.verificationIds.length === 0" class="demo-tag">DEMO</span>
     </div>
     <div class="title-row">
-      <p class="title">{{ listing.brand }} {{ listing.model }}</p>
+      <p class="title">{{ listing.vehicleSnapshot.brand }} {{ listing.vehicleSnapshot.model }}</p>
       <!-- Every listing already requires a passing inspection to go live, so
            "已驗證" is no longer a differentiator — dealer-sold listings get
            their own badge instead (see marketplace-mock.ts). Icon-only and
@@ -24,10 +29,10 @@ defineProps<{ listing: MockMarketListing }>()
         <Store :size="11" />
       </span>
     </div>
-    <p class="year">{{ listing.year }}</p>
+    <p class="year">{{ listing.vehicleSnapshot.manufactureYear }}</p>
     <div class="stat-row">
       <span class="stat-label">里程</span>
-      <span class="stat-value">{{ listing.mileageKm.toLocaleString() }} km</span>
+      <span class="stat-value">{{ listing.vehicleSnapshot.mileage.toLocaleString() }} km</span>
     </div>
     <div class="stat-row">
       <span class="stat-label">價格</span>

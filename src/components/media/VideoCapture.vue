@@ -42,10 +42,9 @@ async function handleUpload(): Promise<void> {
   uploading.value = true
   errorMessage.value = ''
   try {
-    uploadedUrl.value = await storageService.uploadFile(
-      'verification-videos',
+    uploadedUrl.value = await storageService.uploadFileAtPath(
+      `dev-test/video-${Date.now()}.mp4`,
       capturedBlob,
-      `video-${Date.now()}.mp4`,
     )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Upload failed'

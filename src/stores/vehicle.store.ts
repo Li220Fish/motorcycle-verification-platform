@@ -50,6 +50,24 @@ export const useVehicleStore = defineStore('vehicle', () => {
     if (index !== -1) vehicles.value[index] = { ...vehicles.value[index], ...changes }
   }
 
+  async function deleteVehicle(id: string): Promise<void> {
+    await vehicleService.remove(id)
+    vehicles.value = vehicles.value.filter((vehicle) => vehicle.id !== id)
+    if (currentVehicle.value?.id === id) currentVehicle.value = null
+  }
+
+  /** `orderedIds` is the full garage, front to back, after a long-press-drag
+   * reorder (VehiclesView.vue) — persists it, then updates local state to
+   * match immediately rather than waiting on a refetch. */
+  async function reorderVehicles(orderedIds: string[]): Promise<void> {
+    await vehicleService.reorder(orderedIds)
+    const byId = new Map(vehicles.value.map((vehicle) => [vehicle.id, vehicle]))
+    vehicles.value = orderedIds.flatMap((id, index) => {
+      const vehicle = byId.get(id)
+      return vehicle ? [{ ...vehicle, sortOrder: index }] : []
+    })
+  }
+
   return {
     vehicles,
     currentVehicle,
@@ -58,5 +76,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     fetchVehicle,
     createVehicle,
     updateVehicle,
+    deleteVehicle,
+    reorderVehicles,
   }
 })
