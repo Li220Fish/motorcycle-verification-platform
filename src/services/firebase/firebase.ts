@@ -1,5 +1,11 @@
 import { type FirebaseApp, initializeApp } from 'firebase/app'
-import { type Auth, getAuth } from 'firebase/auth'
+import {
+  type Auth,
+  browserLocalPersistence,
+  indexedDBLocalPersistence,
+  inMemoryPersistence,
+  initializeAuth,
+} from 'firebase/auth'
 import { type Firestore, getFirestore } from 'firebase/firestore'
 import { type Functions, getFunctions } from 'firebase/functions'
 import { type FirebaseStorage, getStorage } from 'firebase/storage'
@@ -15,7 +21,12 @@ const firebaseConfig = {
 
 export const firebaseApp: FirebaseApp = initializeApp(firebaseConfig)
 
-export const auth: Auth = getAuth(firebaseApp)
+/** indexedDB hangs without erroring in some WKWebView/Capacitor contexts,
+ *  so onAuthStateChanged never fires — fall back through the persistence
+ *  chain instead of using the indexedDB-only default from getAuth(). */
+export const auth: Auth = initializeAuth(firebaseApp, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
+})
 export const db: Firestore = getFirestore(firebaseApp)
 export const storage: FirebaseStorage = getStorage(firebaseApp)
 /** Trusted Backend (functions/) — Gemini Vision/Audio inspection, OCR
