@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<!-- saved from url=(0051)file:///Users/archi/Downloads/motoverify-admin.html -->
+<html lang="zh-Hant"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MotoVerify 營運後台</title>
+<!--
+  空白框架版。所有示範資料已清除，保留版面、欄位定義與設計約束。
+  接 Firestore 時：每個表格上的 data-collection 標出對應的 collection，
+  每個 [data-metric] 標出該填入的指標名稱。
+  專案 motorcycle-verification / Firebase Auth + Cloud Firestore。
+  接資料前先完成 admin custom claim 與 security rules，UI 不是安全邊界。
+-->
+<style>
+:root{
+  --ink:#131A24; --ink-2:#1C2530;
+  --ground:#EEF1F5; --surface:#FFFFFF;
+  --line:#D8DEE7; --line-soft:#E7EBF1;
+  --text:#1A222E; --muted:#5B6577; --faint:#8A94A6;
+  --action:#1D4ED8; --action-soft:#EAF0FE;
+  --attention:#B45309; --attention-soft:#FDF3E6;
+  --risk:#B42318; --risk-soft:#FDEDEB;
+  --ok:#067647; --ok-soft:#E8F5EF;
+  --rail:250px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:"Noto Sans TC","PingFang TC","Hiragino Sans TC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:var(--ground);color:var(--text);font-size:14px;line-height:1.6;
+  font-variant-numeric:tabular-nums;
+}
+:focus-visible{outline:2px solid var(--action);outline-offset:2px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.shell{display:flex;min-height:100vh}
+.rail{width:var(--rail);flex:0 0 var(--rail);background:var(--ink);color:#C6CEDA;
+  padding:20px 0 40px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:9px;padding:0 20px 18px;border-bottom:1px solid #263042;margin-bottom:14px}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--action);display:grid;place-items:center;flex:0 0 26px}
+.brand-mark svg{width:15px;height:15px}
+.brand-name{color:#fff;font-weight:700;font-size:15px}
+.brand-sub{font-size:11px;color:#7C8798;margin-top:-2px}
+.nav-group{margin-bottom:15px}
+.nav-group h3{padding:0 20px 5px;font-size:11px;font-weight:600;color:#6B7688}
+.nav-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 20px;
+  background:none;border:0;cursor:pointer;color:#C6CEDA;font:inherit;font-size:13.5px;
+  border-left:2px solid transparent;text-align:left}
+.nav-item:hover{background:#1B2431;color:#fff}
+.nav-item[aria-current="page"]{background:var(--ink-2);color:#fff;border-left-color:var(--action);font-weight:600}
+.nav-label{flex:1}
+.nav-count{font-size:11px;padding:1px 6px;border-radius:9px;background:#2E3A4C;color:#B9C3D2;font-weight:600}
+.nav-count:empty{display:none}
+.nav-count.hot{background:var(--attention);color:#fff}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:13px 26px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+.topbar h1{font-size:17px;font-weight:700}
+.crumb{font-size:12px;color:var(--faint)}
+.topbar-spacer{flex:1}
+.op{font-size:12.5px;color:var(--muted)}
+.op b{color:var(--text);font-weight:600}
+
+.page{padding:22px 26px 60px;max-width:1280px}
+.page[hidden]{display:none}
+.page-intro{font-size:13px;color:var(--muted);margin-bottom:18px;max-width:70ch}
+
+.strip{display:flex;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;overflow:hidden;margin-bottom:20px;flex-wrap:wrap}
+.strip>div{flex:1;min-width:145px;padding:13px 17px;border-left:1px solid var(--line-soft)}
+.strip>div:first-child{border-left:0}
+.strip dt{font-size:12px;color:var(--muted);margin-bottom:2px}
+.strip dd{font-size:22px;font-weight:700;letter-spacing:-.4px;line-height:1.2;color:var(--faint)}
+.strip .note{font-size:11.5px;color:var(--faint);margin-top:2px}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
+.panel-head{padding:12px 17px;border-bottom:1px solid var(--line-soft);
+  display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.panel-head h2{font-size:14.5px;font-weight:700}
+.panel-head .sub{font-size:12px;color:var(--faint)}
+.panel-head .spacer{flex:1}
+.panel-body{padding:17px}
+.panel-body.flush{padding:0}
+.ref{font-size:11px;padding:2px 7px;border-radius:4px;background:#F0F3F8;color:var(--muted);font-weight:600;white-space:nowrap}
+.ref.app{background:var(--action-soft);color:var(--action)}
+.ref.new{background:var(--attention-soft);color:var(--attention)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;
+  padding:9px 17px;border-bottom:1px solid var(--line);background:#F7F9FC;white-space:nowrap}
+td{padding:10px 17px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.num{text-align:right}
+.strong{font-weight:600}
+.dim{color:var(--muted);font-size:12.5px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:#F4F7FC}
+td.empty-cell{text-align:center;color:var(--faint);padding:30px 17px;font-size:12.5px}
+
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.attn{background:var(--attention-soft);color:var(--attention)}
+.pill.risk{background:var(--risk-soft);color:var(--risk)}
+.pill.info{background:var(--action-soft);color:var(--action)}
+.pill.mute{background:#F0F3F8;color:var(--muted)}
+
+.btn{font:inherit;font-size:13px;font-weight:600;padding:6px 13px;border-radius:7px;
+  border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer}
+.btn:hover{background:#F5F7FA}
+.btn.primary{background:var(--action);border-color:var(--action);color:#fff}
+.btn.primary:hover{background:#1A44BC}
+.btn.danger{color:var(--risk);border-color:#E9C4C0}
+.btn.danger:hover{background:var(--risk-soft)}
+.btn.sm{padding:3px 10px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+.guard{border:1px solid #E9C4C0;background:var(--risk-soft);border-radius:9px;
+  padding:12px 15px;margin-bottom:17px;display:flex;gap:11px;align-items:flex-start}
+.guard.amber{border-color:#E4C79C;background:var(--attention-soft)}
+.guard svg{flex:0 0 17px;width:17px;height:17px;margin-top:2px;color:var(--risk)}
+.guard.amber svg{color:var(--attention)}
+.guard h4{font-size:13px;font-weight:700;color:var(--risk);margin-bottom:3px}
+.guard.amber h4{color:var(--attention)}
+.guard p{font-size:12.5px;color:#7A2B24;line-height:1.65}
+.guard.amber p{color:#7C4A0C}
+.guard code{background:#fff;padding:1px 5px;border-radius:3px;font-size:11.5px;border:1px solid currentColor}
+
+.stack-note{font-size:12.5px;color:var(--muted);padding:11px 14px;background:#F7F9FC;
+  border:1px solid var(--line-soft);border-radius:8px;line-height:1.7}
+.stack-note b{color:var(--text)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+
+.bar{height:7px;background:#E7EBF1;border-radius:4px;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--action);border-radius:4px}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:12.5px;padding:4px 12px;border-radius:16px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
+
+.search{font:inherit;font-size:13px;padding:6px 12px;border:1px solid var(--line);
+  border-radius:7px;min-width:220px;color:var(--text)}
+.search:focus{outline:none;border-color:var(--action);box-shadow:0 0 0 3px var(--action-soft)}
+
+.udetail{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0}
+.uside{padding:18px;border-right:1px solid var(--line-soft);background:#F7F9FC}
+.uavatar{width:54px;height:54px;border-radius:14px;background:#E7EBF1;color:var(--faint);
+  display:grid;place-items:center;font-size:21px;font-weight:700;margin-bottom:11px}
+.uname{font-size:17px;font-weight:700;line-height:1.3;color:var(--faint)}
+.ucode{font-size:12.5px;color:var(--muted);margin-top:1px}
+.ufacts{margin-top:15px;font-size:12.5px}
+.ufacts div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft)}
+.ufacts div:last-child{border-bottom:0}
+.ufacts dt{color:var(--muted)}
+.ufacts dd{font-weight:600;text-align:right;color:var(--faint)}
+.umain{padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.usec h3{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+
+.slot{border:1px dashed var(--line);border-radius:8px;padding:22px 13px;text-align:center;
+  font-size:12.5px;color:var(--faint)}
+
+.heat{display:flex;flex-direction:column;gap:7px}
+.heatrow{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.heatrow .lbl{width:80px;flex:0 0 80px;color:var(--muted)}
+.heatrow .val{width:56px;flex:0 0 56px;text-align:right;font-weight:600;font-size:12px;color:var(--faint)}
+
+.datasrc{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  padding:2px 8px;border-radius:4px;background:var(--attention-soft);color:var(--attention)}
+
+.setting{display:flex;align-items:flex-start;gap:13px;padding:13px 0;border-bottom:1px solid var(--line-soft)}
+.setting:last-child{border-bottom:0}
+.setting .txt{flex:1}
+.setting .txt b{font-size:13.5px;display:block}
+.setting .txt span{font-size:12.5px;color:var(--muted)}
+.tog{position:relative;width:42px;height:24px;flex:0 0 42px;border:0;border-radius:14px;
+  background:#C2C9D4;cursor:pointer;padding:0;transition:background .15s}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:#fff;transition:transform .15s}
+.tog[aria-pressed="true"]{background:var(--action)}
+.tog[aria-pressed="true"]::after{transform:translateX(18px)}
+.tog.warn[aria-pressed="true"]{background:var(--attention)}
+
+.checker textarea{width:100%;min-height:100px;font:inherit;font-size:13.5px;line-height:1.7;
+  padding:12px;border:1px solid var(--line);border-radius:8px;resize:vertical;color:var(--text)}
+.checker textarea:focus{border-color:var(--action);outline:none;box-shadow:0 0 0 3px var(--action-soft)}
+.findings{margin-top:13px;display:flex;flex-direction:column;gap:8px}
+.finding{border-left:3px solid;border-radius:0 7px 7px 0;padding:10px 13px;font-size:12.5px;background:#F7F9FC}
+.finding.block{border-color:var(--risk);background:var(--risk-soft)}
+.finding.warn{border-color:var(--attention);background:var(--attention-soft)}
+.finding.clear{border-color:var(--ok);background:var(--ok-soft)}
+.finding .why{color:var(--muted);display:block;margin-top:2px;font-size:12px}
+.finding.block .why{color:#7A2B24}
+.finding.warn .why{color:#7C4A0C}
+.wordlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.word{font-size:12px;padding:3px 9px;border-radius:5px;background:var(--risk-soft);color:var(--risk);font-weight:600}
+.word.ctx{background:var(--attention-soft);color:var(--attention)}
+
+@media (max-width:1080px){.udetail{grid-template-columns:1fr}.uside{border-right:0;border-bottom:1px solid var(--line-soft)}
+  .split{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .rail{position:fixed;transform:translateX(-100%);z-index:20;transition:transform .2s}
+  .rail.open{transform:none}
+  .page{padding:16px 14px 48px}.topbar{padding:11px 14px}
+  table{font-size:12.5px}th,td{padding:8px 12px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<nav class="rail" id="rail" aria-label="後台導覽">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 4 5.5v6c0 5 3.4 9.2 8 10.5 4.6-1.3 8-5.5 8-10.5v-6z"></path>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">MotoVerify</div>
+      <div class="brand-sub">營運後台</div>
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <h3>總覽</h3>
+    <button class="nav-item" data-page="overview"><span class="nav-label">營運總覽</span></button>
+  </div>
+
+  <div class="nav-group">
+    <h3>個人用戶</h3>
+    <button class="nav-item" data-page="users"><span class="nav-label">使用者名冊</span></button>
+    <button class="nav-item" data-page="behaviour"><span class="nav-label">行為與興趣</span></button>
+    <button class="nav-item" data-page="garage"><span class="nav-label">車庫與履歷</span></button>
+  </div>
+
+  <div class="nav-group">
+    <h3>App 功能管理</h3>
+    <button class="nav-item" data-page="verify"><span class="nav-label">檢驗任務</span><span class="nav-count" data-metric="verify.pending"></span></button>
+    <button class="nav-item" data-page="reports"><span class="nav-label">檢驗報告</span></button>
+    <button class="nav-item" data-page="market"><span class="nav-label">交易市場</span><span class="nav-count" data-metric="market.pending"></span></button>
+    <button class="nav-item" data-page="messages"><span class="nav-label">訊息與檢舉</span><span class="nav-count" data-metric="messages.reports"></span></button>
+    <button class="nav-item" data-page="discussion"><span class="nav-label">討論中心</span><span class="nav-count" data-metric="discussion.reports"></span></button>
+    <button class="nav-item" data-page="news"><span class="nav-label">車訊新知</span></button>
+    <button class="nav-item" data-page="probe"><span class="nav-label">Probe 裝置</span></button>
+  </div>
+
+  <div class="nav-group">
+    <h3>主資料與內容</h3>
+    <button class="nav-item" data-page="models"><span class="nav-label">車款主檔</span></button>
+    <button class="nav-item" data-page="push"><span class="nav-label">推播與提醒</span></button>
+  </div>
+
+  <div class="nav-group">
+    <h3>法遵</h3>
+    <button class="nav-item" data-page="copy" aria-current="page"><span class="nav-label">文案守則檢查</span></button>
+    <button class="nav-item" data-page="consent"><span class="nav-label">個資同意管理</span></button>
+  </div>
+
+  <div class="nav-group">
+    <h3>環境</h3>
+    <button class="nav-item" data-page="demo"><span class="nav-label">環境旗標</span></button>
+  </div>
+</nav>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1 id="pageTitle">文案守則檢查</h1>
+      <div class="crumb" id="pageCrumb">提案功能五 責任邊界</div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="op">值班：<b data-field="admin.displayName">—</b>　平台管理員</div>
+  </header>
+
+<!-- ================= OVERVIEW ================= -->
+<section class="page" id="page-overview" hidden="">
+  <dl class="strip">
+    <div><dt>註冊用戶</dt><dd data-metric="users.total">—</dd><div class="note">本月新增</div></div>
+    <div><dt>月活躍用戶</dt><dd data-metric="users.mau">—</dd><div class="note">佔註冊比例</div></div>
+    <div><dt>登記車輛</dt><dd data-metric="vehicles.total">—</dd><div class="note">平均每人台數</div></div>
+    <div><dt>在架刊登</dt><dd data-metric="listings.active">—</dd><div class="note">待審筆數</div></div>
+    <div><dt>本月檢驗</dt><dd data-metric="verifications.month">—</dd><div class="note">待覆核筆數</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head"><h2>今天要處理的事</h2><span class="sub">依風險排序，不依時間排序</span></div>
+    <div class="panel-body flush">
+      <table data-collection="tasks">
+        <thead><tr><th>事項</th><th>數量</th><th>最久等待</th><th>風險</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h2>用戶都在用哪些畫面</h2></div>
+      <div class="panel-body">
+        <div class="heat" data-metric="events.pageShare">
+          <div class="heatrow"><span class="lbl">首頁</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">市場</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">檢驗</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">訊息</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">討論中心</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">Probe</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        </div>
+        <div class="stack-note" style="margin-top:14px">
+          檢驗是產品的核心差異化，這條數字要跟其他畫面對照著看。
+          若佔比明顯偏低，通常代表入口設計有問題而不是使用者不需要。
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>用戶組成</h2></div>
+      <div class="panel-body flush">
+        <table data-collection="users">
+          <tbody>
+            <tr><td>使用模式為賣家</td><td class="num" data-metric="users.sellers">—</td><td><div class="bar"><i style="width:0"></i></div></td></tr>
+            <tr><td>使用模式為買家</td><td class="num" data-metric="users.buyers">—</td><td><div class="bar"><i style="width:0"></i></div></td></tr>
+            <tr><td>已登記至少一台車</td><td class="num" data-metric="users.withVehicle">—</td><td class="dim">—</td></tr>
+            <tr><td>有在售刊登</td><td class="num" data-metric="users.withListing">—</td><td class="dim">—</td></tr>
+            <tr><td>已綁定 Probe</td><td class="num" data-metric="users.withProbe">—</td><td class="dim">—</td></tr>
+            <tr><td>7 日未開啟</td><td class="num" data-metric="users.dormant7d">—</td><td class="dim">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= USERS ================= -->
+<section class="page" id="page-users" hidden="">
+  <p class="page-intro">
+    個人用戶名冊，點任一列進入使用者詳情。代號由使用者自行命名、全平台唯一，類似 Instagram 的帳號名稱——
+    客服用代號查最快，但代號可以被改掉，帳號的實際識別仍須以內部 id 為準，只是那個 id 不需要顯示在這個畫面上。
+  </p>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>使用者</h2><span class="sub" data-metric="users.total">—</span>
+      <div class="spacer"></div>
+      <input class="search" type="search" placeholder="搜尋暱稱、代號或 email" aria-label="搜尋使用者">
+      <div class="filters">
+        <button class="chip" aria-pressed="true">全部</button>
+        <button class="chip" aria-pressed="false">近 7 日活躍</button>
+        <button class="chip" aria-pressed="false">有在售</button>
+        <button class="chip" aria-pressed="false">未登記車輛</button>
+      </div>
+    </div>
+    <div class="panel-body flush" style="overflow-x:auto">
+      <table data-collection="users">
+        <thead>
+          <tr>
+            <th>暱稱</th><th>代號</th><th>模式</th>
+            <th>登記車款</th><th>在售</th><th>最常使用</th><th>最有興趣車款</th><th>最後活動</th>
+          </tr>
+        </thead>
+        <tbody><tr><td class="empty-cell" colspan="8">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  
+
+  
+</section>
+
+<!-- ================= USER DETAIL ================= -->
+<section class="page" id="page-userdetail" hidden="">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>使用者詳情</h2>
+      <div class="spacer"></div>
+      <button class="btn sm" data-goto="users">回名冊</button>
+      <button class="btn sm" disabled="">寄送通知</button>
+      <button class="btn sm danger" disabled="">停權</button>
+    </div>
+    <div class="udetail">
+      <div class="uside">
+        <div class="uavatar">—</div>
+        <div class="uname" data-field="user.displayName">未載入</div>
+        <div class="ucode"><span class="mono" data-field="user.handle">—</span></div>
+
+        <dl class="ufacts">
+          <div><dt>Email</dt><dd data-field="user.email">—</dd></div>
+          <div><dt>代號變更</dt><dd data-field="user.handleChanges">—</dd></div>
+          <div><dt>使用模式</dt><dd data-field="user.mode">—</dd></div>
+          <div><dt>註冊日</dt><dd data-field="user.createdAt">—</dd></div>
+          <div><dt>實名認證</dt><dd data-field="user.verified">—</dd></div>
+          <div><dt>登記車輛</dt><dd data-field="user.vehicleCount">—</dd></div>
+          <div><dt>在售刊登</dt><dd data-field="user.listingCount">—</dd></div>
+          <div><dt>完成檢驗</dt><dd data-field="user.verificationCount">—</dd></div>
+          <div><dt>討論發文</dt><dd data-field="user.postCount">—</dd></div>
+          <div><dt>Probe</dt><dd data-field="user.probe">—</dd></div>
+          <div><dt>賣家評分</dt><dd data-field="user.rating">—</dd></div>
+        </dl>
+      </div>
+
+      <div class="umain">
+        <div class="usec">
+          <h3>登記車款 <span class="ref app">app 首頁「我的車輛」</span></h3>
+          <div class="slot" data-collection="vehicles">尚無資料</div>
+        </div>
+
+        <div class="usec">
+          <h3>在售車款 <span class="ref app">app 首頁「我的刊登」</span></h3>
+          <div class="slot" data-collection="listings">尚無資料</div>
+        </div>
+
+        <div class="split">
+          <div class="usec">
+            <h3>最常點擊的畫面 <span class="datasrc">待埋事件</span></h3>
+            <div class="heat" data-metric="user.pageShare">
+              <div class="heatrow"><span class="lbl">首頁</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+              <div class="heatrow"><span class="lbl">市場</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+              <div class="heatrow"><span class="lbl">檢驗</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+              <div class="heatrow"><span class="lbl">訊息</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+              <div class="heatrow"><span class="lbl">討論中心</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+            </div>
+          </div>
+
+          <div class="usec">
+            <h3>最有興趣的車款 <span class="datasrc">待埋事件</span></h3>
+            <div class="slot" data-metric="user.interests">尚無資料</div>
+          </div>
+        </div>
+
+        <div class="usec">
+          <h3>檢驗紀錄 <span class="ref app">app 檢驗頁</span></h3>
+          <table data-collection="verifications" style="border:1px solid var(--line);border-radius:8px;overflow:hidden">
+            <thead><tr><th>車輛</th><th>類型</th><th>日期</th><th>狀態</th><th>報告</th></tr></thead>
+            <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+          </table>
+          <div class="stack-note" style="margin-top:9px">
+            檢驗流程目前允許在未選定車輛的情況下完成，這類紀錄會顯示「未關聯車輛」，
+            無法歸戶也無法併入車輛履歷。建議把選擇車輛改為必填。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BEHAVIOUR ================= -->
+<section class="page" id="page-behaviour" hidden="">
+  
+
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h2>最有興趣的車款排行</h2><span class="sub">近 30 天，全平台</span></div>
+      <div class="panel-body flush">
+        <table data-collection="stats/interests">
+          <thead><tr><th>車款</th><th class="num">瀏覽</th><th class="num">收藏</th><th class="num">聯繫</th><th>轉換</th></tr></thead>
+          <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>興趣與定位是否一致</h2></div>
+      <div class="panel-body">
+        <div class="heat" data-metric="stats.priceBand">
+          <div class="heatrow"><span class="lbl">十萬以上</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+          <div class="heatrow"><span class="lbl">十萬以下</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        </div>
+        <div class="stack-note" style="margin-top:14px">
+          目標客群是重機與運動改裝白牌。這裡看的是使用者的實際瀏覽行為是否落在該價格帶——
+          若推薦內容比使用者的實際興趣更偏離定位，那是內容問題不是客群問題。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>留存與流失</h2></div>
+    <div class="panel-body flush">
+      <table data-collection="stats/retention">
+        <thead><tr><th>分群</th><th class="num">人數</th><th class="num">次日留存</th><th class="num">7 日留存</th><th class="num">30 日留存</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="stack-note">
+    重點看「已登記車輛」與「未登記車輛」兩群的差距。若差距顯著，
+    代表把登記第一台車拉進註冊流程的效益，會高於任何推播。
+  </div>
+</section>
+
+<!-- ================= GARAGE ================= -->
+<section class="page" id="page-garage" hidden="">
+  <p class="page-intro">
+    對應 app 首頁的「我的車輛」與車輛詳情頁。這裡管的是登記車輛本身、行照核對、里程異常與保養提醒。
+  </p>
+
+  <dl class="strip">
+    <div><dt>登記車輛</dt><dd data-metric="vehicles.total">—</dd><div class="note">本月新增</div></div>
+    <div><dt>已上傳行照</dt><dd data-metric="vehicles.withLicense">—</dd><div class="note">佔比</div></div>
+    <div><dt>里程異常</dt><dd data-metric="vehicles.odoAnomaly">—</dd><div class="note">回填數字小於前次</div></div>
+    <div><dt>電動車</dt><dd data-metric="vehicles.ev">—</dd><div class="note">油耗欄位不適用</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head"><h2>需要處理的車輛</h2></div>
+    <div class="panel-body flush">
+      <table data-collection="vehicles">
+        <thead><tr><th>車輛</th><th>車主</th><th>問題</th><th>細節</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>行照處理原則</h2></div>
+    <div class="panel-body">
+      <div class="stack-note">
+        行照僅用於驗證<b>車輛存在性</b>，不用於比對姓名。中古車在車行手上時多半尚未過戶，
+        行照仍為前車主——這是行規不是異常，設成攔截條件會誤傷合法車行庫存。
+        行照影像存放需與同意版本綁定，見個資同意管理。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= VERIFY ================= -->
+<section class="page" id="page-verify" hidden="">
+  
+
+  <dl class="strip">
+    <div><dt>本月檢驗</dt><dd data-metric="verifications.month">—</dd><div class="note">賣家驗證／買家複驗</div></div>
+    <div><dt>待覆核</dt><dd data-metric="verifications.pending">—</dd><div class="note">完成度不足或需人工確認</div></div>
+    <div><dt>平均完成時間</dt><dd data-metric="verifications.avgDuration">—</dd><div class="note">app 預告 20–30 分</div></div>
+    <div><dt>中途放棄率</dt><dd data-metric="verifications.dropoff">—</dd><div class="note">卡關步驟</div></div>
+    <div><dt>未關聯車輛</dt><dd data-metric="verifications.orphan">—</dd><div class="note">報告無法歸戶</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>覆核佇列</h2>
+      <div class="spacer"></div>
+      <div class="filters">
+        <button class="chip" aria-pressed="true">全部</button>
+        <button class="chip" aria-pressed="false">賣家驗證</button>
+        <button class="chip" aria-pressed="false">買家複驗</button>
+      </div>
+    </div>
+    <div class="panel-body flush">
+      <table data-collection="verifications">
+        <thead><tr><th>車輛</th><th>送件者</th><th>類型</th><th>檢驗完成度</th><th>拍照</th><th>狀態</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="7">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>檢驗流程的漏斗</h2><span class="sub">中途放棄集中在哪一步</span></div>
+    <div class="panel-body">
+      <div class="heat" data-metric="verifications.funnel">
+        <div class="heatrow"><span class="lbl">選擇類型</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        <div class="heatrow"><span class="lbl">選擇車輛</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        <div class="heatrow"><span class="lbl">事前準備</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        <div class="heatrow"><span class="lbl">拍照八角度</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        <div class="heatrow"><span class="lbl">電系檢查</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+        <div class="heatrow"><span class="lbl">完成報告</span><div class="bar"><i style="width:0"></i></div><span class="val">—</span></div>
+      </div>
+      <div class="stack-note" style="margin-top:14px">
+        這個漏斗需要 <code>verification_start</code> 與各步驟的完成事件才算得出來。
+        沒有選擇車輛就往下走的那部分，就是「未關聯車輛」的來源。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= REPORTS ================= -->
+<section class="page" id="page-reports" hidden="">
+  
+
+  <div class="panel">
+    <div class="panel-head"><h2>分項燈號分布</h2><span class="sub">本月報告</span></div>
+    <div class="panel-body flush">
+      <table data-collection="reports">
+        <thead><tr><th>項目</th><th class="num">良好</th><th class="num">注意</th><th class="num">需確認</th><th>備註</th></tr></thead>
+        <tbody>
+          <tr><td class="strong">事前準備</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="dim">—</td></tr>
+          <tr><td class="strong">車輛檢查</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="dim">—</td></tr>
+          <tr><td class="strong">車身外觀</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="dim">—</td></tr>
+          <tr><td class="strong">電系狀況</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="dim">—</td></tr>
+          <tr><td class="strong">引擎狀況</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="dim">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="stack-note">
+    若某一項幾乎全部落在「良好」，代表該項不帶資訊。
+    如果它只是流程確認而不是車況判斷，就不該和其他項並列在報告的燈號區。
+  </div>
+</section>
+
+<!-- ================= MARKET ================= -->
+<section class="page" id="page-market" hidden="">
+  <p class="page-intro">
+    對應 app 的交易市場頁。刊登審核只檢查必填欄位與必拍角度是否完成，車況本身不在這裡判斷，
+    平台也不背書。
+  </p>
+
+  <dl class="strip">
+    <div><dt>在架刊登</dt><dd data-metric="listings.active">—</dd><div class="note">僅個人賣家</div></div>
+    <div><dt>待審</dt><dd data-metric="listings.pending">—</dd><div class="note">卡關原因</div></div>
+    <div><dt>本月新增</dt><dd data-metric="listings.month">—</dd><div class="note">月增率</div></div>
+    <div><dt>平均在架天數</dt><dd data-metric="listings.avgDays">—</dd><div class="note">中位數</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>待上架</h2>
+      <div class="spacer"></div>
+      <div class="filters">
+        <button class="chip" aria-pressed="true">全部</button>
+        <button class="chip" aria-pressed="false">待審</button>
+        <button class="chip" aria-pressed="false">售中</button>
+        <button class="chip" aria-pressed="false">已退回</button>
+      </div>
+    </div>
+    <div class="panel-body flush">
+      <table data-collection="listings">
+        <thead><tr><th>車輛</th><th>賣家</th><th>欄位完整度</th><th>拍照</th><th>感興趣</th><th>狀態</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="7">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MESSAGES ================= -->
+<section class="page" id="page-messages" hidden="">
+  
+
+  <dl class="strip">
+    <div><dt>總對話數</dt><dd data-metric="conversations.total">—</dd><div class="note">本月新增</div></div>
+    <div><dt>由刊登發起</dt><dd data-metric="conversations.fromListing">—</dd><div class="note">其餘為代號搜尋</div></div>
+    <div><dt>賣家回覆率</dt><dd data-metric="conversations.replyRate">—</dd><div class="note">24 小時內</div></div>
+    <div><dt>檢舉待處理</dt><dd data-metric="messages.reports">—</dd><div class="note">依理由分類</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head"><h2>檢舉待處理</h2></div>
+    <div class="panel-body flush">
+      <table data-collection="reports">
+        <thead><tr><th>檢舉理由</th><th>檢舉人</th><th>被檢舉人</th><th>時間</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DISCUSSION ================= -->
+<section class="page" id="page-discussion" hidden="">
+  
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>貼文管理</h2>
+      <div class="spacer"></div>
+      <button class="btn sm danger" disabled="">批次刪除測試貼文</button>
+    </div>
+    <div class="panel-body flush">
+      <table data-collection="posts">
+        <thead><tr><th>標題</th><th>作者</th><th>分類</th><th class="num">讚</th><th class="num">留言</th><th>標記</th><th></th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="7">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h2>分類與頁籤</h2></div>
+      <div class="panel-body flush">
+        <table data-collection="categories">
+          <thead><tr><th>項目</th><th class="num">貼文數</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td class="strong">購車討論</td><td class="num dim">—</td><td><span class="pill mute">—</span></td></tr>
+            <tr><td class="strong">賣車討論</td><td class="num dim">—</td><td><span class="pill mute">—</span></td></tr>
+            <tr><td class="dim">頁籤：熱門／最新／精選／追蹤中</td><td class="num dim">—</td><td><span class="pill mute">app 內建</span></td></tr>
+          </tbody>
+        </table>
+        <div class="stack-note" style="margin:14px 17px 17px">
+          提案功能十建議社群不列為主打，讓它依附在功能九的內容上生長。
+          現階段不需要更多分類，需要的是有人發第一批真內容。
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>檢舉待處理</h2></div>
+      <div class="panel-body flush">
+        <table data-collection="reports">
+          <thead><tr><th>內容</th><th>理由</th><th class="num">檢舉</th><th></th></tr></thead>
+          <tbody><tr><td class="empty-cell" colspan="4">尚無資料</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= NEWS ================= -->
+<section class="page" id="page-news" hidden="">
+  <p class="page-intro"></p>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>文章</h2>
+      <div class="spacer"></div>
+      <button class="btn sm primary" disabled="">新增文章</button>
+    </div>
+    <div class="panel-body flush">
+      <table data-collection="news">
+        <thead><tr><th>標題</th><th>分類</th><th>來源</th><th>發布</th><th class="num">閱讀</th><th>狀態</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="6">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  
+</section>
+
+<!-- ================= PROBE ================= -->
+<section class="page" id="page-probe" hidden="">
+  
+
+  <dl class="strip">
+    <div><dt>已綁定裝置</dt><dd data-metric="devices.total">—</dd><div class="note">佔用戶比例</div></div>
+    <div><dt>配對成功率</dt><dd data-metric="devices.pairRate">—</dd><div class="note">近 7 日</div></div>
+    <div><dt>本月讀數上傳</dt><dd data-metric="devices.readings">—</dd><div class="note">平均每台次數</div></div>
+    <div><dt>Mock Probe 啟用</dt><dd data-metric="devices.mock">—</dd><div class="note">正式環境不應啟用</div></div>
+  </dl>
+
+  <div class="panel">
+    <div class="panel-head"><h2>裝置</h2></div>
+    <div class="panel-body flush">
+      <table data-collection="devices">
+        <thead><tr><th>裝置序號</th><th>綁定用戶</th><th>韌體</th><th>最後回報</th><th>電壓讀數</th><th>狀態</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="6">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  
+</section>
+
+<!-- ================= MODELS ================= -->
+<section class="page" id="page-models" hidden="">
+  <p class="page-intro">
+    車款主檔是提案功能一的本體，也是被形容為「最被低估的差異點」的東西。
+    刊登強制從這裡選取，搜尋走 label 而非字串比對。
+  </p>
+
+  <div class="panel">
+    <div class="panel-head"><h2>同義詞映射</h2>
+      <div class="spacer"></div><button class="btn sm primary" disabled="">新增車款</button></div>
+    <div class="panel-body flush">
+      <table data-collection="models">
+        <thead><tr><th>標準車款</th><th>廠牌 / 車系</th><th>已映射寫法</th><th>牌照</th><th>本月搜尋落空</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="5">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>建檔原則</h2></div>
+    <div class="panel-body">
+      <div class="stack-note">
+        同廠不同車系、不同品牌但型號相近的車款必須在主檔層級分開，
+        且搜尋其中一台不得帶出另外兩台——這正是提案舉的痛點證例。
+        <b>另需加上動力型式欄位</b>，否則電動車會繼續顯示「平均油耗」。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PUSH ================= -->
+<section class="page" id="page-push" hidden="">
+  <p class="page-intro">
+    app 設定頁有「通知」項目。提案功能四指出真正驅動記錄行為的是到期提醒，
+    所以推播不是行銷工具，是留存機制。
+  </p>
+
+  <div class="panel">
+    <div class="panel-head"><h2>自動提醒</h2></div>
+    <div class="panel-body">
+      <div class="setting">
+        <div class="txt"><b>保養到期提醒</b><span>依里程曲線推估。</span></div>
+        <button class="tog" aria-pressed="false" aria-label="保養到期提醒"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>刊登有人感興趣</b><span>對賣家推播。</span></div>
+        <button class="tog" aria-pressed="false" aria-label="刊登有人感興趣"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>收藏車款降價</b><span>需先埋 listing_favorite 事件。</span></div>
+        <button class="tog" aria-pressed="false" aria-label="收藏車款降價"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>未完成檢驗提醒</b><span>針對中途放棄者，隔日提醒可回收一部分。</span></div>
+        <button class="tog" aria-pressed="false" aria-label="未完成檢驗提醒"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>登記第一台車引導</b><span>登記與未登記兩群的留存差距通常最大。</span></div>
+        <button class="tog" aria-pressed="false" aria-label="登記第一台車引導"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>手動推播</h2></div>
+    <div class="panel-body">
+      <div class="stack-note">
+        送出前所有文案會先跑一次文案守則檢查。推播標題是禁用詞最容易外洩的地方——
+        它不在條款裡、字數短、常常是趕著發的。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COPY ================= -->
+<section class="page" id="page-copy">
+  <div class="guard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16.5v.01"></path>
+    </svg>
+    <div>
+      <h4>文案是法律風險最容易外洩的地方</h4>
+      <p>
+        提案功能五禁用「認證」「保證」「無事故」。這類詞不會出現在條款裡，
+        而會出現在推播標題、報告頁小字、社群貼文、簡報投影片——這些地方通常沒有人審。
+        任何要對外的文字先貼進來跑一次。
+      </p>
+    </div>
+  </div>
+
+  <div class="panel checker">
+    <div class="panel-head"><h2>文案守則檢查</h2><span class="ref">提案 功能五 責任邊界</span></div>
+    <div class="panel-body">
+      <textarea id="copyInput" aria-label="待檢查文案" placeholder="貼上要對外的文字…"></textarea>
+      <div class="findings" id="findings"></div>
+
+      <div style="margin-top:16px">
+        <div class="stack-note">
+          <b>禁用詞</b>：這些詞會讓平台從「提供初步篩選」變成「提供鑑定與擔保」。
+          <div class="wordlist">
+            <span class="word">保證</span><span class="word">無事故</span><span class="word">鑑定</span>
+            <span class="word">合格</span><span class="word">不合格</span><span class="word">判定</span>
+            <span class="word">保固</span><span class="word">通過檢驗</span><span class="word">總評分</span>
+            <span class="word ctx">認證</span>
+          </div>
+          <div style="margin-top:9px;font-size:12px">
+            「認證」為情境限定：<b>可以</b>用於身分（實名認證），
+            <b>不可以</b>用於車況（認證車況、認證車輛）。
+            「總評分」列入禁用是因為它等同對外給出綜合判定，見檢驗報告頁。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>免責聲明版本</h2></div>
+    <div class="panel-body flush">
+      <table data-collection="disclaimers">
+        <thead><tr><th>版本</th><th>套用位置</th><th>生效日</th><th>狀態</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="4">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="stack-note">
+    提案要求免責聲明須顯示於報告頁面本身，不可僅藏於條款。
+    報告分享頁與買家複驗比對頁也要一併套用，否則分享出去的內容等於沒有免責。
+  </div>
+</section>
+
+<!-- ================= CONSENT ================= -->
+<section class="page" id="page-consent" hidden="">
+  
+
+  <div class="panel">
+    <div class="panel-head"><h2>同意版本與可用範圍</h2><span class="ref">提案 功能八</span></div>
+    <div class="panel-body flush">
+      <table data-collection="consents">
+        <thead><tr><th>同意版本</th><th>取得期間</th><th class="num">用戶數</th><th>車廠數據</th><th>精準行銷</th><th>行照影像</th></tr></thead>
+        <tbody><tr><td class="empty-cell" colspan="6">尚無資料</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h2>資料與隱私設定</h2></div>
+      <div class="panel-body">
+        <div class="setting">
+          <div class="txt"><b>允許用戶匯出自己的資料</b><span>個資法上的查閱與複製權。app 設定頁應提供入口。</span></div>
+          <button class="tog" aria-pressed="false" aria-label="允許匯出資料"></button>
+        </div>
+        <div class="setting">
+          <div class="txt"><b>允許用戶刪除帳號</b><span>刪除後車輛履歷如何處理需明訂——已過渡給他人的部分不應連帶消失。</span></div>
+          <button class="tog" aria-pressed="false" aria-label="允許刪除帳號"></button>
+        </div>
+        <div class="setting">
+          <div class="txt"><b>行照影像加密存放</b><span>需與技術端核對實際狀態。</span></div>
+          <button class="tog" aria-pressed="false" aria-label="行照影像加密"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>去識別化設定</h2></div>
+      <div class="panel-body">
+        <div class="stack-note">
+          輸出給車廠的統計須移除：姓名、地址、身分證字號、車身號碼、聯絡方式。<br>
+          可保留：車款、年式、里程區間、油耗、保養間隔、縣市。<br><br>
+          <b>待確認</b>：單一車款在某縣市若少於 30 名用戶，縣市欄位應改為區域，否則有再識別風險。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ENV FLAGS ================= -->
+<section class="page" id="page-demo" hidden="">
+  <p class="page-intro">
+    示範資料與開發工具應由旗標控制，而不是靠記得手動刪除。簡報前用這一頁一次關閉。
+  </p>
+
+  <div class="panel">
+    <div class="panel-head"><h2>環境旗標</h2></div>
+    <div class="panel-body">
+      <div class="setting">
+        <div class="txt"><b>顯示 DEMO 刊登資料</b><span>市場頁的展示車輛，卡片上帶 DEMO 角標。</span></div>
+        <button class="tog warn" aria-pressed="false" aria-label="顯示DEMO刊登"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>顯示 QA 測試貼文</b><span>討論中心的同步測試貼文。</span></div>
+        <button class="tog warn" aria-pressed="false" aria-label="顯示QA測試貼文"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>允許 Mock Probe</b><span>Developer Mode 的假裝置。</span></div>
+        <button class="tog warn" aria-pressed="false" aria-label="允許Mock Probe"></button>
+      </div>
+      <div class="setting">
+        <div class="txt"><b>市場頁展示提示橫幅</b><span>「目前為 DEMO 展示資料，真實交易市場功能尚在開發中」</span></div>
+        <button class="tog" aria-pressed="false" aria-label="展示提示橫幅"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>示範圖片來源</h2></div>
+    <div class="panel-body">
+      <div class="stack-note">
+        目前 app 的車輛照片外連 <b>upload.wikimedia.org</b>。三個問題：
+        沒網路就整片空白、CC 授權需標示作者、且圖檔車型與卡片標示未必相符。
+        產品的核心賣點是車輛資訊的正確性，示範資料出錯會直接打在最想證明的地方。<br><br>
+        <b>建議</b>：改為本地檔案放進 <code>public/</code>，來源用自己拍的或有明確授權的，並逐張核對車型。
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+(function(){
+  "use strict";
+
+  var TITLES = {
+    overview:   ["營運總覽", "尚未連接資料來源"],
+    users:      ["使用者名冊", "collection: users"],
+    userdetail: ["使用者詳情", "collection: users / vehicles / listings"],
+    behaviour:  ["行為與興趣", "需先埋事件並由 Cloud Functions 聚合"],
+    garage:     ["車庫與履歷", "collection: vehicles"],
+    verify:     ["檢驗任務", "collection: verifications"],
+    reports:    ["檢驗報告", "collection: reports"],
+    market:     ["交易市場", "collection: listings"],
+    messages:   ["訊息與檢舉", "collection: conversations / reports"],
+    discussion: ["討論中心", "collection: posts"],
+    news:       ["車訊新知", "collection: news"],
+    probe:      ["Probe 裝置", "collection: devices"],
+    models:     ["車款主檔", "collection: models"],
+    push:       ["推播與提醒", "對應 app 設定頁「通知」"],
+    copy:       ["文案守則檢查", "提案功能五 責任邊界"],
+    consent:    ["個資同意管理", "提案功能八・風險 R4"],
+    demo:       ["環境旗標", "簡報前確認全數關閉"]
+  };
+
+  var navItems = Array.prototype.slice.call(document.querySelectorAll(".nav-item"));
+  var titleEl = document.getElementById("pageTitle");
+  var crumbEl = document.getElementById("pageCrumb");
+
+  function show(page){
+    if(!TITLES[page]) return;
+    Array.prototype.forEach.call(document.querySelectorAll(".page"), function(s){
+      s.hidden = (s.id !== "page-" + page);
+    });
+    navItems.forEach(function(b){
+      if(b.dataset.page === page){ b.setAttribute("aria-current","page"); }
+      else { b.removeAttribute("aria-current"); }
+    });
+    titleEl.textContent = TITLES[page][0];
+    crumbEl.textContent = TITLES[page][1];
+    window.scrollTo(0,0);
+  }
+
+  navItems.forEach(function(b){
+    b.addEventListener("click", function(){ show(b.dataset.page); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-goto]"), function(el){
+    el.addEventListener("click", function(){ show(el.dataset.goto); });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".filters"), function(group){
+    var chips = group.querySelectorAll(".chip");
+    Array.prototype.forEach.call(chips, function(c){
+      c.addEventListener("click", function(){
+        Array.prototype.forEach.call(chips, function(x){ x.setAttribute("aria-pressed","false"); });
+        c.setAttribute("aria-pressed","true");
+      });
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tog"), function(t){
+    t.addEventListener("click", function(){
+      t.setAttribute("aria-pressed", t.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    });
+  });
+
+  /* ---- 文案守則檢查（規則，非示範資料，保留） ---- */
+  var BANNED = [
+    { w:"保證",     why:"構成品質擔保。平台不做鑑定、不做保證，改寫為「提供初步篩選」。" },
+    { w:"無事故",   why:"平台無法核實事故史，這是斷言而非觀察。改寫為「未偵測到明顯碰撞痕跡」。" },
+    { w:"鑑定",     why:"鑑定意味專業判斷與責任。平台輸出的是注意事項，不是鑑定結果。" },
+    { w:"合格",     why:"暗示平台做了通過與否的判定。模型只輸出 attention，不輸出 verdict。" },
+    { w:"不合格",   why:"同上，且負面判定的爭議風險更高。" },
+    { w:"判定",     why:"判定是結論。改寫為「標記」或「提示」。" },
+    { w:"保固",     why:"§8.2 明確不碰保固，避免理賠精算與責任。" },
+    { w:"通過檢驗", why:"平台不取代監理站定檢，這個說法會造成混淆。" },
+    { w:"總評分",   why:"總分等同對外給出綜合判定，與功能五「不顯示總分」牴觸。" }
+  ];
+  var CONDITION_NOUNS = ["車況","車輛","車子","這台","報告","狀態","引擎","里程"];
+
+  var input = document.getElementById("copyInput");
+  var out = document.getElementById("findings");
+
+  function esc(s){
+    return String(s).replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+    });
+  }
+
+  function check(){
+    var text = input.value, found = [];
+
+    if(!text.trim()){ out.innerHTML = ""; return; }
+
+    BANNED.forEach(function(item){
+      if(text.indexOf(item.w) !== -1){
+        found.push({ level:"block", word:item.w, why:item.why });
+      }
+    });
+
+    var at = text.indexOf("認證");
+    while(at !== -1){
+      var after = text.slice(at + 2, at + 6);
+      var hit = CONDITION_NOUNS.some(function(n){ return after.indexOf(n) !== -1; });
+      if(hit){
+        found.push({ level:"block", word:"認證" + after.slice(0,2),
+          why:"「認證」用於車況等同宣稱平台為車況背書。用於身分（實名認證）才是允許的。" });
+      } else {
+        found.push({ level:"warn", word:"認證",
+          why:"確認這裡指的是身分認證而非車況認證。用於身分沒有問題，用於車況必須改寫。" });
+      }
+      at = text.indexOf("認證", at + 2);
+    }
+
+    if(!found.length){
+      out.innerHTML = '<div class="finding clear"><b>沒有命中禁用詞</b>'
+        + '<span class="why">仍請確認語氣沒有暗示保證或判定。工具只查字詞，不查語意。</span></div>';
+      return;
+    }
+
+    out.innerHTML = found.map(function(f){
+      return '<div class="finding ' + f.level + '"><b>'
+        + (f.level === "block" ? "不可使用：" : "需確認：")
+        + esc(f.word) + '</b><span class="why">' + esc(f.why) + '</span></div>';
+    }).join("");
+  }
+
+  input.addEventListener("input", check);
+})();
+</script>
+
+
+</body></html>
