@@ -13,7 +13,7 @@ const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 
 const typeLabel: Record<string, string> = {
-  seller: '賣家驗證報告',
+  seller: '車輛驗證報告',
   buyer: '買家複驗報告',
   professional: '專業驗證報告',
 }
@@ -80,11 +80,11 @@ onMounted(() => {
           {{ vehicleStore.currentVehicle?.brand }} {{ vehicleStore.currentVehicle?.model }}
         </p>
         <p class="vehicle-meta">
-          <span v-if="vehicleStore.currentVehicle?.year"
-            >{{ vehicleStore.currentVehicle.year }} 年式</span
+          <span v-if="vehicleStore.currentVehicle?.manufactureYear"
+            >{{ vehicleStore.currentVehicle.manufactureYear }} 年式</span
           >
           <span v-if="vehicleStore.currentVehicle?.mileage !== null">
-            {{ vehicleStore.currentVehicle?.year ? ' · ' : '' }}
+            {{ vehicleStore.currentVehicle?.manufactureYear ? ' · ' : '' }}
             {{ vehicleStore.currentVehicle?.mileage?.toLocaleString() }} km
           </span>
         </p>

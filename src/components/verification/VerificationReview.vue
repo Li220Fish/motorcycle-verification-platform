@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Loader2 } from 'lucide-vue-next'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VerificationSectionCard from './VerificationSectionCard.vue'
 import type { MissingRequiredItem, SectionProgress } from '@/stores/verification.store'
@@ -47,6 +48,7 @@ defineEmits<{ jumpTo: [string]; complete: [] }>()
     <template v-else>
       <p class="all-done">所有必填項目已完成。</p>
       <PrimaryButton block :disabled="completing" @click="$emit('complete')">
+        <Loader2 v-if="completing" :size="16" class="spin" />
         {{ completing ? '處理中...' : '完成驗證' }}
       </PrimaryButton>
     </template>
@@ -105,5 +107,18 @@ defineEmits<{ jumpTo: [string]; complete: [] }>()
 .all-done {
   color: var(--color-success);
   font-weight: 600;
+}
+
+.spin {
+  animation: verification-review-spin 0.8s linear infinite;
+}
+
+@keyframes verification-review-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

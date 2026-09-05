@@ -68,8 +68,8 @@ onMounted(load)
       <p v-if="loading">載入中...</p>
       <EmptyState
         v-else-if="!hasSellerLink"
-        title="未連結賣家驗證報告"
-        description="這台車目前沒有已完成的賣家驗證報告可供比對，僅顯示風險摘要與交易決策。"
+        title="未連結車輛驗證報告"
+        description="這台車目前沒有已完成的車輛驗證報告可供比對，僅顯示風險摘要與交易決策。"
       />
       <ComparisonSummary
         v-if="!loading"

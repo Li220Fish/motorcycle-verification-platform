@@ -1,20 +1,34 @@
 <script setup lang="ts">
-import { FileText, Home, ShieldCheck, ShoppingBag, User } from 'lucide-vue-next'
+import { watch } from 'vue'
+import { MessageCircle, Home, ShieldCheck, ShoppingBag, Users } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
-import { useUserPreferenceStore } from '@/stores/user-preference.store'
+import { useAuthStore } from '@/stores/auth.store'
+import { useChatStore } from '@/stores/chat.store'
 
 const route = useRoute()
-const preferenceStore = useUserPreferenceStore()
+const authStore = useAuthStore()
+const chatStore = useChatStore()
+
+// Kept alive at the layout level (not inside MessagesView) so the unread
+// badge in the bottom nav stays correct on every page, not just /messages.
+watch(
+  () => authStore.user?.id,
+  (uid) => {
+    if (uid) chatStore.subscribeConversations(uid)
+    else chatStore.stopConversationsSubscription()
+  },
+  { immediate: true },
+)
 
 const navItems = [
   { path: '/dashboard', label: '首頁', icon: Home },
   { path: '/marketplace', label: '市場', icon: ShoppingBag },
-  { path: '/verification', label: '驗證', icon: ShieldCheck },
-  { path: '/reports', label: '報告', icon: FileText },
-  { path: '/settings', label: '我的', icon: User },
+  { path: '/verification', label: '檢驗', icon: ShieldCheck },
+  { path: '/messages', label: '訊息', icon: MessageCircle },
+  { path: '/discussion', label: '討論中心', icon: Users },
 ]
 
 function isActive(path: string): boolean {
@@ -22,13 +36,7 @@ function isActive(path: string): boolean {
 }
 
 function showChrome(): boolean {
-  if (route.meta.requiresAuth === false || route.meta.hideChrome === true) return false
-  // Home doubles as the first-run Role Selection gate (§4 of the Home
-  // redesign spec) — that screen is a decision point, not a navigable page,
-  // so the nav shouldn't invite the user into Marketplace/Verification/etc.
-  // before any role-based content exists yet.
-  if (route.path === '/dashboard' && !preferenceStore.hasSelectedRole) return false
-  return true
+  return route.meta.requiresAuth !== false && route.meta.hideChrome !== true
 }
 </script>
 

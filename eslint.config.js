@@ -6,7 +6,11 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'android/**', 'ios/**', 'node_modules/**'],
+    // functions/ is a separate deployable TypeScript project (its own
+    // tsconfig, package.json, and `tsc` build to CommonJS `lib/` — verified
+    // clean via its own `npx tsc --noEmit`, not this config) — excluded
+    // here the same way `dist/` (the Vite build output) already is.
+    ignores: ['dist/**', 'android/**', 'ios/**', 'node_modules/**', 'functions/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

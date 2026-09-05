@@ -1,13 +1,553 @@
 rules_version = '2';
 
-// V0.1: any signed-in user can read/write. This is intentionally permissive
-// for skeleton testing — real per-collection authorization (who can create
-// a Verification, who can edit a Vehicle they don't own, etc.) is designed
-// before the real verification flow ships.
+// MotoVerify Firestore v1.0 (see docs/firestore-v1-implementation-report.md
+// for the full migration record, including every deliberate deviation from
+// the literal target spec this was built against).
+//
+// Default-deny: every collection below is explicitly authorized; anything
+// not matched falls through to the final `match /{document=**}` block, which
+// denies everything. This replaces the pre-v1.0 "Freeze Zone" — vehicles and
+// verifications were previously "any signed-in user can read/write"; they
+// are now owner/admin-scoped (verifications additionally readable by any
+// signed-in user once explicitly marked public). The regression suite
+// (tests/e2e/verification-regression.spec.ts) was re-verified against this:
+// every test operates within a single freshly-registered account's own
+// data, which this tightening does not affect.
+//
+// No accountId/publicProfiles system (spec's identity layer) — every
+// business-identity field (sellerId, buyerId, authorId, memberIds,
+// currentOwnerId, reporterId, senderId, userId) is the Firebase Auth uid
+// directly, exactly as it was before this migration. Most invariants (the
+// draft->published transition, the isPublic one-way flip, counters) are
+// still enforced here against ordinary client writes, not via a backend.
+//
+// Superseded 2026-09: this project is no longer client-SDK-only. The
+// functions/ directory (Cloud Functions v2, Admin SDK, Gemini Vision/Audio
+// inspection + IMU analysis — see MotoVerify_Verification_Step_API_Routing_
+// Map.md and the Group A/B/C / Engine Audio-IMU spec files) is a deliberate,
+// explicitly-requested reversal of the "no Cloud Functions" decision above.
+// Admin SDK calls from those Functions bypass these rules entirely (as
+// Admin SDK always does) — the `answers/{itemId}` write rule below still
+// blocks the CLIENT from ever writing an AI-managed item's result or
+// touching its `aiResult` field, which is what actually keeps AI judgments
+// trustworthy, not the client/Admin SDK split itself.
+//
+// Every collection admin might need to backfill/repair (scripts/migrate-v1-
+// schema.mjs included — it runs as the admin account precisely because it
+// touches documents owned by many different users in one pass) carries an
+// explicit `allow ... : if isAdmin();` bypass, consistent with admin's
+// already-unrestricted read/delete/moderation elsewhere in this file. The
+// one deliberate exception is verifications: even admin cannot rewrite a
+// verification once isPublic is true — that immutability is the guarantee
+// the whole public-report feature depends on, and it stays absolute.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    // MotoVerify 營運後台 (/admin) — a single known account, hardcoded by uid
+    // rather than a client-writable `admins/{uid}` allowlist collection. An
+    // allowlist doc would need to be written by *some* client-side flow, and
+    // any rule permissive enough to allow that (e.g. "a user may write their
+    // own admins/{uid} doc") would let any signed-in user self-grant admin —
+    // a real privacy hole, not a hypothetical one. Hardcoding the uid here
+    // means the allowlist can only ever change via a rules deploy. uid
+    // belongs to admin@test.com (accountId motoverify_admin), created by
+    // scripts/seed-test-users.mjs — see docs/admin-backend.md and
+    // docs/test-accounts.md. (Superseded 2026-09-04: previously
+    // admin@motoverify.internal via the now-deleted scripts/seed-admin-user.mjs.)
+    function isAdmin() {
+      return signedIn() && myUid() == 'CMWrmo2pHsRiBu5kMj1CDJ23xd72';
+    }
+
+    function ownsVehicle(vehicleId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.currentOwnerId == myUid();
+    }
+
+    function isConversationMember(conversationId) {
+      return signedIn()
+        && myUid() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds;
+    }
+
+    // --- vehicles/{id} (+ fuelLogs, maintenanceLogs) ---
+    match /vehicles/{vehicleId} {
+      allow get: if signedIn() && (resource.data.currentOwnerId == myUid() || isAdmin());
+      allow list: if signedIn() && (resource.data.currentOwnerId == myUid() || isAdmin());
+      // registrationVerification (行照驗證) is Trusted-Backend-only
+      // (verifyVehicleRegistrationDocument, Admin SDK — bypasses these rules
+      // entirely) — the client can trigger that Function but never write the
+      // field itself, since VehicleDetailView.vue gates "開始新的驗證" on its
+      // status. `update` compares against the EXISTING value rather than
+      // checking field-absence, same reasoning as answers/{itemId}'s aiResult
+      // guard above: request.resource.data on an update() already contains
+      // the existing doc's fields merged in, so a naive `!('x' in ...)` check
+      // would incorrectly block every future unrelated update once the
+      // Function has ever set this once.
+      allow create: if signedIn()
+        && (request.resource.data.currentOwnerId == myUid() || isAdmin())
+        && !('registrationVerification' in request.resource.data);
+      allow update: if signedIn() && resource.data.currentOwnerId == myUid()
+        && request.resource.data.currentOwnerId == resource.data.currentOwnerId
+        && request.resource.data.get('registrationVerification', null) == resource.data.get('registrationVerification', null);
+      allow update: if isAdmin();
+      // Owner delete is a real, live "刪除車輛" feature (VehicleDetailView.vue)
+      // — admin delete is required for scripts/cleanup-database.mjs's
+      // cross-owner throwaway-test-data cleanup.
+      allow delete: if signedIn() && (resource.data.currentOwnerId == myUid() || isAdmin());
+
+      match /fuelLogs/{logId} {
+        allow read: if ownsVehicle(vehicleId) || isAdmin();
+        allow create: if ownsVehicle(vehicleId) && request.resource.data.recordedBy == myUid();
+        allow update: if (ownsVehicle(vehicleId) && resource.data.recordedBy == myUid()) || isAdmin();
+        allow delete: if (ownsVehicle(vehicleId) && resource.data.recordedBy == myUid()) || isAdmin();
+      }
+
+      match /maintenanceLogs/{logId} {
+        allow read: if ownsVehicle(vehicleId) || isAdmin();
+        allow create: if ownsVehicle(vehicleId) && request.resource.data.recordedBy == myUid();
+        allow update: if (ownsVehicle(vehicleId) && resource.data.recordedBy == myUid()) || isAdmin();
+        allow delete: if (ownsVehicle(vehicleId) && resource.data.recordedBy == myUid()) || isAdmin();
+      }
+    }
+
+    // --- verifications/{id} (+ answers, evidence) ---
+    // get/list intentionally split: a combined rule that allows read whenever
+    // `resource.data.isPublic == true` would let a client run
+    // `query(where('isPublic','==',true))` and enumerate every public
+    // verification in the database — exactly what this is meant to forbid.
+    // The public branch exists only on `get` (fetch-by-known-id).
+    //
+    // `.get('isPublic', false)` rather than direct field access throughout:
+    // a document written before this migration has no isPublic field at all
+    // yet (scripts/migrate-v1-schema.mjs backfills it) — direct access
+    // (`resource.data.isPublic == false`) evaluates to false for a *missing*
+    // field too (missing != false), which would incorrectly block every
+    // owner from updating their own pre-migration verification until the
+    // migration script has already run. Treating "missing" as "false" (not
+    // yet public) is the correct reading and makes rule behavior independent
+    // of migration order.
+    match /verifications/{verificationId} {
+      allow get: if signedIn()
+        && (resource.data.userId == myUid()
+          || ownsVehicle(resource.data.vehicleId)
+          || isAdmin()
+          || resource.data.get('isPublic', false) == true);
+      allow list: if signedIn()
+        && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId) || isAdmin());
+      // Admin bypass exists for scripts/seed-mock-vehicles.mjs, which
+      // verifies several accounts' demo vehicles from one signed-in session.
+      // environmentContext (Step 3) / coldStateContext (Step 39) are
+      // Trusted-Backend-only fields (Environment/Cold-State spec §40:
+      // "Client cannot set coldStateValid") — never legitimate in a
+      // client create payload.
+      allow create: if signedIn()
+        && ((request.resource.data.userId == myUid() && ownsVehicle(request.resource.data.vehicleId))
+          || isAdmin())
+        && request.resource.data.isPublic == false
+        && !('environmentContext' in request.resource.data)
+        && !('coldStateContext' in request.resource.data);
+      // Immutable the instant isPublic flips true — this single guard (only
+      // updatable while still private) covers "no further edits to a
+      // published report", "isPublic can only ever go false -> true, never
+      // back", AND deliberately applies to admin too (no `|| isAdmin()`
+      // escape hatch here) — see the file-level comment on why this one
+      // guarantee stays absolute even for the trusted admin account.
+      //
+      // The environmentContext/coldStateContext guards compare against the
+      // EXISTING value (`resource.data`), not "field absent from
+      // request.resource.data" — `request.resource.data` on an update() is
+      // the existing document merged with the incoming fields, so once the
+      // Trusted Backend has ever set these, a naive `!('x' in
+      // request.resource.data)` check would block every future unrelated
+      // client update to this verification (status changes, isPublic
+      // flips, transactionDecision) forever after. Comparing "unchanged by
+      // this write" instead blocks the client from ever setting/altering
+      // the field while leaving every other legitimate update unaffected.
+      allow update: if signedIn()
+        && resource.data.get('isPublic', false) == false
+        && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId) || isAdmin())
+        && request.resource.data.get('environmentContext', null) == resource.data.get('environmentContext', null)
+        && request.resource.data.get('coldStateContext', null) == resource.data.get('coldStateContext', null);
+      allow delete: if signedIn()
+        && ((resource.data.get('isPublic', false) == false
+            && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId)))
+          || isAdmin());
+
+      match /answers/{itemId} {
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin()
+            || get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == true);
+        // AI-managed items (functions/src/ai/prompts/groups/*.ts — see every
+        // Group A/B/C spec's "Client 不可修改 AI result/aiResult" section):
+        // the 19 pure-vision items have no legitimate client write path at
+        // all (only the Trusted Backend's Admin SDK writes them, which
+        // bypasses these rules entirely) — blocked outright below, but only
+        // for create/update: `request.resource` doesn't exist on a delete,
+        // so a combined create/update/delete rule referencing it would
+        // throw and deny every delete outright, including admin's (a real
+        // bug caught live — the first version of this rule did exactly
+        // that). Delete stays governed only by the ownership/admin/isPublic
+        // checks already used everywhere else, same as before this AI pass.
+        // ENG-02 (Step 39 cold-state check) and ENG-03..08 (Engine
+        // Audio/IMU) keep their existing client placeholder-write
+        // (EngineInspectionFlow marks them `normal` immediately so the
+        // lockedOrder gate isn't stuck on Gemini latency, then the Backend
+        // overwrites with the real graded result) — allowed to keep
+        // writing `result`/`note`, but never the `aiResult` field itself,
+        // on ANY item, AI-managed or not. `create` can check "aiResult
+        // absent from the payload" directly (nothing pre-exists yet to
+        // merge in); `update` must instead check "aiResult unchanged from
+        // what's already there" — `request.resource.data` on an update()
+        // is the existing document merged with the incoming fields, so a
+        // combined create+update rule checking `!('aiResult' in
+        // request.resource.data)` would incorrectly deny every future
+        // client update (e.g. adding a User note) to an item the Trusted
+        // Backend has ever graded, the moment aiResult first gets set — a
+        // real bug caught by re-reasoning through this file, the same
+        // class of mistake as the request.resource-on-delete bug below.
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == false
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin())
+          && !(itemId in [
+            'body_damage', 'paint_condition', 'body_alignment_visual', 'seat_condition',
+            'front_tire_condition', 'rear_tire_condition', 'front_suspension_condition',
+            'rear_suspension_condition', 'front_brake_condition', 'rear_brake_condition',
+            'triple_clamp_condition', 'engine_leak_condition', 'engine_external_condition',
+            'engine_tool_mark_condition', 'engine_paint_condition', 'intake_manifold_condition',
+            'engine_guard_condition', 'chain_sprocket_condition', 'exhaust_condition'
+          ])
+          && !('aiResult' in request.resource.data);
+        allow update: if signedIn()
+          && get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == false
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin())
+          && !(itemId in [
+            'body_damage', 'paint_condition', 'body_alignment_visual', 'seat_condition',
+            'front_tire_condition', 'rear_tire_condition', 'front_suspension_condition',
+            'rear_suspension_condition', 'front_brake_condition', 'rear_brake_condition',
+            'triple_clamp_condition', 'engine_leak_condition', 'engine_external_condition',
+            'engine_tool_mark_condition', 'engine_paint_condition', 'intake_manifold_condition',
+            'engine_guard_condition', 'chain_sprocket_condition', 'exhaust_condition'
+          ])
+          && request.resource.data.get('aiResult', null) == resource.data.get('aiResult', null);
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == false
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin());
+      }
+
+      match /evidence/{evidenceId} {
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin()
+            || get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == true);
+        allow write: if signedIn()
+          && get(/databases/$(database)/documents/verifications/$(verificationId)).data.get('isPublic', false) == false
+          && (get(/databases/$(database)/documents/verifications/$(verificationId)).data.userId == myUid()
+            || ownsVehicle(get(/databases/$(database)/documents/verifications/$(verificationId)).data.vehicleId)
+            || isAdmin());
+      }
+    }
+
+    // --- marketplaceListings/{id} (+ appointments) ---
+    // get/list combined is safe here (unlike verifications) because every
+    // real browse query already filters status=='published'
+    // (homeContentService.listMarketplaceListings) and "my own listings"
+    // already filters sellerId==caller (listingService.listBySeller) — there
+    // is no "enumerate everyone's drafts" query this could accidentally allow.
+    match /marketplaceListings/{listingId} {
+      allow get: if signedIn()
+        && (resource.data.status == 'published' || resource.data.sellerId == myUid() || isAdmin());
+      allow list: if signedIn()
+        && (resource.data.status == 'published' || resource.data.sellerId == myUid() || isAdmin());
+      // Sellers create their own draft through listingService.create(); admin
+      // create covers the seeded DEMO listings (scripts/seed-marketplace-mock.mjs),
+      // written directly as status:'published' with no backing verification
+      // — fictional content the seller-authored path (which requires
+      // verificationIds.length>=1) was never meant to allow.
+      allow create: if signedIn()
+        && ((request.resource.data.sellerId == myUid() && request.resource.data.status == 'draft')
+          || isAdmin());
+      // General edits (price/description/region/district/transferable/
+      // availableDates/timeSlots/vehicleSnapshot.photos) — status/sellerId/
+      // vehicleId/verificationIds/favoriteCount/appointmentCount stay fixed
+      // through this path.
+      allow update: if signedIn() && resource.data.sellerId == myUid()
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.vehicleId == resource.data.vehicleId
+        && request.resource.data.verificationIds == resource.data.verificationIds
+        && request.resource.data.favoriteCount == resource.data.favoriteCount
+        && request.resource.data.appointmentCount == resource.data.appointmentCount;
+      // The one-time draft -> published transition (listingService.publish()).
+      allow update: if signedIn() && resource.data.sellerId == myUid()
+        && resource.data.status == 'draft'
+        && request.resource.data.status == 'published'
+        && request.resource.data.verificationIds.size() >= 1;
+      // The only remaining writers of these two counters are
+      // listingService's transaction/batch (addFavorite/removeFavorite,
+      // createAppointment/updateAppointmentStatus) — each ever moves its own
+      // counter by exactly 1 per write, so bounding to that delta (rather
+      // than just "only these fields changed") is what actually stops a
+      // client from setting favoriteCount straight to 999 in one write.
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount'])
+        && (request.resource.data.favoriteCount == resource.data.favoriteCount + 1
+          || request.resource.data.favoriteCount == resource.data.favoriteCount - 1);
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['appointmentCount'])
+        && (request.resource.data.appointmentCount == resource.data.appointmentCount + 1
+          || request.resource.data.appointmentCount == resource.data.appointmentCount - 1);
+      // Admin bypass — e.g. scripts/migrate-v1-schema.mjs reshaping a
+      // listing's vehicleSnapshot, which is a multi-field change none of the
+      // narrower rules above would otherwise permit for a non-owner.
+      allow update: if isAdmin();
+      // No self-delete (no "取消刊登" UI exists — a seller who wants a
+      // listing gone would go back to draft, once that's exposed). Admin-only,
+      // matching the same pattern as conversations' delete rule, for purging
+      // broken/orphaned test listings (e.g. fictional demo-N entries and
+      // ones bound to a deleted test account — see docs/test-accounts.md).
+      allow delete: if isAdmin();
+
+      match /appointments/{appointmentId} {
+        allow read: if signedIn()
+          && (resource.data.buyerId == myUid()
+            || get(/databases/$(database)/documents/marketplaceListings/$(listingId)).data.sellerId == myUid()
+            || isAdmin());
+        allow create: if signedIn()
+          && request.resource.data.buyerId == myUid()
+          && request.resource.data.status == 'pending';
+        allow update: if signedIn()
+          && ((resource.data.buyerId == myUid()
+              && resource.data.status in ['pending', 'approved']
+              && request.resource.data.status == 'cancelled')
+            || (get(/databases/$(database)/documents/marketplaceListings/$(listingId)).data.sellerId == myUid()
+              && resource.data.status == 'pending'
+              && request.resource.data.status in ['approved', 'declined'])
+            || isAdmin());
+        allow delete: if false;
+      }
+    }
+
+    // --- users/{uid} profile + owned subcollections ---
+    match /users/{userId} {
+      allow get: if signedIn() && (myUid() == userId || isAdmin());
+      allow list: if signedIn() && isAdmin();
+      allow create: if signedIn() && (myUid() == userId || isAdmin());
+      // accountId/accountTier/createdAt fixed once set — self can change
+      // everything else (email/displayName/photoUrl/region/lastSeenAt/...).
+      // accountId compared via `.get(field, null)` (not direct access) so a
+      // pre-existing account with no accountId at all (every real user
+      // today — see the accountIds/publicProfiles block below) can still
+      // update its own doc: null == null passes, only an actual change to
+      // an existing accountId is blocked.
+      allow update: if signedIn() && myUid() == userId
+        && request.resource.data.accountTier == resource.data.accountTier
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.get('accountId', null) == resource.data.get('accountId', null);
+      // Admin bypass — e.g. scripts/migrate-v1-schema.mjs backfilling
+      // photoUrl/accountTier on every account from one signed-in session.
+      allow update: if isAdmin();
+      // No self-delete (no "delete my account" UI exists) — admin-only, for
+      // retiring accounts like the legacy buyer/seller/dealer test personas
+      // (scripts/delete-legacy-test-accounts.mjs). Content those accounts
+      // created (discussionPosts, marketplaceListings, conversations, ...)
+      // is untouched and keeps working — this app denormalizes display
+      // identity at write time (authorSnapshot, memberSnapshots,
+      // vehicleSnapshot) specifically so it doesn't depend on the author's
+      // users/{uid} doc still existing.
+      allow delete: if isAdmin();
+
+      // isBlocked() checks both directions of a pair, so reads stay open;
+      // only the owner may add/remove their own block list. `update` is
+      // included alongside create/delete because a client `setDoc()` (no
+      // merge) on a path that already exists is itself an `update` from the
+      // rules' point of view — re-blocking/re-following the same target
+      // idempotently is a legitimate, harmless operation, not something
+      // worth rejecting (confirmed needed by re-running
+      // scripts/seed-demo-data.mjs against already-seeded data).
+      match /blockedUsers/{targetUid} {
+        allow read: if signedIn();
+        allow create, update, delete: if signedIn() && myUid() == userId;
+      }
+
+      match /following/{targetUid} {
+        allow read: if signedIn();
+        allow create, update, delete: if signedIn() && myUid() == userId;
+      }
+
+      match /savedPosts/{postId} {
+        allow read, create, delete: if signedIn() && myUid() == userId;
+      }
+
+      match /favoriteListings/{listingId} {
+        allow read, create, delete: if signedIn() && myUid() == userId;
+      }
+    }
+
+    // --- accountIds/{accountId} + publicProfiles/{accountId} ---
+    // Identity-layer collections from the frozen spec (§5) — accountId is a
+    // permanent handle, claimed once, mapped 1:1 to a Firebase Auth uid.
+    // Currently populated only by scripts/seed-test-users.mjs for the 5
+    // fixed dev/test accounts (docs/test-accounts.md) — there is no in-app
+    // "claim a handle" flow yet (claimAccountId(), spec §28, is a distinct
+    // onboarding feature deliberately deferred, see
+    // docs/firestore-v1-implementation-report.md's Test Accounts section).
+    // No other collection's business-identity fields (sellerId, buyerId,
+    // userId, memberIds, ...) reference accountId — those all remain the
+    // Firebase Auth uid directly, per the standing v1.0 migration decision
+    // (see file header comment) and are unaffected by this addition.
+    //
+    // The spec marks both collections backend-sync-only (no client write),
+    // which assumes a trusted Cloud Function performing the actual claim —
+    // this client-SDK-only project has none (see file header comment on
+    // why, generally). Consistent with every other spec-implied backend
+    // invariant in this file, the guarantee is instead enforced here in
+    // rules: a client may only ever create/maintain the accountIds/
+    // publicProfiles pair mapping to their OWN uid, never anyone else's.
+    match /accountIds/{accountId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && request.resource.data.authUid == myUid();
+      // Permanently unique once claimed (spec §5.3) — no update/delete
+      // path for anyone, admin included, matching the one other absolute
+      // (no-admin-bypass) guarantee in this file: verifications.isPublic.
+      allow update, delete: if false;
+    }
+
+    match /publicProfiles/{accountId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.accountId == accountId
+        && (get(/databases/$(database)/documents/accountIds/$(accountId)).data.authUid == myUid()
+          || isAdmin());
+      allow delete: if false;
+    }
+
+    // --- conversations/{id} + messages/{id} ---
+    match /conversations/{conversationId} {
+      allow read: if signedIn() && (myUid() in resource.data.memberIds || isAdmin());
+      allow create: if signedIn() && myUid() in request.resource.data.memberIds
+        && request.resource.data.memberIds.size() == 2;
+      // Membership can't be forged or changed after creation — only the
+      // conversation's mutable fields (lastMessage, unreadCounts, tag, ...)
+      // may be updated by a member.
+      allow update: if signedIn() && myUid() in resource.data.memberIds
+        && request.resource.data.memberIds == resource.data.memberIds;
+      // No delete UI exists for a conversation in the app — admin-only, for
+      // cleaning up erroneous/orphaned threads (e.g. test/seed data).
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && (isConversationMember(conversationId) || isAdmin());
+        // 'vehicle'/'verification_report' have no compose-UI send site in
+        // the app itself yet (only ChatBubble.vue's render side exists), but
+        // scripts/seed-demo-data.mjs writes them directly for the "share a
+        // verification report in chat" demo — confirmed by actually running
+        // the regression suite, which this rule initially broke.
+        allow create: if signedIn()
+          && myUid() == request.resource.data.senderId
+          && isConversationMember(conversationId)
+          && request.resource.data.type in ['text', 'image', 'system', 'vehicle', 'verification_report'];
+        allow update, delete: if false;
+      }
+    }
+
+    // --- discussionPosts/{id} + comments/{id} + likes/{uid} ---
+    match /discussionPosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && myUid() == request.resource.data.authorId;
+      // Author: full edit/delete of their own post.
+      allow update: if signedIn() && myUid() == resource.data.authorId;
+      // Any signed-in user: likeCount, moved by exactly 1 per write (the
+      // like transaction) — bounding the delta, not just the field set, is
+      // what stops a client setting it straight to an arbitrary number.
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && (request.resource.data.likeCount == resource.data.likeCount + 1
+          || request.resource.data.likeCount == resource.data.likeCount - 1);
+      // Any signed-in user: commentCount, moved by exactly 1 per write (the
+      // comment create/delete writeBatch).
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount'])
+        && (request.resource.data.commentCount == resource.data.commentCount + 1
+          || request.resource.data.commentCount == resource.data.commentCount - 1);
+      // Admin: moderation (status -> hidden) plus a general bypass for
+      // migration/maintenance writes.
+      allow update: if isAdmin();
+      // Admin bypass added alongside author-delete — needed to purge posts
+      // authored by a since-deleted account (see docs/test-accounts.md);
+      // update already had one, delete originally didn't.
+      allow delete: if signedIn() && (myUid() == resource.data.authorId || isAdmin());
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && myUid() == request.resource.data.authorId;
+        allow update, delete: if signedIn() && myUid() == resource.data.authorId;
+        // Admin bypass — scripts/migrate-v1-schema.mjs backfilling
+        // status/parentCommentId on comments authored by other users; delete
+        // bypass added for the same reason as the parent post's above.
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      match /likes/{uid} {
+        allow read: if signedIn();
+        allow write: if signedIn() && (myUid() == uid || isAdmin());
+      }
+    }
+
+    match /discussionReports/{reportId} {
+      allow create: if signedIn() && myUid() == request.resource.data.reporterId;
+      // Nobody but the admin backend reviews these — regular users, including
+      // the reporter, never read their own report back (deliberately, so
+      // reports stay a one-way mailbox, not a satisfaction-tracking thread).
+      allow read: if isAdmin();
+      // Resolving/dismissing a report only ever changes its status —
+      // deletion stays disallowed for everyone so the moderation trail can't
+      // be erased.
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // --- Reference content: admin-authored, not owned by any one user ---
+    match /vehicleModels/{document=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /vehicleNews/{document=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Home page's Featured Dealers section — kept exactly as it was before
+    // this migration (a live, working feature; the target spec's removal of
+    // this collection was not applied — see docs/firestore-v1-implementation-report.md).
+    match /featuredDealers/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    // voltageSessions/userPreferences/myListings were deleted in full
+    // (scripts/delete-deprecated-collections.mjs) and have no rule here —
+    // they now fall through to the default-deny match below, same as any
+    // other nonexistent collection.
+
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

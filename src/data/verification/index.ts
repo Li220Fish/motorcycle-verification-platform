@@ -7,7 +7,7 @@ import type {
 } from './verification.types'
 
 export * from './verification.types'
-export { STANDARD_INSPECTION_OPTIONS, COLD_CHECK_OPTIONS } from './inspection-options'
+export { STANDARD_INSPECTION_OPTIONS } from './inspection-options'
 export { SELLER_VERIFICATION_SECTIONS } from './seller-verification'
 export { BUYER_VERIFICATION_SECTIONS } from './buyer-verification'
 

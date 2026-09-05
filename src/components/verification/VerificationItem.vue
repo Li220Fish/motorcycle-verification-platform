@@ -22,11 +22,12 @@ const props = defineProps<{
   item: VerificationItemData
 }>()
 
+const emit = defineEmits<{ advance: [] }>()
+
 const verificationStore = useVerificationStore()
 
 const result = ref<AnswerResultValue | null>(null)
 const note = ref('')
-const cannotCheckReason = ref('')
 const formData = ref<Record<string, string>>({})
 const helpOpen = ref(false)
 // Photo checklist items (車身外觀) are pure evidence-collection: the task IS
@@ -43,7 +44,6 @@ function hydrateFromStore(): void {
   const answer = verificationStore.answers[props.item.id]
   result.value = answer?.result ?? null
   note.value = answer?.note ?? ''
-  cannotCheckReason.value = answer?.cannotCheckReason ?? ''
   formData.value = answer?.formData ?? {}
   flaggingIssue.value = answer?.result === 'attention'
   // Re-expand automatically when a saved note already exists so it's never
@@ -59,18 +59,12 @@ function persist(): void {
     props.item.id,
     result.value,
     note.value || undefined,
-    cannotCheckReason.value || undefined,
     Object.keys(formData.value).length > 0 ? formData.value : undefined,
   )
 }
 
 function handleResultChange(value: AnswerResultValue): void {
   result.value = value
-  persist()
-}
-
-function handleCannotCheckReasonChange(value: string): void {
-  cannotCheckReason.value = value
   persist()
 }
 
@@ -106,6 +100,17 @@ const isPurePhotoItem = computed(() => props.item.type === 'photo')
 watch(evidenceList, (list) => {
   if (isPurePhotoItem.value && list.length > 0 && !result.value && !flaggingIssue.value) {
     handleResultChange('normal')
+    // 拍完就是完成 (see the comment above isPurePhotoItem) — confirming the
+    // photo IS the whole task for these items, so advance immediately
+    // instead of also requiring a separate manual "下一步" tap.
+    emit('advance')
+  }
+  // A photo removed down to zero evidence must re-open the capture UI
+  // (the template hides PhotoEvidenceCapture once `result` is set) — without
+  // this, deleting the one photo on a pure-photo item leaves "✓ 已完成"
+  // showing with nothing to retake.
+  if (isPurePhotoItem.value && list.length === 0 && result.value && !flaggingIssue.value) {
+    result.value = null
   }
 })
 
@@ -175,6 +180,8 @@ function handleUnflagIssue(): void {
           :verification-id="verificationId"
           :item-id="item.id"
           :label="requirement.label"
+          :ai-check="item.aiCheck"
+          :auto-confirm="isPurePhotoItem"
         />
       </div>
     </template>
@@ -194,9 +201,7 @@ function handleUnflagIssue(): void {
       <VerificationResultSelector
         :options="item.options"
         :model-value="result"
-        :cannot-check-reason="cannotCheckReason"
         @update:model-value="handleResultChange"
-        @update:cannot-check-reason="handleCannotCheckReasonChange"
       />
       <button class="flag-issue-btn ghost" @click="handleUnflagIssue">取消異常標記</button>
     </template>
@@ -204,9 +209,7 @@ function handleUnflagIssue(): void {
       v-else
       :options="item.options"
       :model-value="result"
-      :cannot-check-reason="cannotCheckReason"
       @update:model-value="handleResultChange"
-      @update:cannot-check-reason="handleCannotCheckReasonChange"
     />
 
     <IssuePhotoCapture

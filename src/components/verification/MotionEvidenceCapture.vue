@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-import { motionCaptureService } from '@/services/motion/motion-capture.service'
+import {
+  computeMotionSummary,
+  motionCaptureService,
+} from '@/services/motion/motion-capture.service'
 import type { MotionSample } from '@/services/motion/motion-capture.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
@@ -31,17 +34,6 @@ async function handleStart(): Promise<void> {
   }
 }
 
-function magnitude(sample: MotionSample): number {
-  return Math.sqrt(sample.x ** 2 + sample.y ** 2 + sample.z ** 2)
-}
-
-function stddev(values: number[]): number {
-  if (values.length === 0) return 0
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length
-  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length
-  return Math.sqrt(variance)
-}
-
 async function handleStop(): Promise<void> {
   motionCaptureService.stop()
   recording.value = false
@@ -53,7 +45,7 @@ async function handleStop(): Promise<void> {
   // (marked as such) instead of silently no-op'ing: a required-evidence gate
   // with no achievable evidence on that device would be a permanent dead end.
   const hasSamples = samples.value.length > 0
-  const magnitudes = samples.value.map(magnitude)
+  const summary = computeMotionSummary(samples.value)
   const evidence: VerificationEvidence = {
     id: crypto.randomUUID(),
     verificationId: props.verificationId,
@@ -63,14 +55,7 @@ async function handleStop(): Promise<void> {
     captureSource: 'manual',
     captureTimestamp: Date.now(),
     metadata: hasSamples
-      ? {
-          label: props.label,
-          sampleCount: samples.value.length,
-          avgMagnitude: Number(
-            (magnitudes.reduce((sum, value) => sum + value, 0) / magnitudes.length).toFixed(3),
-          ),
-          stddevMagnitude: Number(stddev(magnitudes).toFixed(3)),
-        }
+      ? { label: props.label, ...summary }
       : { label: props.label, sampleCount: 0, unsupported: true },
   }
   await useVerificationStore().addEvidence(evidence)

@@ -47,10 +47,9 @@ function handleBack(): void {
   align-items: center;
   justify-content: space-between;
   height: var(--header-height);
-  padding: 0 var(--space-md);
+  padding: 0 18px;
   padding-top: env(safe-area-inset-top);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -59,13 +58,13 @@ function handleBack(): void {
 .left {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 10px;
   min-width: 0;
 }
 
 .title {
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -84,13 +83,14 @@ function handleBack(): void {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   border: none;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
 
 .icon-button:active {
-  background: var(--color-background);
+  background: var(--color-surface);
 }
 </style>

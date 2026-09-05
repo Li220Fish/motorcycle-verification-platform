@@ -15,7 +15,7 @@ const router = useRouter()
       v-for="listing in listings"
       :key="listing.id"
       class="carousel-item"
-      @click="router.push('/marketplace')"
+      @click="router.push(`/marketplace/${listing.id}`)"
     >
       <VehicleMarketCard :listing="listing" />
     </button>

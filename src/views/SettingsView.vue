@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import {
   Bell,
   Bluetooth,
   ChevronRight,
+  Home,
   Info,
   LogOut,
   Shield,
@@ -17,25 +17,22 @@ import { useAuthStore } from '@/stores/auth.store'
 const authStore = useAuthStore()
 const router = useRouter()
 
-const noticeMessage = ref('')
+interface SettingSection {
+  icon: typeof UserIcon
+  label: string
+  to: string
+}
 
-const sections = [
-  { icon: UserIcon, label: '帳號', to: null },
-  { icon: Bell, label: '通知', to: null },
+const sections: SettingSection[] = [
+  { icon: UserIcon, label: '帳號', to: '/settings/account' },
+  { icon: Bell, label: '通知', to: '/settings/notifications' },
   { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
-  { icon: Shield, label: '資料與隱私', to: null },
-  { icon: Info, label: '關於 MotoVerify', to: null },
+  { icon: Shield, label: '資料與隱私', to: '/settings/privacy' },
+  { icon: Info, label: '關於 MotoVerify', to: '/settings/about' },
 ]
 
-function handleSectionClick(label: string, to: string | null): void {
-  if (to) {
-    router.push(to)
-    return
-  }
-  noticeMessage.value = `「${label}」尚未開放設定`
-  setTimeout(() => {
-    noticeMessage.value = ''
-  }, 2000)
+function handleSectionClick(section: SettingSection): void {
+  router.push(section.to)
 }
 
 async function handleLogout(): Promise<void> {
@@ -46,7 +43,13 @@ async function handleLogout(): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="我的" />
+    <AppHeader title="我的">
+      <template #right>
+        <button class="icon-button" aria-label="回到主頁" @click="router.push('/dashboard')">
+          <Home :size="20" />
+        </button>
+      </template>
+    </AppHeader>
 
     <div class="content">
       <div class="user-card">
@@ -64,15 +67,13 @@ async function handleLogout(): Promise<void> {
           v-for="item in sections"
           :key="item.label"
           class="section-row"
-          @click="handleSectionClick(item.label, item.to)"
+          @click="handleSectionClick(item)"
         >
           <component :is="item.icon" :size="18" color="var(--color-text-secondary)" />
           <span>{{ item.label }}</span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>
       </div>
-
-      <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
 
       <button class="logout-row" @click="handleLogout">
         <LogOut :size="18" />
@@ -83,6 +84,18 @@ async function handleLogout(): Promise<void> {
 </template>
 
 <style scoped>
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+}
+
 .content {
   padding: var(--space-md);
   display: flex;
@@ -154,12 +167,6 @@ async function handleLogout(): Promise<void> {
 
 .section-row span:first-of-type {
   flex: 1;
-}
-
-.notice {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  text-align: center;
 }
 
 .logout-row {

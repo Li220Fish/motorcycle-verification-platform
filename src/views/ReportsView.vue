@@ -1,24 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { FileText } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import VehicleSearchBar from '@/components/home/VehicleSearchBar.vue'
 import { verificationService } from '@/services/firebase/verification.service'
-import { useUserPreferenceStore } from '@/stores/user-preference.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Vehicle } from '@/types/vehicle'
 import type { Verification } from '@/types/verification'
 
 const router = useRouter()
 const vehicleStore = useVehicleStore()
-const preferenceStore = useUserPreferenceStore()
-
-// Buyer's "驗證報告" means looking up someone else's vehicle report (via
-// Search); Seller/Professional's means managing reports they created
-// themselves — same nav destination, different content per role (§43).
-const isBuyer = computed(() => preferenceStore.currentRole === 'buyer')
 
 interface ReportEntry {
   vehicle: Vehicle
@@ -54,9 +47,7 @@ async function loadReports(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  if (!isBuyer.value) loadReports()
-})
+onMounted(loadReports)
 </script>
 
 <template>
@@ -64,32 +55,30 @@ onMounted(() => {
     <AppHeader title="驗證報告" />
 
     <div class="content">
-      <template v-if="isBuyer">
-        <p class="hint">輸入車牌或車身號碼，查看該車輛的驗證報告。</p>
-        <VehicleSearchBar />
-      </template>
+      <p class="hint">輸入車牌或車身號碼，查看該車輛的驗證報告。</p>
+      <VehicleSearchBar />
 
-      <template v-else>
-        <p class="hint">管理您已建立的車況驗證報告。</p>
-        <p v-if="loading" class="loading">載入中...</p>
-        <div v-else-if="reports.length === 0" class="empty">
-          <p>目前沒有已完成的驗證報告。</p>
-        </div>
-        <div v-else class="report-list">
-          <button
-            v-for="entry in reports"
-            :key="entry.verification.id"
-            class="report-row"
-            @click="router.push(`/verification/${entry.verification.id}/report`)"
-          >
-            <span class="thumb"><FileText :size="20" color="var(--color-text-disabled)" /></span>
-            <span class="info">
-              <span class="title">{{ entry.vehicle.brand }} {{ entry.vehicle.model }}</span>
-              <span class="sub">{{ entry.vehicle.licensePlate ?? entry.vehicle.year }}</span>
-            </span>
-          </button>
-        </div>
-      </template>
+      <h2 class="section-title">我的驗證報告</h2>
+      <p v-if="loading" class="loading">載入中...</p>
+      <div v-else-if="reports.length === 0" class="empty">
+        <p>目前沒有已完成的驗證報告。</p>
+      </div>
+      <div v-else class="report-list">
+        <button
+          v-for="entry in reports"
+          :key="entry.verification.id"
+          class="report-row"
+          @click="router.push(`/verification/${entry.verification.id}/report`)"
+        >
+          <span class="thumb"><FileText :size="20" color="var(--color-text-disabled)" /></span>
+          <span class="info">
+            <span class="title">{{ entry.vehicle.brand }} {{ entry.vehicle.model }}</span>
+            <span class="sub">{{
+              entry.vehicle.licensePlate ?? entry.vehicle.manufactureYear
+            }}</span>
+          </span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -106,6 +95,13 @@ onMounted(() => {
   font-size: 13.5px;
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: var(--space-sm) 0 0;
 }
 
 .loading,
