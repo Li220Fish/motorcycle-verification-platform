@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 
 import AudioEvidenceRecorder from './AudioEvidenceRecorder.vue'
+import DisclosureMultiSelect from './DisclosureMultiSelect.vue'
 import DocumentEvidenceCapture from './DocumentEvidenceCapture.vue'
 import EvidencePreview from './EvidencePreview.vue'
 import FormFieldCapture from './FormFieldCapture.vue'
 import IssuePhotoCapture from './IssuePhotoCapture.vue'
 import MotionEvidenceCapture from './MotionEvidenceCapture.vue'
+import MultiPhotoEvidenceCapture from './MultiPhotoEvidenceCapture.vue'
 import PhotoEvidenceCapture from './PhotoEvidenceCapture.vue'
 import VerificationHelpSheet from './VerificationHelpSheet.vue'
 import VerificationItemHeader from './VerificationItemHeader.vue'
@@ -29,6 +31,7 @@ const verificationStore = useVerificationStore()
 const result = ref<AnswerResultValue | null>(null)
 const note = ref('')
 const formData = ref<Record<string, string>>({})
+const selections = ref<string[]>([])
 const helpOpen = ref(false)
 // Photo checklist items (車身外觀) are pure evidence-collection: the task IS
 // the photo. Forcing a redundant "正常" tap after every one of 20 photos is
@@ -45,6 +48,7 @@ function hydrateFromStore(): void {
   result.value = answer?.result ?? null
   note.value = answer?.note ?? ''
   formData.value = answer?.formData ?? {}
+  selections.value = answer?.selections ?? []
   flaggingIssue.value = answer?.result === 'attention'
   // Re-expand automatically when a saved note already exists so it's never
   // hidden behind the toggle on a re-visit.
@@ -60,11 +64,23 @@ function persist(): void {
     result.value,
     note.value || undefined,
     Object.keys(formData.value).length > 0 ? formData.value : undefined,
+    selections.value.length > 0 ? selections.value : undefined,
   )
 }
 
 function handleResultChange(value: AnswerResultValue): void {
   result.value = value
+  persist()
+}
+
+/** PREP-02-style multi-select disclosure: "無" (or nothing checked) reads as
+ * `normal` (car owner is proactively saying there's nothing to flag); any
+ * real issue checked reads as `attention` — same normal/attention semantics
+ * every other self-disclosure Optional item already uses, just derived from
+ * a checkbox set instead of a single radio pick. */
+function handleSelectionsChange(value: string[]): void {
+  selections.value = value
+  result.value = value.length === 0 || value.includes('none') ? 'normal' : 'attention'
   persist()
 }
 
@@ -96,6 +112,17 @@ const photoEvidenceRequirements = computed(
 )
 
 const isPurePhotoItem = computed(() => props.item.type === 'photo')
+// The 7 required core photos (車輛左側/右側/車尾/儀表板/前避震/引擎底部/傳動
+// 鏈條) never reach this component at all — VerificationStepsView.vue's
+// isCorePhotoGroup intercepts them first and renders CorePhotoCaptureFlow.
+// vue (one consolidated live-camera session for the whole group) instead.
+// Every photo item that DOES reach here (Optional single-photo slots,
+// issue-marking photos, PREP-01's document capture) still uses the
+// native-camera PhotoEvidenceCapture.vue path below.
+// Brief "拍完就是完成" success flash before auto-advancing — gives the user
+// a moment of positive feedback instead of the screen silently jumping away
+// the instant the shutter fires.
+const showSuccessFlash = ref(false)
 
 watch(evidenceList, (list) => {
   if (isPurePhotoItem.value && list.length > 0 && !result.value && !flaggingIssue.value) {
@@ -103,7 +130,11 @@ watch(evidenceList, (list) => {
     // 拍完就是完成 (see the comment above isPurePhotoItem) — confirming the
     // photo IS the whole task for these items, so advance immediately
     // instead of also requiring a separate manual "下一步" tap.
-    emit('advance')
+    showSuccessFlash.value = true
+    setTimeout(() => {
+      showSuccessFlash.value = false
+      emit('advance')
+    }, 450)
   }
   // A photo removed down to zero evidence must re-open the capture UI
   // (the template hides PhotoEvidenceCapture once `result` is set) — without
@@ -125,7 +156,17 @@ function handleUnflagIssue(): void {
 </script>
 
 <template>
-  <div class="verification-item">
+  <MultiPhotoEvidenceCapture
+    v-if="item.multiPhoto"
+    :verification-id="verificationId"
+    :item-id="item.id"
+    :label="item.title"
+    @advance="$emit('advance')"
+  />
+  <div v-else class="verification-item">
+    <Transition name="success-flash-fade">
+      <div v-if="showSuccessFlash" class="success-flash">✓ 已拍攝</div>
+    </Transition>
     <VerificationItemHeader
       :title="item.title"
       :description="item.description"
@@ -205,6 +246,12 @@ function handleUnflagIssue(): void {
       />
       <button class="flag-issue-btn ghost" @click="handleUnflagIssue">取消異常標記</button>
     </template>
+    <DisclosureMultiSelect
+      v-else-if="item.disclosureOptions"
+      :options="item.disclosureOptions"
+      :model-value="selections"
+      @update:model-value="handleSelectionsChange"
+    />
     <VerificationResultSelector
       v-else
       :options="item.options"
@@ -244,6 +291,34 @@ function handleUnflagIssue(): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.success-flash {
+  position: fixed;
+  top: max(var(--space-lg), env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: var(--color-success);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.success-flash-fade-enter-active,
+.success-flash-fade-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.success-flash-fade-enter-from,
+.success-flash-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
 }
 
 .help-trigger {

@@ -3,10 +3,10 @@ import { ref } from 'vue'
 import { FileText } from 'lucide-vue-next'
 
 import { cameraService } from '@/services/media/camera.service'
-import { storageService } from '@/services/firebase/storage.service'
 import { mockRecognitionService } from '@/services/recognition/mock-recognition.service'
 import type { RecognitionStatus } from '@/services/recognition/recognition.types'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{
@@ -75,25 +75,14 @@ async function handleConfirm(): Promise<void> {
     const blob =
       source.kind === 'photo' ? await fetch(source.previewUrl).then((r) => r.blob()) : source.file
     const extension = source.kind === 'photo' ? 'jpg' : 'pdf'
+    const evidenceId = crypto.randomUUID()
 
-    let remoteUrl: string | undefined
-    try {
-      remoteUrl = await storageService.uploadEvidenceFile(
-        props.verificationId,
-        `${props.itemId}-doc`,
-        blob,
-        extension,
-      )
-    } catch {
-      remoteUrl = undefined
-    }
     const evidence: VerificationEvidence = {
-      id: crypto.randomUUID(),
+      id: evidenceId,
       verificationId: props.verificationId,
       itemId: props.itemId,
       type: 'document',
       localUri: source.kind === 'photo' ? source.previewUrl : undefined,
-      remoteUrl,
       createdAt: Date.now(),
       captureSource: source.kind === 'photo' ? 'camera' : 'file',
       captureTimestamp: Date.now(),
@@ -107,6 +96,14 @@ async function handleConfirm(): Promise<void> {
       },
     }
     await useVerificationStore().addEvidence(evidence)
+    void useUploadQueueStore().enqueue({
+      localId: evidenceId,
+      verificationId: props.verificationId,
+      itemId: `${props.itemId}-doc`,
+      type: 'document',
+      blob,
+      extension,
+    })
     handleReset()
   } finally {
     uploading.value = false

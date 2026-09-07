@@ -16,16 +16,24 @@ export type VerificationItemType =
   | 'ride'
   | 'form'
   | 'motion'
-  /** Step 3 (驗車環境檢測) and Step 39 (冷車狀態確認) — fully custom capture
-   *  screens swapped in at VerificationStepsView level (same pattern as the
-   *  Engine Audio/IMU session group), never rendered via VerificationItem's
-   *  generic per-type evidence-block dispatch. */
-  | 'environment'
+  /** Step 39 (冷車狀態確認) — a fully custom capture screen swapped in at
+   *  VerificationStepsView level (same pattern as the Engine Audio/IMU
+   *  session group), never rendered via VerificationItem's generic per-type
+   *  evidence-block dispatch. */
   | 'cold-touch'
 
 export type ItemSeverity = 'normal' | 'important' | 'critical'
 
 export type InspectionOptionValue = 'normal' | 'attention' | 'unsure' | 'not_applicable'
+
+/** Multi-select self-disclosure checkboxes (e.g. PREP-02 車況主動揭露) — a
+ *  deliberately separate, open-ended value space from InspectionOptionValue:
+ *  disclosure answers are things like "倒車"/"碰撞", not a normal/attention/
+ *  unsure/not_applicable judgement, and more than one can be true at once. */
+export interface DisclosureOption {
+  value: string
+  label: string
+}
 
 export interface InspectionOption {
   value: InspectionOptionValue
@@ -70,6 +78,10 @@ export interface VerificationItem {
   options?: InspectionOption[]
   /** For type: 'form' — renders a compact fillable table instead of free text. */
   formFields?: FormFieldDef[]
+  /** Renders a multi-select checkbox group instead of the normal single-
+   *  select result options (see DisclosureMultiSelect.vue) — currently only
+   *  PREP-02 (車況主動揭露: 倒車/碰撞/其他/無, multi-select). */
+  disclosureOptions?: DisclosureOption[]
   mockAnalysis?: boolean
   /** Replaces the unused `mockAnalysis` flag above with what it should
    *  actually say: which recognition pass applies, not just "some AI runs." */
@@ -78,10 +90,25 @@ export interface VerificationItem {
    *  (CVT scooter vs chain-drive manual) — see Vehicle.transmission and
    *  PhotoGuide.vue's per-item prompt text. */
   transmissionSensitive?: boolean
+  /** Typically-dim shooting position — the capture screen suggests turning
+   *  on the phone's torch before shooting (see photo-slots.ts's PhotoSlot.lowLight). */
+  lowLight?: boolean
   /** True when this item's evidence step can share one continuous
    *  recording with the item(s) right after it (e.g. 啟動馬達聲音 +
    *  發動順暢度) — purely a UI hint text, capture is still per-item. */
   canShareCapture?: boolean
+  /** Renders MultiPhotoEvidenceCapture.vue (a full-screen live-camera view,
+   *  shutter + running filmstrip of everything already captured for this
+   *  item) instead of the normal card layout entirely — for Optional items
+   *  where the user may want to attach an open-ended number of supporting
+   *  photos (e.g. PREP-02-DAMAGE-PHOTOS), unlike every other photo item
+   *  which expects exactly one. */
+  multiPhoto?: boolean
+  /** Hides this item from flatItems/sections unless the named item's saved
+   *  answer has ANY of these values among its `selections` (see
+   *  verification.store.ts's applyConditionalVisibility). Currently only
+   *  PREP-02-DAMAGE-PHOTOS, shown only once PREP-02 discloses 碰撞 or 其他. */
+  visibleWhen?: { itemId: string; anyOfSelections: string[] }
   severity?: ItemSeverity
   helpText?: string
   /** Shown under a disabled "下一步" when this item sits in a lockedOrder

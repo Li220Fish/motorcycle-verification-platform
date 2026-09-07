@@ -84,7 +84,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 68000,
     region: '台北市',
     district: '大安區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: 'NMAX',
@@ -112,7 +111,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 145000,
     region: '新北市',
     district: '板橋區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'HONDA',
       model: 'CB300R',
@@ -140,7 +138,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 112000,
     region: '台中市',
     district: '西區',
-    transferable: false,
     vehicleSnapshot: {
       brand: 'KYMCO',
       model: 'KRV 180',
@@ -168,7 +165,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 52000,
     region: '高雄市',
     district: '左營區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'SYM',
       model: 'JET SR',
@@ -196,7 +192,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 79000,
     region: '桃園市',
     district: '中壢區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: '勁戰六代',
@@ -224,7 +219,6 @@ const MARKETPLACE_LISTINGS = [
     priceTwd: 238000,
     region: '台北市',
     district: '中正區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: 'MT-07',

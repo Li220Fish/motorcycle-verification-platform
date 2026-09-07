@@ -8,14 +8,17 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 const props = defineProps<{
   open: boolean
   submitting?: boolean
-  /** 'YYYY-MM-DD' dates the seller has opened for viewing. */
-  availableDates: string[]
-  /** Time-of-day slots (e.g. '10:00') offered on every available date. */
-  timeSlots: string[]
+  /** Per-date viewing times the seller opened — key 'YYYY-MM-DD', value that
+   * date's own 'HH:mm' times. Build with resolveAvailableSlots() rather than
+   * reading a listing's raw fields directly (handles the legacy shared
+   * availableDates/timeSlots shape too). */
+  availableSlots: Record<string, string[]>
   /** Existing appointments' scheduledAt — slots already taken are hidden
    * from whichever date they fall on. */
   bookedTimestamps: number[]
 }>()
+
+const availableDates = computed(() => Object.keys(props.availableSlots))
 const emit = defineEmits<{ close: []; submit: [{ scheduledAt: number }] }>()
 
 const selectedDate = ref<string | null>(null)
@@ -59,9 +62,11 @@ const bookedTimesForSelectedDate = computed(() => {
   return times
 })
 
-const availableTimesForDate = computed(() =>
-  props.timeSlots.filter((time) => !bookedTimesForSelectedDate.value.has(time)),
-)
+const availableTimesForDate = computed(() => {
+  if (!selectedDate.value) return []
+  const times = props.availableSlots[selectedDate.value] ?? []
+  return times.filter((time) => !bookedTimesForSelectedDate.value.has(time))
+})
 
 function handleSubmit(): void {
   if (!selectedDate.value || !selectedTime.value) return

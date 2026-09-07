@@ -44,7 +44,6 @@ const sections = computed(() => (listing.value ? buildMockReportSections(listing
       <InspectionReportBody
         :vehicle-title="vehicleTitle"
         :inspected-date="inspectedDate"
-        :score="listing.verificationScore"
         :sections="sections"
       />
     </template>

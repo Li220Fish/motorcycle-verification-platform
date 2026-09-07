@@ -6,14 +6,16 @@ import type { MockMarketListing } from './marketplace-mock'
 
 /**
  * Every Marketplace listing already claims a passing MotoVerify inspection
- * (see marketplace-mock.ts's header comment) and shows its
- * `verificationScore` as a badge before you ever open the report — this
- * builds the same 5-category/70-item breakdown the real 檢驗報告 screen
- * shows for an actual vehicle (see VerificationReportView.vue), reusing the
- * real Seller flow's item titles so the two screens read identically, just
- * fed by fabricated per-item results instead of real verification answers.
- * Deterministic per listing id (not Math.random) so the same listing always
- * shows the same report on reload.
+ * (see marketplace-mock.ts's header comment) — this builds the same
+ * 5-category/70-item breakdown the real 檢驗報告 screen shows for an actual
+ * vehicle (see VerificationReportView.vue), reusing the real Seller flow's
+ * item titles so the two screens read identically, just fed by fabricated
+ * per-item results instead of real verification answers. Deterministic per
+ * listing id (not Math.random) so the same listing always shows the same
+ * report on reload. `verificationScore` itself is no longer shown to users
+ * anywhere (moved admin-only, see VerifyDetailSection.vue) — it's kept on
+ * the listing purely to derive this mock report's attentionRate below and
+ * for internal sort (`score-desc`) in MarketplaceView.vue.
  */
 
 const ATTENTION_NOTES = [

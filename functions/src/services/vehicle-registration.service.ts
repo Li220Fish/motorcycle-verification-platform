@@ -1,6 +1,8 @@
 import { getFirestore } from 'firebase-admin/firestore'
 import sharp from 'sharp'
 import { callGeminiJson, ImagePart } from '../ai/gemini/client'
+import { REGISTRATION_OCR_PROMPT_VERSION } from '../ai/prompts/registration-ocr-v1'
+import { resolvePromptText, hashPromptText } from './prompt-config.service'
 
 // Same Image Cost Strategy constants as evidence.service.ts's toAnalysisJpeg
 // — analysis copy only, the original upload in Storage is left untouched.
@@ -24,18 +26,6 @@ async function fetchAndResize(url: string): Promise<{ base64: string; mimeType: 
     .toBuffer()
   return { base64: resized.toString('base64'), mimeType: 'image/jpeg' }
 }
-
-export const REGISTRATION_OCR_PROMPT_VERSION = 'ocr-registration-v1'
-const REGISTRATION_OCR_PROMPT = `Read the motorcycle vehicle registration certificate (行照) photo.
-
-Extract two fields exactly as printed on the document:
-- engineNumber: the engine number (引擎號碼)
-- chassisNumber: the chassis/frame number (車身號碼/車架號碼)
-
-If either field is unclear, obstructed, or cannot be read reliably, set it to null.
-Do not guess a plausible-looking value.
-
-Return only the requested JSON shape: { engineNumber, chassisNumber, confidence, note }.`
 
 const REGISTRATION_OCR_SCHEMA = {
   type: 'object',
@@ -112,12 +102,17 @@ export async function verifyVehicleRegistration(params: {
     base64,
     mimeType,
   }
+  const promptText = await resolvePromptText('registration-ocr-v1')
   const result = await callGeminiJson<RegistrationOcrResult>({
     apiKey: params.apiKey,
-    promptText: REGISTRATION_OCR_PROMPT,
+    promptText,
     images: [image],
     responseSchema: REGISTRATION_OCR_SCHEMA,
-    cacheDiscriminators: [REGISTRATION_OCR_PROMPT_VERSION, params.vehicleId],
+    cacheDiscriminators: [
+      REGISTRATION_OCR_PROMPT_VERSION,
+      params.vehicleId,
+      hashPromptText(promptText),
+    ],
     promptVersion: REGISTRATION_OCR_PROMPT_VERSION,
   })
 

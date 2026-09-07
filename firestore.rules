@@ -142,16 +142,19 @@ service cloud.firestore {
         && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId) || isAdmin());
       // Admin bypass exists for scripts/seed-mock-vehicles.mjs, which
       // verifies several accounts' demo vehicles from one signed-in session.
-      // environmentContext (Step 3) / coldStateContext (Step 39) are
+      // environmentContext (Step 3) / coldStateContext (Step 39) /
+      // analysisStatus (Verification v2 — background AI status tracking) are
       // Trusted-Backend-only fields (Environment/Cold-State spec §40:
-      // "Client cannot set coldStateValid") — never legitimate in a
-      // client create payload.
+      // "Client cannot set coldStateValid"; same reasoning for
+      // analysisStatus — see AnalysisStatusEntry's own comment in
+      // types/verification.ts) — never legitimate in a client create payload.
       allow create: if signedIn()
         && ((request.resource.data.userId == myUid() && ownsVehicle(request.resource.data.vehicleId))
           || isAdmin())
         && request.resource.data.isPublic == false
         && !('environmentContext' in request.resource.data)
-        && !('coldStateContext' in request.resource.data);
+        && !('coldStateContext' in request.resource.data)
+        && !('analysisStatus' in request.resource.data);
       // Immutable the instant isPublic flips true — this single guard (only
       // updatable while still private) covers "no further edits to a
       // published report", "isPublic can only ever go false -> true, never
@@ -173,7 +176,8 @@ service cloud.firestore {
         && resource.data.get('isPublic', false) == false
         && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId) || isAdmin())
         && request.resource.data.get('environmentContext', null) == resource.data.get('environmentContext', null)
-        && request.resource.data.get('coldStateContext', null) == resource.data.get('coldStateContext', null);
+        && request.resource.data.get('coldStateContext', null) == resource.data.get('coldStateContext', null)
+        && request.resource.data.get('analysisStatus', null) == resource.data.get('analysisStatus', null);
       allow delete: if signedIn()
         && ((resource.data.get('isPublic', false) == false
             && (resource.data.userId == myUid() || ownsVehicle(resource.data.vehicleId)))
@@ -281,7 +285,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && ((request.resource.data.sellerId == myUid() && request.resource.data.status == 'draft')
           || isAdmin());
-      // General edits (price/description/region/district/transferable/
+      // General edits (price/description/region/district/
       // availableDates/timeSlots/vehicleSnapshot.photos) — status/sellerId/
       // vehicleId/verificationIds/favoriteCount/appointmentCount stay fixed
       // through this path.
@@ -532,6 +536,16 @@ service cloud.firestore {
     match /vehicleNews/{document=**} {
       allow read: if signedIn();
       allow write: if isAdmin();
+    }
+
+    // Admin-editable Gemini prompt overrides (see
+    // functions/src/services/prompt-config.service.ts). Read-gated to admin
+    // only — unlike vehicleModels/vehicleNews this isn't reference content
+    // any signed-in user needs; the Trusted Backend reads it via Admin SDK,
+    // which bypasses these rules entirely, so this only governs the admin
+    // webapp's own client-SDK access.
+    match /aiPrompts/{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // Home page's Featured Dealers section — kept exactly as it was before

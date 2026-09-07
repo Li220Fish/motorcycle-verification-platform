@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { FileText, Trash2, Video, Volume2, X, Zap } from 'lucide-vue-next'
 
 import { storageService } from '@/services/firebase/storage.service'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = withDefaults(
@@ -14,6 +15,26 @@ const props = withDefaults(
 )
 
 defineEmits<{ remove: [string] }>()
+
+const uploadQueueStore = useUploadQueueStore()
+// Resumes any evidence still mid-upload from a previous session (a fresh
+// capture already triggers hydrate() itself via enqueue(); revisiting an
+// item whose evidence was only ever loaded from Firestore needs this too).
+onMounted(() => void uploadQueueStore.hydrate())
+
+/** ✓ 已拍攝 / 上傳中… / ! 上傳失敗 — never surfaces upload technical detail,
+ * just enough for the user to know whether they need to do anything. No
+ * queue entry (e.g. evidence synced from Firestore with a remoteUrl already
+ * set, or loaded before this pass shipped) simply shows nothing. */
+function uploadBadge(
+  item: VerificationEvidence,
+): { label: string; tone: 'pending' | 'failed' } | null {
+  const status = uploadQueueStore.statusFor(item.id)
+  if (!status || status === 'uploaded')
+    return item.remoteUrl ? null : { label: '✓ 已拍攝', tone: 'pending' }
+  if (status === 'failed') return { label: '! 上傳失敗', tone: 'failed' }
+  return { label: '上傳中…', tone: 'pending' }
+}
 
 // evidence.remoteUrl is a Storage object path for real uploads (see
 // storageService.uploadEvidenceFile) — resolved to fresh, rules-checked URLs
@@ -93,7 +114,16 @@ function closeZoom(): void {
         <Trash2 :size="14" />
       </button>
       <Video v-if="item.type === 'video'" class="type-badge" :size="14" />
-      <span v-if="!item.remoteUrl" class="pending-badge">上傳中</span>
+      <button
+        v-if="uploadBadge(item)"
+        type="button"
+        class="pending-badge"
+        :class="uploadBadge(item)?.tone"
+        :disabled="uploadBadge(item)?.tone !== 'failed'"
+        @click.stop="uploadBadge(item)?.tone === 'failed' && uploadQueueStore.retry(item.id)"
+      >
+        {{ uploadBadge(item)?.label }}
+      </button>
     </div>
 
     <div v-if="zoomedItem" class="zoom-overlay" @click="closeZoom">
@@ -183,6 +213,13 @@ function closeZoom(): void {
   border-radius: 4px;
   background: rgba(15, 23, 42, 0.7);
   color: #fff;
+  border: none;
+  line-height: 1.6;
+}
+
+.pending-badge.failed {
+  background: var(--color-danger);
+  cursor: pointer;
 }
 
 .evidence-tile.zoomable {

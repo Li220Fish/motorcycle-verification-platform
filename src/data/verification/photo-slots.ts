@@ -12,7 +12,16 @@ export interface DiagramRect {
   h: number
 }
 
-/** The 車身外觀 photo checklist — steps 5–24 of the frozen 45-step flow. */
+/**
+ * The 車身外觀 photo checklist — Verification v2 (see
+ * MotoVerify Verification v2 Migration spec §1/§2/§6). Steps 9/10/11/16/17/
+ * 20/23 (車牌/前輪/後輪/引擎左側/引擎右側/排氣管/車身號碼) are fully removed —
+ * not hidden, deleted from the registry — and steps 13/14/15/21/22 (後避震/
+ * 前煞車/後煞車/三角台/坐墊外觀) are downgraded to Optional (`required:
+ * false`): their AI checks are retired along with them (see
+ * functions/src/services/core-vision-v2.service.ts), these slots now exist
+ * purely as User-provided supporting evidence, never sent to Gemini.
+ */
 export interface PhotoSlot {
   id: string
   label: string
@@ -22,6 +31,12 @@ export interface PhotoSlot {
   instruction?: string
   helpText?: string
   transmissionSensitive?: boolean
+  /** Typically-dim shooting position (under the vehicle, behind fork/shock
+   *  tubes, etc.) — the capture screen suggests turning on the phone's torch
+   *  for these. Not auto-detected from the live preview (no reliable
+   *  brightness signal available without a custom camera-preview plugin);
+   *  this is a static, content-authored hint. */
+  lowLight?: boolean
   /** This item's own position on the diagram — shown directly on the capture
    *  screen (PhotoGuide.vue) so every photo has its own precise target
    *  instead of sharing its whole Capture Map group's region. */
@@ -70,82 +85,36 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
     highlight: { x: 5, y: 70, w: 45, h: 30 },
   },
   {
-    id: 'plate',
-    label: '車牌',
-    description: '拍攝並辨識車牌，可與車輛註冊資料交叉確認。',
-    required: true,
-    aiCheck: 'plate',
-    helpText: '車牌資料本身仍屬私人 Vehicle 資料。',
-    highlight: { x: 8, y: 94, w: 22, h: 16 },
-  },
-  {
-    id: 'front-wheel',
-    label: '前輪',
-    description: 'AI檢查：胎紋、龜裂、偏磨、明顯損傷、可見平衡塊及其他異常。',
-    required: true,
-    aiCheck: 'appearance',
-    instruction: '請拍攝：前輪胎面＋側面',
-    highlight: { x: 215, y: 82, w: 60, h: 60 },
-  },
-  {
-    id: 'rear-wheel',
-    label: '後輪',
-    description: 'AI檢查：胎紋、龜裂、偏磨、明顯損傷、可見平衡塊及其他異常。',
-    required: true,
-    aiCheck: 'appearance',
-    instruction: '請拍攝：後輪胎面＋側面',
-    highlight: { x: 25, y: 82, w: 60, h: 60 },
-  },
-  {
     id: 'front-suspension',
     label: '前避震',
     description: 'AI檢查：漏油、鏽蝕、刮傷、異常噴漆及其他外觀異常。',
     required: true,
     aiCheck: 'appearance',
+    lowLight: true,
     highlight: { x: 225, y: 55, w: 35, h: 35 },
   },
   {
     id: 'rear-suspension',
     label: '後避震',
-    description: 'AI檢查：漏油、鏽蝕、刮傷、異常噴漆及其他外觀異常。',
-    required: true,
-    aiCheck: 'appearance',
+    description: '車主提供之補充資訊，非 AI 核心判定項目。',
+    required: false,
+    lowLight: true,
     highlight: { x: 75, y: 70, w: 35, h: 30 },
   },
   {
     id: 'front-brake',
     label: '前煞車',
-    description: 'AI檢查：碟盤、卡鉗、鏽蝕、可見磨耗及明顯外觀異常。',
-    required: true,
-    aiCheck: 'appearance',
+    description: '車主提供之補充資訊，非 AI 核心判定項目。',
+    required: false,
     highlight: { x: 225, y: 95, w: 35, h: 35 },
   },
   {
     id: 'rear-brake',
     label: '後煞車',
-    description: 'AI檢查：碟盤／鼓煞區域、鏽蝕、可見磨耗及明顯外觀異常。',
-    required: true,
-    aiCheck: 'appearance',
+    description: '車主提供之補充資訊，非 AI 核心判定項目。',
+    required: false,
     helpText: '依車型（碟煞／鼓煞）不同顯示拍攝提示。',
     highlight: { x: 40, y: 95, w: 35, h: 35 },
-  },
-  {
-    id: 'engine-left',
-    label: '引擎左側',
-    description: 'AI檢查：滲漏、鏽蝕、異常噴漆、螺絲拆裝痕跡、護蓋、汽缸頭等可見狀況。',
-    required: true,
-    aiCheck: 'appearance',
-    instruction: '請拍攝：引擎左側＋主要螺絲',
-    highlight: { x: 110, y: 88, w: 60, h: 35 },
-  },
-  {
-    id: 'engine-right',
-    label: '引擎右側',
-    description: 'AI檢查：滲漏、鏽蝕、異常噴漆、螺絲拆裝痕跡、進氣歧管等可見狀況。',
-    required: true,
-    aiCheck: 'appearance',
-    instruction: '請拍攝：引擎右側＋主要螺絲',
-    highlight: { x: 110, y: 88, w: 60, h: 35 },
   },
   {
     id: 'engine-bottom',
@@ -153,6 +122,7 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
     description: 'AI檢查：滲油、滲液、刮傷、護蓋及其他可見異常。',
     required: true,
     aiCheck: 'appearance',
+    lowLight: true,
     highlight: { x: 110, y: 108, w: 60, h: 20 },
   },
   {
@@ -162,43 +132,25 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
     required: true,
     aiCheck: 'appearance',
     transmissionSensitive: true,
-    helpText: '速克達與檔車使用不同拍攝提示；照片不判斷異音。',
+    lowLight: true,
+    helpText:
+      '僅有外露鏈條的車輛需要本項目；速可達等無外露鏈條車輛由系統自動判定為不適用，不需拍攝。照片不判斷異音。',
     highlight: { x: 70, y: 100, w: 55, h: 20 },
-  },
-  {
-    id: 'exhaust',
-    label: '排氣管',
-    description: 'AI檢查：鏽蝕、撞傷、異常污漬、接合處可見異常。',
-    required: true,
-    aiCheck: 'appearance',
-    instruction: '請拍攝：排氣管＋接合處',
-    highlight: { x: 60, y: 112, w: 110, h: 15 },
   },
   {
     id: 'triple-clamp',
     label: '三角台',
-    description: 'AI檢查：鏽蝕、止點、主要螺絲拆裝痕跡及明顯異常。',
-    required: true,
-    aiCheck: 'appearance',
+    description: '車主提供之補充資訊，非 AI 核心判定項目。',
+    required: false,
     highlight: { x: 215, y: 45, w: 35, h: 25 },
   },
   {
     id: 'seat',
     label: '坐墊外觀',
-    description: 'AI檢查：破損、裂痕、異常磨耗、明顯修補。',
-    required: true,
-    aiCheck: 'appearance',
+    description: '車主提供之補充資訊，非 AI 核心判定項目。',
+    required: false,
     helpText: '目前只拍坐墊外觀。',
     highlight: { x: 85, y: 75, w: 130, h: 20 },
-  },
-  {
-    id: 'vin',
-    label: '車身號碼位置',
-    description: 'OCR辨識車身號碼，與車輛註冊／身份綁定資料比對。',
-    required: true,
-    aiCheck: 'vin',
-    helpText: '不把原始車身號碼放入公開報告。',
-    highlight: { x: 190, y: 55, w: 30, h: 25 },
   },
   {
     id: 'modifications',
@@ -222,11 +174,19 @@ export function buildPhotoSlotItems(idPrefix: string): VerificationItem[] {
     evidence: [{ kind: 'photo', label: slot.label, required: slot.required }],
     aiCheck: slot.aiCheck,
     transmissionSensitive: slot.transmissionSensitive,
+    lowLight: slot.lowLight,
     helpText: slot.helpText,
+    // Verification v2 §2 — Optional items are self-disclosure, not a plain
+    // "did you take the photo" checkbox: normal = 車主主動表示目前未發現需要
+    // 注意, attention = 車主主動表示存在需要注意的狀況. `missing` per spec is
+    // simply "no answer at all" (no selectable option needed for it — see
+    // scoring.service.ts's scorableAnswers, which already excludes Optional
+    // items regardless of whether they were answered).
     options: slot.required
       ? undefined
       : [
-          { value: 'normal', label: '已拍攝' },
+          { value: 'normal', label: '未發現需要注意的狀況' },
+          { value: 'attention', label: '有需要注意的狀況' },
           { value: 'not_applicable', label: '此車型不適用' },
         ],
   }))

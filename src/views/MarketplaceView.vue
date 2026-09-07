@@ -53,7 +53,6 @@ async function handleToggleFavorite(listingId: string): Promise<void> {
 const activeFilterCount = computed(() => {
   let count = 0
   if (filters.value.sellerType !== 'all') count += 1
-  if (filters.value.transferableOnly) count += 1
   if (filters.value.sortBy !== 'default') count += 1
   if (
     filters.value.priceRange[0] !== DEFAULT_MARKETPLACE_FILTERS.priceRange[0] ||
@@ -77,7 +76,6 @@ const listings = computed(() => {
     }
     if (filters.value.sellerType !== 'all' && listing.sellerType !== filters.value.sellerType)
       return false
-    if (filters.value.transferableOnly && !listing.transferable) return false
     const [priceMin, priceMax] = filters.value.priceRange
     if (listing.priceTwd < priceMin) return false
     // priceMax at the slider's own ceiling means "or more" (see

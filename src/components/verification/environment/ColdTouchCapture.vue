@@ -135,7 +135,9 @@ async function finish(): Promise<void> {
     // Fire-and-forget, same convention as every other capture step — the
     // Trusted Backend overwrites this placeholder with the real verified
     // result (and cold_state validity) once it lands.
-    analyzeColdEngineTouchCheck(props.verificationId).catch(() => {})
+    analyzeColdEngineTouchCheck(props.verificationId).catch((error) =>
+      console.error('[AI analysis] analyzeColdEngineTouchCheck trigger failed:', error),
+    )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : ''
     phase.value = 'failed'

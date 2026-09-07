@@ -2,6 +2,7 @@ import { onCall } from 'firebase-functions/v2/https'
 import { GEMINI_API_KEY_SECRET } from '../config'
 import { assertCanAnalyze } from '../services/auth.service'
 import { analyzeColdEngineTouch, retryColdEngineTouch } from '../services/cold-touch.service'
+import { withAnalysisFailureTrace } from '../services/analysis-status.service'
 
 /** Step 39 (Cold-state eligibility check) — Environment/Cold-State spec
  *  §36. Client sends only `verificationId`; the app-timed contact-window
@@ -12,10 +13,12 @@ export const analyzeColdEngineTouchCheck = onCall(
   async (request) => {
     const { verificationId } = (request.data ?? {}) as { verificationId?: string }
     if (!verificationId) throw new Error('verificationId is required')
-    await assertCanAnalyze(verificationId, request.auth?.uid)
-    const apiKey = process.env.GEMINI_API_KEY as string
-    const result = await analyzeColdEngineTouch({ verificationId, apiKey })
-    return { result }
+    return withAnalysisFailureTrace(verificationId, 'coldCheck', async () => {
+      await assertCanAnalyze(verificationId, request.auth?.uid)
+      const apiKey = process.env.GEMINI_API_KEY as string
+      const result = await analyzeColdEngineTouch({ verificationId, apiKey })
+      return { result }
+    })
   },
 )
 

@@ -36,7 +36,6 @@ export interface ListingDraft {
   priceTwd: number
   region: string
   district: string
-  transferable: boolean
   displacementCc: number
   transmission: string
   color: string
@@ -129,7 +128,6 @@ async function create(id: string, draft: ListingDraft): Promise<void> {
     priceTwd: draft.priceTwd,
     region: draft.region,
     district: draft.district,
-    transferable: draft.transferable,
     ...stripUndefined({ description: draft.description || undefined }),
     vehicleSnapshot,
     sellerId: draft.sellerId,
@@ -171,9 +169,10 @@ export interface ListingUpdate {
   description?: string
   region?: string
   district?: string
-  transferable?: boolean
   availableDates?: string[]
   timeSlots?: string[]
+  /** Per-date custom viewing times — see MockMarketListing.availableSlots. */
+  availableSlots?: Record<string, string[]>
 }
 
 async function update(id: string, changes: ListingUpdate): Promise<void> {
@@ -247,14 +246,31 @@ async function updateAppointmentStatus(
 ): Promise<void> {
   const batch = writeBatch(db)
   batch.update(doc(db, COLLECTION, listingId, 'appointments', appointmentId), { status })
-  // Both call sites (ChatRoomView.vue) only ever transition an appointment
-  // that's currently 'pending' — 'declined' is the only path that leaves the
-  // pending+approved set spec §13's appointmentCount tracks; 'approved'
-  // stays counted, so no change there.
-  if (status === 'declined') {
+  // 'declined' (seller) and 'cancelled' (buyer, Task C1 — firestore.rules
+  // already allowed this transition, but no client code ever produced it
+  // until now) both leave the pending+approved set spec §13's
+  // appointmentCount tracks; 'approved' stays counted, so no change there.
+  if (status === 'declined' || status === 'cancelled') {
     batch.update(doc(db, COLLECTION, listingId), { appointmentCount: increment(-1) })
   }
   await batch.commit()
+}
+
+/** Live appointments subscription — replaces the one-time listAppointments()
+ * fetch on the buyer detail page / seller management page / chat room's
+ * appointment banner (Task C2), so an approve/decline/cancel on one side
+ * shows up on the other without a manual reload. Same onSnapshot(collection)
+ * pattern as discussion.service.ts's post/comment subscriptions. */
+function subscribeAppointments(
+  listingId: string,
+  onChange: (appointments: ListingAppointment[]) => void,
+): Unsubscribe {
+  return onSnapshot(collection(db, COLLECTION, listingId, 'appointments'), (snapshot) => {
+    const appointments = snapshot.docs
+      .map((docSnapshot) => toAppointment(docSnapshot.id, docSnapshot.data() as AppointmentDoc))
+      .sort((a, b) => a.scheduledAt - b.scheduledAt)
+    onChange(appointments)
+  })
 }
 
 async function get(id: string): Promise<MockMarketListing | null> {
@@ -322,6 +338,7 @@ export const listingService = {
   get,
   subscribeListing,
   listAppointments,
+  subscribeAppointments,
   createAppointment,
   updateAppointmentStatus,
   addFavorite,

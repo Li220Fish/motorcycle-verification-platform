@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Bike, ChevronRight, Heart, Image, Star, Store } from 'lucide-vue-next'
+import { Bike, ChevronRight, Heart, Image, ShieldCheck, Star, Store } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
@@ -10,6 +10,7 @@ import { chatService } from '@/services/chat/chat.service'
 import { listingService } from '@/services/firebase/listing.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
+import { resolveAvailableSlots } from '@/data/home/marketplace-mock'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { Unsubscribe } from 'firebase/firestore'
 
@@ -27,6 +28,12 @@ const isFavorite = ref(false)
 // else about the listing — updates in real time while this page is open,
 // e.g. another buyer favoriting it while this one is looking.
 let unsubscribeListing: Unsubscribe | null = null
+// Same for appointments (Task C2) — a one-time fetch here is exactly why two
+// buyers loading the page around the same time could both see a slot as
+// free. Only 'pending'/'approved' actually occupy a slot — a declined or
+// cancelled appointment must free it back up, which the old one-time fetch
+// never did either (it kept every appointment forever).
+let unsubscribeAppointments: Unsubscribe | null = null
 
 async function loadListing(): Promise<void> {
   loading.value = true
@@ -35,9 +42,14 @@ async function loadListing(): Promise<void> {
     listing.value = updated
     loading.value = false
   })
-  bookedTimestamps.value = (await listingService.listAppointments(props.id)).map(
-    (appointment) => appointment.scheduledAt,
-  )
+  unsubscribeAppointments?.()
+  unsubscribeAppointments = listingService.subscribeAppointments(props.id, (appointments) => {
+    bookedTimestamps.value = appointments
+      .filter(
+        (appointment) => appointment.status === 'pending' || appointment.status === 'approved',
+      )
+      .map((appointment) => appointment.scheduledAt)
+  })
   if (authStore.user) {
     isFavorite.value = (await listingService.listFavoriteIds(authStore.user.id)).includes(props.id)
   }
@@ -45,7 +57,10 @@ async function loadListing(): Promise<void> {
 
 watch(() => props.id, loadListing, { immediate: true })
 
-onUnmounted(() => unsubscribeListing?.())
+onUnmounted(() => {
+  unsubscribeListing?.()
+  unsubscribeAppointments?.()
+})
 
 async function handleToggleFavorite(): Promise<void> {
   if (!authStore.user) return
@@ -234,7 +249,6 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
 
         <div class="price-row">
           <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
-          <span v-if="listing.transferable" class="tag success">可過戶</span>
         </div>
 
         <p class="meta-row">
@@ -298,7 +312,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
              verification) fall back to the fabricated demo report. -->
         <h3 class="section-title">驗車報告</h3>
         <button class="report-card" @click="router.push(reportPath)">
-          <span class="score-badge">{{ listing.verificationScore }}</span>
+          <span class="score-badge"><ShieldCheck :size="22" /></span>
           <span class="report-info">
             <span class="report-title">車輛檢驗報告</span>
             <span class="report-subtitle">已通過 MotoVerify 專業檢驗</span>
@@ -344,8 +358,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
     <BookingSheet
       :open="bookingSheetOpen"
       :submitting="bookingSubmitting"
-      :available-dates="listing?.availableDates ?? []"
-      :time-slots="listing?.timeSlots ?? []"
+      :available-slots="listing ? resolveAvailableSlots(listing) : {}"
       :booked-timestamps="bookedTimestamps"
       @close="bookingSheetOpen = false"
       @submit="handleBookingSubmit"

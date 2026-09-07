@@ -11,7 +11,8 @@ import {
   type AdminVerificationDetail,
 } from '../services/admin-data.service'
 import { findItemById } from '@/data/verification'
-import { aiVisionItemTitle } from '@/data/verification/ai-vision-items'
+import { aiVisionItemsForAprItem, aiVisionItemTitle } from '@/data/verification/ai-vision-items'
+import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
 import type { Vehicle } from '@/types/vehicle'
 import type { VerificationAnswer } from '@/types/verification-evidence'
 
@@ -65,10 +66,63 @@ function itemTitle(itemId: string): string {
   return findItemById(kind, itemId)?.title ?? aiVisionItemTitle(itemId) ?? itemId
 }
 
-const sortedAnswers = computed(() =>
-  [...answers.value].sort((a, b) => a.itemId.localeCompare(b.itemId)),
-)
+function isChecklistItem(itemId: string): boolean {
+  const kind = verification.value?.type === 'buyer' ? 'buyer' : 'seller'
+  return !!findItemById(kind, itemId)
+}
+
+/**
+ * Mirrors the mobile report's merge (VerificationReportView.vue's
+ * effectiveItemResult): Group A/B/C AI-vision answers (rear_brake_condition
+ * etc.) have no checklist itemId of their own, so they must never render as
+ * their own top-level card here either — only nested under the real APR-*
+ * checklist item(s) whose photo they analyzed. Unlike the mobile report,
+ * admin keeps every AI sub-item's own id/verdict/full JSON visible
+ * separately (no worst-of collapsing) since traceability is the whole point
+ * of this screen.
+ */
+interface AnswerGroup {
+  answer: VerificationAnswer
+  aiSubAnswers: VerificationAnswer[]
+}
+
+const groupedAnswers = computed<AnswerGroup[]>(() => {
+  const byId = new Map(answers.value.map((a) => [a.itemId, a]))
+  const checklistAnswers = answers.value.filter((a) => isChecklistItem(a.itemId))
+  const consumedAiIds = new Set<string>()
+
+  const groups = checklistAnswers
+    .map((answer) => {
+      const aiSubAnswers = aiVisionItemsForAprItem(answer.itemId)
+        .map((meta) => byId.get(meta.id))
+        .filter((a): a is VerificationAnswer => !!a)
+      for (const a of aiSubAnswers) consumedAiIds.add(a.itemId)
+      return { answer, aiSubAnswers }
+    })
+    .sort((a, b) => a.answer.itemId.localeCompare(b.answer.itemId))
+
+  // Any AI-vision answer whose APR-* item hasn't been answered yet (or whose
+  // mapping is somehow missing) still needs to be visible somewhere, not
+  // silently dropped — shown as its own group with no parent APR answer.
+  const orphanAiAnswers = answers.value.filter(
+    (a) => !isChecklistItem(a.itemId) && !consumedAiIds.has(a.itemId),
+  )
+  for (const orphan of orphanAiAnswers) {
+    groups.push({ answer: orphan, aiSubAnswers: [] })
+  }
+
+  return groups
+})
 const aiAnsweredCount = computed(() => answers.value.filter((a) => a.aiResult).length)
+
+// 車況評分不再顯示給使用者看（見 VerificationReportView.vue / InspectionReportBody.vue
+// 的移除紀錄）——這裡是唯一還會顯示這個分數的地方，僅供後台人員參考，不對外顯示。
+const score = computed<number | null>(() => {
+  if (!verification.value) return null
+  const flowKind = verification.value.type === 'buyer' ? 'buyer' : 'seller'
+  const answersById = Object.fromEntries(answers.value.map((a) => [a.itemId, a]))
+  return computeVerificationScore(scorableAnswers(answersById, flowKind))
+})
 
 onMounted(async () => {
   if (!props.id) {
@@ -106,8 +160,12 @@ onMounted(async () => {
 
     <div v-else class="admin-udetail">
       <div class="admin-uside">
-        <div class="admin-uname">{{ vehicle ? `${vehicle.brand} ${vehicle.model}` : '（找不到車輛）' }}</div>
-        <div class="admin-ucode">{{ submitter?.displayName || submitter?.email || verification.userId.slice(0, 8) }}</div>
+        <div class="admin-uname">
+          {{ vehicle ? `${vehicle.brand} ${vehicle.model}` : '（找不到車輛）' }}
+        </div>
+        <div class="admin-ucode">
+          {{ submitter?.displayName || submitter?.email || verification.userId.slice(0, 8) }}
+        </div>
 
         <dl class="admin-ufacts">
           <div>
@@ -150,6 +208,10 @@ onMounted(async () => {
             <dt>項目總數 / 有 AI 回應</dt>
             <dd>{{ answers.length }} / {{ aiAnsweredCount }}</dd>
           </div>
+          <div>
+            <dt>檢驗評分</dt>
+            <dd>{{ score !== null ? `${score} / 100` : '尚無足夠資料計算' }}</dd>
+          </div>
         </dl>
       </div>
 
@@ -162,7 +224,11 @@ onMounted(async () => {
               <dd>
                 <span
                   class="admin-pill"
-                  :class="(verification.environmentContext as any).quality?.overallSuitable ? 'ok' : 'attn'"
+                  :class="
+                    (verification.environmentContext as any).quality?.overallSuitable
+                      ? 'ok'
+                      : 'attn'
+                  "
                 >
                   {{
                     (verification.environmentContext as any).quality?.overallSuitable
@@ -178,10 +244,14 @@ onMounted(async () => {
             </div>
             <div v-if="((verification.environmentContext as any).warnings ?? []).length > 0">
               <dt>警示</dt>
-              <dd>{{ ((verification.environmentContext as any).warnings as string[]).join('、') }}</dd>
+              <dd>
+                {{ ((verification.environmentContext as any).warnings as string[]).join('、') }}
+              </dd>
             </div>
           </dl>
-          <pre class="admin-json">{{ JSON.stringify(verification.environmentContext, null, 2) }}</pre>
+          <pre class="admin-json">{{
+            JSON.stringify(verification.environmentContext, null, 2)
+          }}</pre>
         </div>
 
         <div v-if="verification.coldStateContext" class="admin-usec">
@@ -208,51 +278,110 @@ onMounted(async () => {
 
         <div class="admin-usec">
           <h3>各項目結果與 AI 回應 <span class="admin-ref app">collection: answers</span></h3>
-          <div v-if="sortedAnswers.length === 0" class="admin-slot">尚無任何項目回答</div>
+          <p class="admin-page-intro" style="padding: 0 0 8px; font-size: 12px">
+            後煞車狀況、後避震狀況等 AI 影像判定項目已併入其對應的 APR 檢測項目下方，不再單獨列出。
+          </p>
+          <div v-if="groupedAnswers.length === 0" class="admin-slot">尚無任何項目回答</div>
           <div v-else class="answer-list">
-            <div v-for="answer in sortedAnswers" :key="answer.itemId" class="answer-card">
+            <div v-for="group in groupedAnswers" :key="group.answer.itemId" class="answer-card">
               <div class="answer-head">
-                <span class="mono answer-id">{{ answer.itemId }}</span>
-                <span class="answer-title">{{ itemTitle(answer.itemId) }}</span>
-                <span class="admin-pill" :class="RESULT_TONE[answer.result] ?? 'mute'">
-                  {{ RESULT_LABEL[answer.result] ?? answer.result }}
+                <span class="mono answer-id">{{ group.answer.itemId }}</span>
+                <span class="answer-title">{{ itemTitle(group.answer.itemId) }}</span>
+                <span class="admin-pill" :class="RESULT_TONE[group.answer.result] ?? 'mute'">
+                  {{ RESULT_LABEL[group.answer.result] ?? group.answer.result }}
                 </span>
               </div>
-              <p v-if="answer.note" class="answer-note">使用者備註：{{ answer.note }}</p>
+              <p v-if="group.answer.note" class="answer-note">
+                使用者備註：{{ group.answer.note }}
+              </p>
 
-              <div v-if="answer.aiResult" class="ai-block">
+              <div v-if="group.answer.aiResult" class="ai-block">
                 <dl class="admin-kv">
                   <div>
                     <dt>模型</dt>
-                    <dd class="mono">{{ answer.aiResult.model }} ({{ answer.aiResult.modelVersion }})</dd>
+                    <dd class="mono">
+                      {{ group.answer.aiResult.model }} ({{ group.answer.aiResult.modelVersion }})
+                    </dd>
                   </div>
                   <div>
                     <dt>信心值</dt>
-                    <dd>{{ answer.aiResult.confidence ?? '—' }}</dd>
+                    <dd>{{ group.answer.aiResult.confidence ?? '—' }}</dd>
                   </div>
                   <div>
                     <dt>標籤</dt>
-                    <dd>{{ answer.aiResult.label }}</dd>
+                    <dd>{{ group.answer.aiResult.label }}</dd>
                   </div>
-                  <div v-if="answer.aiResult.details.note">
+                  <div v-if="group.answer.aiResult.details.note">
                     <dt>AI 說明</dt>
-                    <dd>{{ answer.aiResult.details.note }}</dd>
+                    <dd>{{ group.answer.aiResult.details.note }}</dd>
                   </div>
-                  <div v-if="(answer.aiResult.details.findings ?? []).length > 0">
+                  <div v-if="(group.answer.aiResult.details.findings ?? []).length > 0">
                     <dt>觀察項目</dt>
-                    <dd>{{ (answer.aiResult.details.findings ?? []).join('、') }}</dd>
+                    <dd>{{ (group.answer.aiResult.details.findings ?? []).join('、') }}</dd>
                   </div>
-                  <div v-if="answer.aiResult.details.attempts.length > 1">
+                  <div v-if="group.answer.aiResult.details.attempts.length > 1">
                     <dt>重試次數</dt>
-                    <dd>{{ answer.aiResult.details.finalAttempt }} / {{ answer.aiResult.details.attempts.length }}</dd>
+                    <dd>
+                      {{ group.answer.aiResult.details.finalAttempt }} /
+                      {{ group.answer.aiResult.details.attempts.length }}
+                    </dd>
                   </div>
                 </dl>
                 <details class="ai-raw">
                   <summary>完整 AI 回應（JSON）</summary>
-                  <pre class="admin-json">{{ JSON.stringify(answer.aiResult, null, 2) }}</pre>
+                  <pre class="admin-json">{{ JSON.stringify(group.answer.aiResult, null, 2) }}</pre>
                 </details>
               </div>
               <p v-else class="answer-manual">人工判定項目，無 AI 回應。</p>
+
+              <div v-if="group.aiSubAnswers.length > 0" class="ai-sub-list">
+                <div v-for="sub in group.aiSubAnswers" :key="sub.itemId" class="ai-sub-item">
+                  <div class="answer-head">
+                    <span class="mono answer-id">{{ sub.itemId }}</span>
+                    <span class="answer-title">{{ itemTitle(sub.itemId) }}</span>
+                    <span class="admin-pill" :class="RESULT_TONE[sub.result] ?? 'mute'">
+                      {{ RESULT_LABEL[sub.result] ?? sub.result }}
+                    </span>
+                  </div>
+                  <div v-if="sub.aiResult" class="ai-block">
+                    <dl class="admin-kv">
+                      <div>
+                        <dt>模型</dt>
+                        <dd class="mono">
+                          {{ sub.aiResult.model }} ({{ sub.aiResult.modelVersion }})
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>信心值</dt>
+                        <dd>{{ sub.aiResult.confidence ?? '—' }}</dd>
+                      </div>
+                      <div>
+                        <dt>標籤</dt>
+                        <dd>{{ sub.aiResult.label }}</dd>
+                      </div>
+                      <div v-if="sub.aiResult.details.note">
+                        <dt>AI 說明</dt>
+                        <dd>{{ sub.aiResult.details.note }}</dd>
+                      </div>
+                      <div v-if="(sub.aiResult.details.findings ?? []).length > 0">
+                        <dt>觀察項目</dt>
+                        <dd>{{ (sub.aiResult.details.findings ?? []).join('、') }}</dd>
+                      </div>
+                      <div v-if="sub.aiResult.details.attempts.length > 1">
+                        <dt>重試次數</dt>
+                        <dd>
+                          {{ sub.aiResult.details.finalAttempt }} /
+                          {{ sub.aiResult.details.attempts.length }}
+                        </dd>
+                      </div>
+                    </dl>
+                    <details class="ai-raw">
+                      <summary>完整 AI 回應（JSON）</summary>
+                      <pre class="admin-json">{{ JSON.stringify(sub.aiResult, null, 2) }}</pre>
+                    </details>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -350,5 +479,28 @@ onMounted(async () => {
   cursor: pointer;
   font-size: 12px;
   color: var(--action);
+}
+
+.ai-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.ai-sub-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--ground);
+  border-radius: 6px;
+}
+
+.ai-sub-item .answer-title {
+  font-weight: 500;
+  font-size: 12.5px;
 }
 </style>

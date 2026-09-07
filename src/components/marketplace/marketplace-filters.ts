@@ -13,14 +13,12 @@ export const PRICE_FILTER_STEP = 10000
 
 export interface MarketplaceFilters {
   sellerType: SellerTypeFilter
-  transferableOnly: boolean
   sortBy: MarketplaceSortOption
   priceRange: [number, number]
 }
 
 export const DEFAULT_MARKETPLACE_FILTERS: MarketplaceFilters = {
   sellerType: 'all',
-  transferableOnly: false,
   sortBy: 'default',
   priceRange: [PRICE_FILTER_MIN, PRICE_FILTER_MAX],
 }

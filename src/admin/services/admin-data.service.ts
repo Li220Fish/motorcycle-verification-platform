@@ -6,11 +6,13 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 
-import { db } from '@/services/firebase/firebase'
+import { auth, db, functions } from '@/services/firebase/firebase'
 import type { Conversation } from '@/services/chat/chat.types'
 import type { DiscussionPost } from '@/services/discussion/discussion.types'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
@@ -511,4 +513,43 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
 
 export async function deleteVehicleModel(id: string): Promise<void> {
   await deleteDoc(doc(db, 'vehicleModels', id))
+}
+
+/**
+ * AI Prompt 設定 — lets an admin view/edit the exact prompt text sent to
+ * Gemini without a code deploy. Defaults live in Cloud Functions source
+ * (functions/src/ai/prompts/registry.ts), so reading the catalog goes
+ * through a callable (getAiPromptCatalog); an override is just a document
+ * under aiPrompts/{key}, written directly like vehicleModels above — gated
+ * by firestore.rules' isAdmin(), read by the Trusted Backend via Admin SDK
+ * (see functions/src/services/prompt-config.service.ts).
+ */
+export interface AdminAiPrompt {
+  key: string
+  label: string
+  defaultText: string
+  overrideText: string | null
+  updatedAt: number | null
+  updatedBy: string | null
+}
+
+export async function listAiPrompts(): Promise<AdminAiPrompt[]> {
+  const call = httpsCallable<Record<string, never>, { prompts: AdminAiPrompt[] }>(
+    functions,
+    'getAiPromptCatalog',
+  )
+  const response = await call({})
+  return response.data.prompts
+}
+
+export async function setAiPromptOverride(key: string, text: string): Promise<void> {
+  await setDoc(doc(db, 'aiPrompts', key), {
+    text,
+    updatedAt: Date.now(),
+    updatedBy: auth.currentUser?.email ?? auth.currentUser?.uid ?? 'admin',
+  })
+}
+
+export async function resetAiPromptOverride(key: string): Promise<void> {
+  await deleteDoc(doc(db, 'aiPrompts', key))
 }

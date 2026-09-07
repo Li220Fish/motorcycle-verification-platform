@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { Flashlight } from 'lucide-vue-next'
 
 import PhotoGuide from './PhotoGuide.vue'
 import { cameraService } from '@/services/media/camera.service'
-import { storageService } from '@/services/firebase/storage.service'
+import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
 import { mockRecognitionService } from '@/services/recognition/mock-recognition.service'
 import type { RecognitionStatus } from '@/services/recognition/recognition.types'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { AiCheckKind } from '@/data/verification'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
@@ -34,6 +36,7 @@ const props = withDefaults(
 )
 
 const verificationStore = useVerificationStore()
+const uploadQueueStore = useUploadQueueStore()
 
 const previewUrl = ref('')
 const uploading = ref(false)
@@ -41,6 +44,12 @@ const errorMessage = ref('')
 const issuePosition = ref<{ x: number; y: number } | null>(null)
 const recognitionStatus = ref<RecognitionStatus>('idle')
 const recognitionFindings = ref<string[]>([])
+
+// No reliable client-side brightness signal exists without a custom
+// camera-preview plugin (see Task A6 decision) — this is a static,
+// content-authored suggestion, never a fake "we detected low light" claim.
+const isLowLight = computed(() => getPhotoSlotByItemId(props.itemId)?.lowLight ?? false)
+const torchHintOpen = ref(false)
 
 async function handleAnalyze(): Promise<void> {
   recognitionStatus.value = 'analyzing'
@@ -83,31 +92,25 @@ function handleMarkIssue(event: MouseEvent): void {
   }
 }
 
+/**
+ * Local-first: the evidence doc (with no remoteUrl yet) is saved and the UI
+ * moves on immediately — the actual Firebase Storage upload happens in the
+ * background via uploadQueueStore, so the user never waits on it here.
+ */
 async function handleConfirm(): Promise<void> {
   if (!previewUrl.value) return
   uploading.value = true
   errorMessage.value = ''
   try {
     const blob = await fetch(previewUrl.value).then((response) => response.blob())
-    let remoteUrl: string | undefined
-    try {
-      remoteUrl = await storageService.uploadEvidenceFile(
-        props.verificationId,
-        props.itemId,
-        blob,
-        'jpg',
-      )
-    } catch {
-      remoteUrl = undefined
-    }
+    const evidenceId = crypto.randomUUID()
 
     const evidence: VerificationEvidence = {
-      id: crypto.randomUUID(),
+      id: evidenceId,
       verificationId: props.verificationId,
       itemId: props.itemId,
       type: 'photo',
       localUri: previewUrl.value,
-      remoteUrl,
       createdAt: Date.now(),
       captureSource: 'camera',
       captureTimestamp: Date.now(),
@@ -117,6 +120,15 @@ async function handleConfirm(): Promise<void> {
       },
     }
     await verificationStore.addEvidence(evidence)
+    void uploadQueueStore.enqueue({
+      localId: evidenceId,
+      verificationId: props.verificationId,
+      itemId: props.itemId,
+      type: 'photo',
+      blob,
+      extension: 'jpg',
+    })
+
     previewUrl.value = ''
     issuePosition.value = null
     recognitionStatus.value = 'idle'
@@ -131,6 +143,15 @@ async function handleConfirm(): Promise<void> {
   <div class="photo-capture">
     <template v-if="!previewUrl">
       <PhotoGuide :label="label" :item-id="itemId" />
+      <template v-if="isLowLight">
+        <button type="button" class="torch-hint-btn" @click="torchHintOpen = !torchHintOpen">
+          <Flashlight :size="16" />
+          建議開啟補光
+        </button>
+        <p v-if="torchHintOpen" class="torch-hint-text">
+          這個角度光線通常較暗，拍攝前請在手機相機畫面點擊閃光燈／手電筒圖示開啟補光，再對準角度拍攝。
+        </p>
+      </template>
       <button class="capture-button" @click="handleTakePhoto">請拍攝：{{ label }}</button>
     </template>
     <template v-else>
@@ -210,6 +231,29 @@ async function handleConfirm(): Promise<void> {
 .hint {
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.torch-hint-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-warning);
+  background: var(--color-warning-bg);
+  color: #9a6b0a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.torch-hint-text {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-background);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin: 0;
 }
 
 .ai-btn {

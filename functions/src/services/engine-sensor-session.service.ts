@@ -1,52 +1,33 @@
 import { getFirestore } from 'firebase-admin/firestore'
 import { GEMINI_MODEL } from '../config'
 import {
-  ENGINE_AUDIO_GLOBAL_PROMPT,
-  ENGINE_AUDIO_GLOBAL_PROMPT_VERSION,
-} from '../ai/prompts/audio/engine-audio-global-v1'
-import {
-  STARTUP_AUDIO_ITEM_IDS,
-  STARTUP_AUDIO_PROMPT,
-  STARTUP_AUDIO_PROMPT_VERSION,
-} from '../ai/prompts/audio/startup-audio-v1'
-import {
-  IDLE_AUDIO_ITEM_IDS,
-  IDLE_AUDIO_PROMPT,
-  IDLE_AUDIO_PROMPT_VERSION,
-} from '../ai/prompts/audio/idle-audio-v1'
-import {
-  REV_AUDIO_ITEM_IDS,
-  REV_AUDIO_PROMPT,
-  REV_AUDIO_PROMPT_VERSION,
-} from '../ai/prompts/audio/rev-audio-v1'
+  ENGINE_AUDIO_V2_ITEM_IDS,
+  ENGINE_AUDIO_V2_PROMPT_VERSION,
+} from '../ai/prompts/audio/engine-audio-v2'
 import { GeminiItemResult } from '../ai/schemas/common'
 import { validateGeminiResults } from '../ai/validator'
 import { AudioInspectionProvider } from '../ai/providers/audio-inspection-provider'
 import { resolveAudioEvidence, resolveImuEvidence } from './evidence.service'
 import { writeAiAnswer } from './answer-writer.service'
-import { ImuSessionJson, preprocessImu } from '../imu/imu-preprocessor'
+import { ImuSample, preprocessImu } from '../imu/imu-preprocessor'
 import { extractImuFeatures, IMU_FEATURES_VERSION } from '../imu/imu-feature-extractor'
 import {
   classifyIdleStability,
   classifyRevStability,
   IMU_STABILITY_VERSION,
 } from '../imu/imu-stability-classifier'
+import { withAnalysisStatus } from './analysis-status.service'
+import { hashPromptText, resolvePromptText } from './prompt-config.service'
 
 /**
- * ENG-03..08 are this project's EXISTING checklist itemIds (see
- * src/data/verification/seller-verification.ts, and the 3-session capture
- * UI built earlier this pass — src/components/verification/engine/
- * EngineInspectionFlow.vue). The routing map's semantic ids
- * (starter_motor_sound, engine_idle_sound, ...) are the spec's "stable
- * business key" concept (§63-64), but rekeying the Answer documents to them
- * would break the already-shipped lockedOrder gate / Review missing-items /
- * Report grouping, all of which already read/write these exact ENG-* ids.
- * Reconciliation: keep ENG-* as the actual Answer doc id (unchanged
- * integration surface), record the semantic id as
- * `aiResult.details.semanticItemId` for traceability, and use the semantic
- * names only in the Gemini-facing prompt/schema layer, matching the intent
- * (a durable identifier independent of UI step numbers) without a breaking
- * schema migration.
+ * Verification v2 migration spec §23-§33 — supersedes the 3 separate
+ * analyzeEngineStartup/Idle/Rev calls with ONE dispatch over a single fixed
+ * 23.0-second synchronized Audio+IMU recording. ENG-03..08 remain this
+ * project's EXISTING checklist itemIds (unchanged integration surface —
+ * lockedOrder gate / Review missing-items / Report grouping all read/write
+ * these exact ids); the routing map's semantic ids (starter_motor_sound,
+ * engine_idle_sound, ...) are recorded only inside `aiResult.details.
+ * semanticItemId` for traceability, same reconciliation the v1 version used.
  */
 const STARTUP_ENG_IDS = ['ENG-03', 'ENG-04'] as const // starter_motor_sound, start_smoothness
 const IDLE_AUDIO_ENG_ID = 'ENG-05' // engine_idle_sound
@@ -63,6 +44,31 @@ const SEMANTIC_ITEM_ID: Record<string, string> = {
   'ENG-08': 'rev_stability',
 }
 
+/** The client-authored phase boundaries embedded in the single IMU session
+ * JSON (see EngineInspectionFlow.vue's saveMotionEvidence) — system truth,
+ * never re-derived here (spec §27). */
+interface EngineSessionPhases {
+  startup: { startMs: number; endMs: number }
+  idle: { startMs: number; endMs: number }
+  rev: { startMs: number; endMs: number }
+}
+interface EngineSessionImuJson {
+  schemaVersion: number
+  sessionType: string
+  durationMs: number
+  phases: EngineSessionPhases
+  samples: ImuSample[]
+}
+
+function sliceSamples(samples: ImuSample[], bounds: { startMs: number; endMs: number }): ImuSample[] {
+  return samples.filter((sample) => sample.tMs >= bounds.startMs && sample.tMs < bounds.endMs)
+}
+
+async function getColdStateValid(verificationId: string): Promise<boolean> {
+  const snap = await getFirestore().collection('verifications').doc(verificationId).get()
+  return (snap.data()?.coldStateContext?.coldStateValid as boolean | undefined) ?? false
+}
+
 function withSemanticId(
   item: GeminiItemResult,
   engId: string,
@@ -74,117 +80,72 @@ function withSemanticId(
   }
 }
 
-/** Environment/Cold-State spec §34: every Startup/Idle/Rev answer records
- *  whether Step 39's cold-state procedure was actually verified complete —
- *  this project's chosen policy (vs. the spec's stricter alternative) is to
- *  let the user continue past a failed Step 39 rather than hard-block
- *  Startup, but the resulting data must never be silently presented as a
- *  valid cold-start baseline. Missing coldStateContext (Step 39 not yet
- *  analyzed/skipped) reads conservatively as `false`, never assumed valid. */
-async function getColdStateValid(verificationId: string): Promise<boolean> {
-  const snap = await getFirestore().collection('verifications').doc(verificationId).get()
-  return (snap.data()?.coldStateContext?.coldStateValid as boolean | undefined) ?? false
-}
-
-export async function analyzeEngineStartup(params: {
+async function analyzeEngineAudioV2(params: {
   verificationId: string
   apiKey: string
   provider: AudioInspectionProvider
+  coldStateValid: boolean
 }): Promise<GeminiItemResult[]> {
-  const coldStateValid = await getColdStateValid(params.verificationId)
+  // The client duplicates the same one 23s audio blob across all 4 audio
+  // items (ENG-03..06) — any one of them resolves the same evidence.
   const audio = await resolveAudioEvidence(params.verificationId, STARTUP_ENG_IDS[0])
-  const promptText = `${ENGINE_AUDIO_GLOBAL_PROMPT}\n\n${STARTUP_AUDIO_PROMPT}`
-
+  const promptText = await resolvePromptText('engine-audio-v2')
   const results = await params.provider.analyze({
     apiKey: params.apiKey,
     promptText,
-    promptVersion: STARTUP_AUDIO_PROMPT_VERSION,
+    // See core-vision-v2.service.ts for why this is hash-suffixed.
+    promptVersion: `${ENGINE_AUDIO_V2_PROMPT_VERSION}:${hashPromptText(promptText)}`,
     audio,
-    requestedItemIds: [...STARTUP_AUDIO_ITEM_IDS],
+    requestedItemIds: [...ENGINE_AUDIO_V2_ITEM_IDS],
   })
   validateGeminiResults(results, {
-    requestedItemIds: [...STARTUP_AUDIO_ITEM_IDS],
+    requestedItemIds: [...ENGINE_AUDIO_V2_ITEM_IDS],
     attempt: 1,
     validEvidenceIds: new Set([audio.evidenceId]),
   })
 
-  // starter_motor_sound -> ENG-03, start_smoothness -> ENG-04, by position
-  // in STARTUP_AUDIO_ITEM_IDS (both frozen, order-stable per spec).
-  for (let i = 0; i < STARTUP_AUDIO_ITEM_IDS.length; i++) {
-    const semanticId = STARTUP_AUDIO_ITEM_IDS[i]
-    const engId = STARTUP_ENG_IDS[i]
+  const audioEngIdBySemantic: Record<string, string> = {
+    starter_motor_sound: STARTUP_ENG_IDS[0],
+    start_smoothness: STARTUP_ENG_IDS[1],
+    engine_idle_sound: IDLE_AUDIO_ENG_ID,
+    engine_rev_sound: REV_AUDIO_ENG_ID,
+  }
+
+  for (const semanticId of ENGINE_AUDIO_V2_ITEM_IDS) {
     const item = results.find((r) => r.itemId === semanticId)
     if (!item) continue
+    const engId = audioEngIdBySemantic[semanticId]
     await writeAiAnswer({
       verificationId: params.verificationId,
-      item: { ...withSemanticId(item, engId, coldStateValid), itemId: engId },
+      item: { ...withSemanticId(item, engId, params.coldStateValid), itemId: engId },
       modelId: GEMINI_MODEL,
       modelVersion: GEMINI_MODEL,
       analysisType: 'audio',
-      promptVersion: {
-        global: ENGINE_AUDIO_GLOBAL_PROMPT_VERSION,
-        group: STARTUP_AUDIO_PROMPT_VERSION,
-        retry: null,
-      },
+      promptVersion: { global: 'n/a', group: ENGINE_AUDIO_V2_PROMPT_VERSION, retry: null },
       attempt: 1,
     })
   }
   return results
 }
 
-async function analyzeSingleAudioItem(params: {
-  verificationId: string
-  apiKey: string
-  provider: AudioInspectionProvider
-  audioEngId: string
-  semanticItemIds: readonly string[]
-  promptText: string
-  promptVersion: string
-  coldStateValid: boolean
-}): Promise<GeminiItemResult> {
-  const audio = await resolveAudioEvidence(params.verificationId, params.audioEngId)
-  const results = await params.provider.analyze({
-    apiKey: params.apiKey,
-    promptText: params.promptText,
-    promptVersion: params.promptVersion,
-    audio,
-    requestedItemIds: [...params.semanticItemIds],
-  })
-  validateGeminiResults(results, {
-    requestedItemIds: [...params.semanticItemIds],
-    attempt: 1,
-    validEvidenceIds: new Set([audio.evidenceId]),
-  })
-  const item = results[0]
-  await writeAiAnswer({
-    verificationId: params.verificationId,
-    item: {
-      ...withSemanticId(item, params.audioEngId, params.coldStateValid),
-      itemId: params.audioEngId,
-    },
-    modelId: GEMINI_MODEL,
-    modelVersion: GEMINI_MODEL,
-    analysisType: 'audio',
-    promptVersion: {
-      global: ENGINE_AUDIO_GLOBAL_PROMPT_VERSION,
-      group: params.promptVersion,
-      retry: null,
-    },
-    attempt: 1,
-  })
-  return item
-}
-
 async function analyzeImuItem(params: {
   verificationId: string
   imuEngId: string
   sessionType: 'idle' | 'rev'
+  samples: ImuSample[]
+  durationMs: number
   coldStateValid: boolean
 }): Promise<{ result: string; note: string | null }> {
-  const { json } = await resolveImuEvidence(params.verificationId, params.imuEngId)
-  const raw = json as ImuSessionJson
-  const preprocessed = preprocessImu(raw)
-  const features = extractImuFeatures(preprocessed, raw.durationMs)
+  const preprocessed = preprocessImu({
+    schemaVersion: 1,
+    sessionType: params.sessionType,
+    durationMs: params.durationMs,
+    placement: '',
+    orientation: '',
+    targetSampleRateHz: 100,
+    samples: params.samples,
+  })
+  const features = extractImuFeatures(preprocessed, params.durationMs)
   const classification =
     params.sessionType === 'idle' ? classifyIdleStability(features) : classifyRevStability(features)
 
@@ -215,56 +176,55 @@ async function analyzeImuItem(params: {
   return classification
 }
 
-export async function analyzeEngineIdle(params: {
+/** ONE dispatch for the whole 23s session: ONE Gemini audio call (4 items)
+ * + 2 deterministic IMU classifications (idle/rev), sliced from the SAME
+ * single 0-23s sample array using the client-embedded phase boundaries
+ * (spec §27: "Gemini / IMU Analyzer 不重新判斷時間區段"). 0-8s (startup) IMU
+ * data is stored on the evidence doc but intentionally not classified here
+ * (spec §32: "0–8 sec：保存 IMU raw data，目前不產核心 Result"). */
+export async function analyzeEngineSensorSessionV2(params: {
   verificationId: string
   apiKey: string
   provider: AudioInspectionProvider
-}): Promise<{ audio: GeminiItemResult; imu: { result: string; note: string | null } }> {
-  const coldStateValid = await getColdStateValid(params.verificationId)
-  const [audio, imu] = await Promise.all([
-    analyzeSingleAudioItem({
-      verificationId: params.verificationId,
-      apiKey: params.apiKey,
-      provider: params.provider,
-      audioEngId: IDLE_AUDIO_ENG_ID,
-      semanticItemIds: IDLE_AUDIO_ITEM_IDS,
-      promptText: `${ENGINE_AUDIO_GLOBAL_PROMPT}\n\n${IDLE_AUDIO_PROMPT}`,
-      promptVersion: IDLE_AUDIO_PROMPT_VERSION,
-      coldStateValid,
-    }),
-    analyzeImuItem({
-      verificationId: params.verificationId,
-      imuEngId: IDLE_IMU_ENG_ID,
-      sessionType: 'idle',
-      coldStateValid,
-    }),
-  ])
-  return { audio, imu }
-}
+}): Promise<{
+  audio: GeminiItemResult[]
+  idle: { result: string; note: string | null }
+  rev: { result: string; note: string | null }
+}> {
+  return withAnalysisStatus(params.verificationId, 'engineSensorSession', async () => {
+    const coldStateValid = await getColdStateValid(params.verificationId)
 
-export async function analyzeEngineRev(params: {
-  verificationId: string
-  apiKey: string
-  provider: AudioInspectionProvider
-}): Promise<{ audio: GeminiItemResult; imu: { result: string; note: string | null } }> {
-  const coldStateValid = await getColdStateValid(params.verificationId)
-  const [audio, imu] = await Promise.all([
-    analyzeSingleAudioItem({
+    const audio = await analyzeEngineAudioV2({
       verificationId: params.verificationId,
       apiKey: params.apiKey,
       provider: params.provider,
-      audioEngId: REV_AUDIO_ENG_ID,
-      semanticItemIds: REV_AUDIO_ITEM_IDS,
-      promptText: `${ENGINE_AUDIO_GLOBAL_PROMPT}\n\n${REV_AUDIO_PROMPT}`,
-      promptVersion: REV_AUDIO_PROMPT_VERSION,
       coldStateValid,
-    }),
-    analyzeImuItem({
-      verificationId: params.verificationId,
-      imuEngId: REV_IMU_ENG_ID,
-      sessionType: 'rev',
-      coldStateValid,
-    }),
-  ])
-  return { audio, imu }
+    })
+
+    const { json } = await resolveImuEvidence(params.verificationId, IDLE_IMU_ENG_ID)
+    const raw = json as EngineSessionImuJson
+    const idleSamples = sliceSamples(raw.samples, raw.phases.idle)
+    const revSamples = sliceSamples(raw.samples, raw.phases.rev)
+
+    const [idle, rev] = await Promise.all([
+      analyzeImuItem({
+        verificationId: params.verificationId,
+        imuEngId: IDLE_IMU_ENG_ID,
+        sessionType: 'idle',
+        samples: idleSamples,
+        durationMs: raw.phases.idle.endMs - raw.phases.idle.startMs,
+        coldStateValid,
+      }),
+      analyzeImuItem({
+        verificationId: params.verificationId,
+        imuEngId: REV_IMU_ENG_ID,
+        sessionType: 'rev',
+        samples: revSamples,
+        durationMs: raw.phases.rev.endMs - raw.phases.rev.startMs,
+        coldStateValid,
+      }),
+    ])
+
+    return { audio, idle, rev }
+  })
 }

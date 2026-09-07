@@ -7,17 +7,18 @@ import type {
   VerificationItem,
   VerificationSection,
 } from '@/data/verification'
+import { inferTransmissionType } from '@/data/verification/engine-session'
 import {
+  analyzeColdEngineTouchCheck,
+  analyzeCoreVisionV2,
   analyzeDocumentMaintenance,
-  analyzeInspectionGroupA,
-  analyzeInspectionGroupB,
-  analyzeInspectionGroupC,
-  analyzeOcrChassis,
+  analyzeEngineSensorSessionV2,
   analyzeOcrDashboard,
-  analyzeOcrPlate,
 } from '@/services/firebase/ai-analysis.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { localDraftService } from '@/services/verification/local-draft.service'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
+import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Verification, VerificationDraft } from '@/types/verification'
 import type {
   AnswerResultValue,
@@ -39,9 +40,25 @@ export interface MissingRequiredItem {
 }
 
 export const useVerificationStore = defineStore('verification', () => {
+  const uploadQueueStore = useUploadQueueStore()
+  const vehicleStore = useVehicleStore()
+
   const verifications = ref<Verification[]>([])
   const currentVerification = ref<Verification | null>(null)
   const loading = ref(false)
+  let unsubscribeVerification: (() => void) | null = null
+
+  /** Verification v2 §7 — Step 19 (鏈條/齒盤) only shows for chain-drive
+   * vehicles; scooters/CVT never see it at all (not just "optional" — fully
+   * absent from the flow). Mirrors the Trusted Backend's own
+   * vehicle-context.service.ts default: unknown transmission is NOT treated
+   * as "definitely no chain" (that would silently drop a possibly-required
+   * photo) — only an explicit scooter/CVT reading hides the step; unknown or
+   * chain-drive both keep it visible, same "資料不足才詢問" spirit via the
+   * existing 傳動 picker rather than a brand-new prompt. */
+  const hasExposedChainSprocket = computed(
+    () => inferTransmissionType(vehicleStore.currentVehicle?.transmission) !== 'scooter',
+  )
 
   // --- Runner state (V0.2): answers/evidence for the currently loaded flow ---
   const answers = ref<Record<string, VerificationAnswer>>({})
@@ -76,6 +93,18 @@ export const useVerificationStore = defineStore('verification', () => {
     if (flowLoaded.value && missingRequiredItems.value.length > 0) {
       throw new Error('尚有必填項目未完成，無法結束驗證。')
     }
+    if (flowLoaded.value && pendingRequiredUploads.value.length > 0) {
+      throw new Error('正在完成最後幾筆資料上傳，請稍候再試一次。')
+    }
+    if (flowLoaded.value && failedRequiredUploads.value.length > 0) {
+      throw new Error('有必填照片/影音上傳失敗，請重試後再完成驗證。')
+    }
+    if (flowLoaded.value && pendingRequiredAnalysis.value.length > 0) {
+      throw new Error('AI 分析正在進行中，請稍候再試一次。')
+    }
+    if (flowLoaded.value && failedRequiredAnalysis.value.length > 0) {
+      throw new Error('部分 AI 分析失敗，請重試後再完成驗證。')
+    }
     await verificationService.complete(id)
     if (currentVerification.value?.id === id) {
       currentVerification.value = { ...currentVerification.value, status: 'completed' }
@@ -95,20 +124,62 @@ export const useVerificationStore = defineStore('verification', () => {
   const flowKind = computed(() =>
     currentVerification.value?.type === 'buyer' ? 'buyer' : 'seller',
   )
+  /** Step 19's item id is filtered out of the flow entirely for a
+   * confirmed-scooter vehicle (see hasExposedChainSprocket above) — not
+   * hidden via CSS, actually absent from flatItems/sections so it can never
+   * appear in progress counts, the Hub, or missingRequiredItems. Same
+   * treatment for any item declaring `visibleWhen` (e.g.
+   * PREP-02-DAMAGE-PHOTOS, shown only once PREP-02 discloses 碰撞/其他) —
+   * both checks live here so a single pass covers every conditionally-shown
+   * item instead of one bespoke filter per condition. */
+  function isItemVisible(item: VerificationItem): boolean {
+    if (item.id === 'APR-transmission-chain' && !hasExposedChainSprocket.value) return false
+    if (item.visibleWhen) {
+      const selections = answers.value[item.visibleWhen.itemId]?.selections ?? []
+      if (!item.visibleWhen.anyOfSelections.some((value) => selections.includes(value))) {
+        return false
+      }
+    }
+    return true
+  }
   const flatItems = computed<FlatVerificationItem[]>(() =>
-    currentVerification.value ? getFlatItems(flowKind.value) : [],
+    currentVerification.value
+      ? getFlatItems(flowKind.value).filter((flat) => isItemVisible(flat.item))
+      : [],
   )
-  const sections = computed<VerificationSection[]>(() =>
-    currentVerification.value ? getFlowSections(flowKind.value) : [],
-  )
+  const sections = computed<VerificationSection[]>(() => {
+    if (!currentVerification.value) return []
+    return getFlowSections(flowKind.value).map((section) => ({
+      ...section,
+      items: section.items.filter((item) => isItemVisible(item)),
+    }))
+  })
 
   /** Loads the verification + hydrates answers/evidence (Firestore, then local-draft overrides by recency). */
   async function loadFlow(verificationId: string): Promise<void> {
     loading.value = true
     flowLoaded.value = false
+    unsubscribeVerification?.()
     try {
       currentVerification.value = await verificationService.get(verificationId)
       if (!currentVerification.value) return
+
+      if (vehicleStore.currentVehicle?.id !== currentVerification.value.vehicleId) {
+        vehicleStore.fetchVehicle(currentVerification.value.vehicleId).catch(() => {})
+      }
+      // Verification v2 — analysisStatus is written by the Trusted Backend
+      // while this screen is open (background AI routes), so it needs a
+      // live subscription rather than the one-time get() above; everything
+      // else on the doc (status, transactionDecision, ...) stays consistent
+      // with the client's own optimistic writes via the other setters below.
+      unsubscribeVerification = verificationService.subscribeVerification(
+        verificationId,
+        (updated) => {
+          if (updated && currentVerification.value?.id === verificationId) {
+            currentVerification.value = { ...currentVerification.value, ...updated }
+          }
+        },
+      )
 
       const localAnswers = localDraftService.loadAnswers(verificationId)
       const localEvidence = localDraftService.loadEvidence(verificationId)
@@ -156,6 +227,7 @@ export const useVerificationStore = defineStore('verification', () => {
     result: AnswerResultValue,
     note?: string,
     formData?: Record<string, string>,
+    selections?: string[],
   ): Promise<void> {
     if (!currentVerification.value) return
     const verificationId = currentVerification.value.id
@@ -164,6 +236,7 @@ export const useVerificationStore = defineStore('verification', () => {
       result,
       note,
       formData,
+      selections,
       updatedAt: Date.now(),
     }
 
@@ -188,78 +261,84 @@ export const useVerificationStore = defineStore('verification', () => {
     evidenceByItem.value = { ...evidenceByItem.value, [evidence.itemId]: [...list, evidence] }
     localDraftService.saveEvidence(evidence.verificationId, evidence)
     verificationService.saveEvidence(evidence).catch(() => {})
-    void maybeTriggerGroupAnalysis(evidence.itemId)
+    void maybeTriggerCoreVisionV2(evidence.itemId)
   }
 
-  // Group A/B/C Evidence Views (Routing Map §9/§13/§15 trigger conditions —
-  // "只有全部所需 Evidence Ready 才 call") — expressed here in this
-  // project's OWN photo-slot itemIds (APR-*), not the routing map's view
-  // names, since that's what evidenceByItem is actually keyed by. Fired
-  // fire-and-forget from the one choke point every photo capture already
-  // goes through (addEvidence), rather than scattered across UI components.
-  const GROUP_A_TRIGGER_ITEM_IDS = ['APR-left-side', 'APR-right-side', 'APR-rear', 'APR-seat']
-  const GROUP_B_TRIGGER_ITEM_IDS = [
-    'APR-front-wheel',
-    'APR-rear-wheel',
+  // Verification v2 §9/§14 — Core Vision v2's required evidence set
+  // (supersedes the old Group A/B/C trigger lists, which covered removed
+  // items like front-wheel/rear-wheel/engine-left/engine-right/exhaust, and
+  // now-Optional-no-AI items like rear-suspension/front-brake/rear-brake/
+  // triple-clamp/seat). Fired fire-and-forget from the one choke point every
+  // photo capture already goes through (addEvidence). APR-transmission-chain
+  // only ever gets evidence when hasExposedChainSprocket is true (the item
+  // is filtered out of the flow entirely otherwise — see flatItems above),
+  // so it's only added to the "must all be present" check when applicable.
+  const CORE_VISION_V2_TRIGGER_ITEM_IDS = [
+    'APR-left-side',
+    'APR-right-side',
+    'APR-rear',
     'APR-front-suspension',
-    'APR-rear-suspension',
-    'APR-front-brake',
-    'APR-rear-brake',
-    'APR-triple-clamp',
-  ]
-  // Always includes APR-transmission-chain — the 45-step checklist requires
-  // this photo from every vehicle regardless of type (unchanged this pass),
-  // so evidence for it always exists; the Backend alone decides whether a
-  // scooter's photo is actually used or the item comes back not_applicable
-  // (Group C spec §16/§23), never the client.
-  const GROUP_C_TRIGGER_ITEM_IDS = [
-    'APR-engine-left',
-    'APR-engine-right',
     'APR-engine-bottom',
-    'APR-transmission-chain',
-    'APR-exhaust',
   ]
 
   function hasEvidence(itemId: string): boolean {
     return (evidenceByItem.value[itemId]?.length ?? 0) > 0
   }
 
-  async function maybeTriggerGroupAnalysis(changedItemId: string): Promise<void> {
+  async function maybeTriggerCoreVisionV2(changedItemId: string): Promise<void> {
     const verificationId = currentVerification.value?.id
     if (!verificationId) return
 
-    if (
-      GROUP_A_TRIGGER_ITEM_IDS.includes(changedItemId) &&
-      GROUP_A_TRIGGER_ITEM_IDS.every(hasEvidence)
-    ) {
-      analyzeInspectionGroupA(verificationId).catch(() => {})
-    }
-    if (
-      GROUP_B_TRIGGER_ITEM_IDS.includes(changedItemId) &&
-      GROUP_B_TRIGGER_ITEM_IDS.every(hasEvidence)
-    ) {
-      analyzeInspectionGroupB(verificationId).catch(() => {})
-    }
-    if (
-      GROUP_C_TRIGGER_ITEM_IDS.includes(changedItemId) &&
-      GROUP_C_TRIGGER_ITEM_IDS.every(hasEvidence)
-    ) {
-      analyzeInspectionGroupC(verificationId).catch(() => {})
+    const requiredForCore = hasExposedChainSprocket.value
+      ? [...CORE_VISION_V2_TRIGGER_ITEM_IDS, 'APR-transmission-chain']
+      : CORE_VISION_V2_TRIGGER_ITEM_IDS
+    if (requiredForCore.includes(changedItemId) && requiredForCore.every(hasEvidence)) {
+      analyzeCoreVisionV2(verificationId).catch((error) =>
+        console.error('[AI analysis] analyzeCoreVisionV2 trigger failed:', error),
+      )
     }
 
-    // OCR routes (Routing Map §11/§12/§21) — single-photo groups, fire the
-    // instant that one photo exists.
-    if (changedItemId === 'APR-dashboard') analyzeOcrDashboard(verificationId).catch(() => {})
-    if (changedItemId === 'APR-plate') analyzeOcrPlate(verificationId).catch(() => {})
-    if (changedItemId === 'APR-vin') analyzeOcrChassis(verificationId).catch(() => {})
+    // Dashboard OCR (Step 7) — single-photo, fires the instant it exists,
+    // never waits for Core Vision (spec §9/§18).
+    if (changedItemId === 'APR-dashboard') {
+      analyzeOcrDashboard(verificationId).catch((error) =>
+        console.error('[AI analysis] analyzeOcrDashboard trigger failed:', error),
+      )
+    }
 
-    // Step 1 (歷史工單) — placeholder routing only, per spec §4/§71 (no
+    // Step 1 (歷史工單) — placeholder routing only, per spec §4 (no
     // Maintenance Document Prompt/Schema Frozen yet).
     if (changedItemId === 'PREP-01') {
       const latestEvidenceId = evidenceByItem.value['PREP-01']?.slice(-1)[0]?.id
       if (latestEvidenceId) {
-        analyzeDocumentMaintenance(verificationId, latestEvidenceId).catch(() => {})
+        analyzeDocumentMaintenance(verificationId, latestEvidenceId).catch((error) =>
+          console.error('[AI analysis] analyzeDocumentMaintenance trigger failed:', error),
+        )
       }
+    }
+  }
+
+  /** Manual recovery for whatever `failedRequiredAnalysis` surfaces — every
+   * analyze route here only ever needs `verificationId` (evidence is
+   * resolved server-side by itemId), so a generic re-trigger is safe to fire
+   * from the Hub without re-deriving per-route arguments. Still fire-and-
+   * forget UI-wise (no loading spinner state), but no longer silent: a
+   * failure is logged instead of vanishing, and Cloud Functions now always
+   * leave a 'failed' trace on analysisStatus regardless of where it failed
+   * (see withAnalysisFailureTrace server-side), so the Hub's hint/retry row
+   * will reflect the outcome via the live analysisStatus subscription. */
+  async function retryAnalysis(
+    key: 'coreVision' | 'dashboardOcr' | 'coldCheck' | 'engineSensorSession',
+  ): Promise<void> {
+    const verificationId = currentVerification.value?.id
+    if (!verificationId) return
+    try {
+      if (key === 'coreVision') await analyzeCoreVisionV2(verificationId)
+      else if (key === 'dashboardOcr') await analyzeOcrDashboard(verificationId)
+      else if (key === 'coldCheck') await analyzeColdEngineTouchCheck(verificationId)
+      else if (key === 'engineSensorSession') await analyzeEngineSensorSessionV2(verificationId)
+    } catch (error) {
+      console.error(`[AI analysis] retry ${key} failed:`, error)
     }
   }
 
@@ -328,6 +407,29 @@ export const useVerificationStore = defineStore('verification', () => {
   })
 
   /**
+   * User-facing completeness now reads as a tier, not a percentage — a raw
+   * "87%" doesn't mean anything to a buyer (87% of WHAT counts as good?).
+   * All Required items are always done by the time a verification can even
+   * complete (see completeVerification's missingRequiredItems guard above),
+   * so the only thing left to vary is how much of Phase 4's 其他主動揭露
+   * (entirely Optional — see seller-verification.ts's phase4 grouping) the
+   * seller chose to also fill in:
+   * - basic: every Required item done, no Optional disclosure at all.
+   * - detailed: some but not all Optional disclosure items answered.
+   * - complete: every Optional disclosure item answered too.
+   */
+  const disclosureCompleteness = computed(() => {
+    const optional = flatItems.value.filter((flat) => !flat.item.required)
+    const filled = optional.filter((flat) => !!answers.value[flat.item.id]).length
+    return { filled, total: optional.length }
+  })
+  const verificationTier = computed<'basic' | 'detailed' | 'complete'>(() => {
+    const { filled, total } = disclosureCompleteness.value
+    if (total === 0 || filled === 0) return 'basic'
+    return filled < total ? 'detailed' : 'complete'
+  })
+
+  /**
    * A `type: 'form'` item's `*`-marked fields were previously cosmetic
    * only — any single keystroke in ANY field flipped the whole item to
    * "answered" via handleFormDataChange. That let a verification
@@ -358,7 +460,82 @@ export const useVerificationStore = defineStore('verification', () => {
       })),
   )
 
-  const canComplete = computed(() => flowLoaded.value && missingRequiredItems.value.length === 0)
+  /** A required evidence *kind* (item.evidence[].required) counts as
+   * satisfied once ANY captured evidence of that item has finished
+   * uploading — 'none' (never captured) is folded into missingRequiredItems
+   * already via isAnswerComplete for form items, but pure evidence-only
+   * items (no form fields) only ever gate on this upload-status check. */
+  function requiredEvidenceStatus(itemId: string): 'uploaded' | 'pending' | 'failed' | 'none' {
+    const list = evidenceByItem.value[itemId] ?? []
+    if (list.length === 0) return 'none'
+    let sawFailed = false
+    for (const evidence of list) {
+      const queueStatus = uploadQueueStore.statusFor(evidence.id)
+      if (queueStatus === 'uploaded' || (!queueStatus && evidence.remoteUrl)) return 'uploaded'
+      if (queueStatus === 'failed') sawFailed = true
+    }
+    return sawFailed ? 'failed' : 'pending'
+  }
+
+  function itemsWithRequiredEvidence(): FlatVerificationItem[] {
+    return flatItems.value.filter((flat) => (flat.item.evidence ?? []).some((req) => req.required))
+  }
+
+  /** Required evidence still mid-upload (compressing/uploading/pending) — the
+   * "完成驗車"/"產生報告" gate shows "正在完成最後幾筆資料上傳" for these,
+   * not a hard failure. */
+  const pendingRequiredUploads = computed<MissingRequiredItem[]>(() =>
+    itemsWithRequiredEvidence()
+      .filter((flat) => requiredEvidenceStatus(flat.item.id) === 'pending')
+      .map((flat) => ({
+        itemId: flat.item.id,
+        title: flat.item.title,
+        sectionTitle: flat.section.title,
+      })),
+  )
+
+  /** Required evidence whose background upload failed even after automatic
+   * retries — surfaced with a manual retry action, distinct from "still
+   * uploading". Optional evidence failing never appears here and never
+   * blocks completion. */
+  const failedRequiredUploads = computed<MissingRequiredItem[]>(() =>
+    itemsWithRequiredEvidence()
+      .filter((flat) => requiredEvidenceStatus(flat.item.id) === 'failed')
+      .map((flat) => ({
+        itemId: flat.item.id,
+        title: flat.item.title,
+        sectionTitle: flat.section.title,
+      })),
+  )
+
+  /** Verification v2 §38 Final Report Gate — the background AI routes that
+   * must have actually finished (not just been fired) before a report can be
+   * generated: Core Vision, Dashboard OCR, Cold Check, and the Engine Sensor
+   * Session (audio+IMU). Keyed by the same route names each Cloud Function
+   * stamps onto Verification.analysisStatus (see analysis-status.service.ts
+   * server-side) — absence of a key here just means "not triggered yet",
+   * which is already covered by missingRequiredItems blocking completion
+   * first, so this only ever needs to check for 'processing'/'failed'. */
+  const REQUIRED_ANALYSIS_KEYS = ['coreVision', 'dashboardOcr', 'coldCheck', 'engineSensorSession']
+  function analysisStatusFor(key: string): 'processing' | 'completed' | 'failed' | undefined {
+    return currentVerification.value?.analysisStatus?.[key]?.status
+  }
+  const pendingRequiredAnalysis = computed(() =>
+    REQUIRED_ANALYSIS_KEYS.filter((key) => analysisStatusFor(key) === 'processing'),
+  )
+  const failedRequiredAnalysis = computed(() =>
+    REQUIRED_ANALYSIS_KEYS.filter((key) => analysisStatusFor(key) === 'failed'),
+  )
+
+  const canComplete = computed(
+    () =>
+      flowLoaded.value &&
+      missingRequiredItems.value.length === 0 &&
+      pendingRequiredUploads.value.length === 0 &&
+      failedRequiredUploads.value.length === 0 &&
+      pendingRequiredAnalysis.value.length === 0 &&
+      failedRequiredAnalysis.value.length === 0,
+  )
 
   /**
    * P0 fix: within a `lockedOrder` section (引擎狀況), "下一步" must be a
@@ -423,7 +600,15 @@ export const useVerificationStore = defineStore('verification', () => {
     resumeIndex,
     sectionProgress,
     overallProgress,
+    disclosureCompleteness,
+    verificationTier,
     missingRequiredItems,
+    pendingRequiredUploads,
+    failedRequiredUploads,
+    hasExposedChainSprocket,
+    pendingRequiredAnalysis,
+    failedRequiredAnalysis,
+    retryAnalysis,
     canComplete,
     isItemAdvanceReady,
   }

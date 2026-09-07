@@ -2,8 +2,8 @@
 import { ref } from 'vue'
 
 import { audioRecorderService } from '@/services/media/audio-recorder.service'
-import { storageService } from '@/services/firebase/storage.service'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{
@@ -45,30 +45,27 @@ async function handleConfirm(): Promise<void> {
   if (!capturedBlob) return
   uploading.value = true
   try {
-    let remoteUrl: string | undefined
-    try {
-      remoteUrl = await storageService.uploadEvidenceFile(
-        props.verificationId,
-        props.itemId,
-        capturedBlob,
-        'aac',
-      )
-    } catch {
-      remoteUrl = undefined
-    }
+    const evidenceId = crypto.randomUUID()
     const evidence: VerificationEvidence = {
-      id: crypto.randomUUID(),
+      id: evidenceId,
       verificationId: props.verificationId,
       itemId: props.itemId,
       type: 'audio',
       localUri: previewUrl.value,
-      remoteUrl,
       createdAt: Date.now(),
       captureSource: 'camera',
       captureTimestamp: Date.now(),
       metadata: { durationMs: durationMs.value },
     }
     await useVerificationStore().addEvidence(evidence)
+    void useUploadQueueStore().enqueue({
+      localId: evidenceId,
+      verificationId: props.verificationId,
+      itemId: props.itemId,
+      type: 'audio',
+      blob: capturedBlob,
+      extension: 'aac',
+    })
     previewUrl.value = ''
     capturedBlob = null
   } finally {

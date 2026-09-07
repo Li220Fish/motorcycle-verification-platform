@@ -47,7 +47,6 @@ export interface MockMarketListing {
   priceTwd: number
   region: string
   district: string
-  transferable: boolean
   vehicleSnapshot: VehicleSnapshot
   sellerType: 'individual' | 'dealer'
   sellerName: string
@@ -70,14 +69,21 @@ export interface MockMarketListing {
    * listings, absent on the seeded DEMO listings which have no backing
    * vehicle record. */
   vehicleId?: string
-  /** Dates ('YYYY-MM-DD') the seller has opened for viewing appointments —
-   * set on the listing management page, shown highlighted on the buyer's
-   * booking calendar. Only present on real user-submitted listings. */
+  /** Legacy shape — a single shared list of open dates with one shared set
+   * of times (`timeSlots`) applied to all of them. Superseded by
+   * `availableSlots` (per-date custom times), kept only so listings created
+   * before that existed don't lose their availability; new edits always
+   * write `availableSlots` instead. Use `resolveAvailableSlots()` rather
+   * than reading either shape directly. */
   availableDates?: string[]
-  /** Time-of-day slots (e.g. '10:00') offered on every date in
-   * `availableDates` — one shared set rather than per-date custom times,
-   * to keep the seller's setup to a single toggle list. */
+  /** See `availableDates` — the legacy shared time-of-day list. */
   timeSlots?: string[]
+  /** Per-date viewing time slots the seller opened — key is 'YYYY-MM-DD',
+   * value is that date's own sorted 'HH:mm' times (free-chosen, not limited
+   * to a fixed preset — a seller can open a 03:00 slot if they want).
+   * Read via `resolveAvailableSlots()`, which falls back to the legacy
+   * `availableDates`/`timeSlots` shape above for older listings. */
+  availableSlots?: Record<string, string[]>
   /** Denormalized count of `users/{uid}/favoriteListings/{listingId}` docs
    * pointing at this listing — kept in sync transactionally by
    * listingService.addFavorite/removeFavorite (mirrors discussionPosts'
@@ -88,6 +94,27 @@ export interface MockMarketListing {
   appointmentCount?: number
   createdAt?: number
   publishedAt?: number | null
+}
+
+/**
+ * Single place that reads a listing's viewing availability — prefers the
+ * per-date `availableSlots` map; falls back to the legacy shared
+ * `availableDates`/`timeSlots` shape (every legacy open date gets the same
+ * shared time list) so older listings created before per-date slots existed
+ * still show up as bookable. Callers (BookingSheet.vue, the management page)
+ * should always go through this rather than reading either field directly.
+ */
+export function resolveAvailableSlots(
+  listing: Pick<MockMarketListing, 'availableSlots' | 'availableDates' | 'timeSlots'>,
+): Record<string, string[]> {
+  if (listing.availableSlots && Object.keys(listing.availableSlots).length > 0) {
+    return listing.availableSlots
+  }
+  const legacyDates = listing.availableDates ?? []
+  const legacyTimes = [...(listing.timeSlots ?? [])].sort()
+  const resolved: Record<string, string[]> = {}
+  for (const date of legacyDates) resolved[date] = legacyTimes
+  return resolved
 }
 
 // The 3 seeded test accounts (docs/test-accounts.md) — 'individual' listings
@@ -103,7 +130,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 68000,
     region: '台北市',
     district: '大安區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: 'NMAX',
@@ -131,7 +157,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 145000,
     region: '新北市',
     district: '板橋區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'HONDA',
       model: 'CB300R',
@@ -159,7 +184,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 112000,
     region: '台中市',
     district: '西區',
-    transferable: false,
     vehicleSnapshot: {
       brand: 'KYMCO',
       model: 'KRV 180',
@@ -187,7 +211,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 52000,
     region: '高雄市',
     district: '左營區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'SYM',
       model: 'JET SR',
@@ -215,7 +238,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 79000,
     region: '桃園市',
     district: '中壢區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: '勁戰六代',
@@ -243,7 +265,6 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
     priceTwd: 238000,
     region: '台北市',
     district: '中正區',
-    transferable: true,
     vehicleSnapshot: {
       brand: 'YAMAHA',
       model: 'MT-07',

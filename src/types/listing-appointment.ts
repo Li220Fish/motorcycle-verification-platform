@@ -10,7 +10,7 @@ export interface ListingAppointment {
   buyerName: string
   scheduledAt: number
   note?: string
-  status: 'pending' | 'approved' | 'declined'
+  status: 'pending' | 'approved' | 'declined' | 'cancelled'
   createdAt: number
 }
 

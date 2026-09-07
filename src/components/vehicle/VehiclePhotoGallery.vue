@@ -8,7 +8,9 @@
  */
 import { computed, ref } from 'vue'
 import { Bike, Plus, Star, Trash2 } from 'lucide-vue-next'
+import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import { storageService } from '@/services/firebase/storage.service'
+import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 
 const props = defineProps<{ vehicleId: string; photos: string[] }>()
@@ -16,6 +18,13 @@ const props = defineProps<{ vehicleId: string; photos: string[] }>()
 const vehicleStore = useVehicleStore()
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const activePhotoUrl = ref<string | null>(null)
+// Matches wherever the photo actually displays — the cover banner reads as
+// roughly 16:9 (fixed 200px height across a mobile-width card), thumbnails
+// are perfect 1:1 squares — so the crop frame always produces a shape that
+// won't get re-cropped by object-fit the moment it's saved.
+const activePhotoAspect = ref(1)
+const replacingPhoto = ref(false)
 
 const cover = computed(() => props.photos[0] ?? null)
 const thumbnails = computed(() => props.photos.slice(1))
@@ -31,8 +40,12 @@ async function handleFileChange(event: Event): Promise<void> {
   if (!file) return
   uploading.value = true
   try {
-    const extension = file.name.split('.').pop() || 'jpg'
-    const url = await storageService.uploadVehiclePhoto(props.vehicleId, file, extension)
+    // Same resize/re-encode as verification evidence / marketplace listing
+    // photos — always re-encodes to JPEG, so the stored extension follows
+    // the actual bytes rather than the original file's (possibly different)
+    // extension.
+    const { blob } = await imageCompressionService.compressImage(file)
+    const url = await storageService.uploadVehiclePhoto(props.vehicleId, blob, 'jpg')
     await vehicleStore.updateVehicle(props.vehicleId, { photos: [...props.photos, url] })
   } finally {
     uploading.value = false
@@ -50,12 +63,37 @@ async function removePhoto(url: string): Promise<void> {
     photos: props.photos.filter((photo) => photo !== url),
   })
 }
+
+function openPhoto(url: string, aspect: number): void {
+  activePhotoUrl.value = url
+  activePhotoAspect.value = aspect
+}
+
+function closePhoto(): void {
+  if (replacingPhoto.value) return
+  activePhotoUrl.value = null
+}
+
+async function handleCropConfirmed(blob: Blob): Promise<void> {
+  const originalUrl = activePhotoUrl.value
+  if (!originalUrl) return
+  replacingPhoto.value = true
+  try {
+    const { blob: compressed } = await imageCompressionService.compressImage(blob)
+    const newUrl = await storageService.uploadVehiclePhoto(props.vehicleId, compressed, 'jpg')
+    const nextPhotos = props.photos.map((photo) => (photo === originalUrl ? newUrl : photo))
+    await vehicleStore.updateVehicle(props.vehicleId, { photos: nextPhotos })
+    activePhotoUrl.value = null
+  } finally {
+    replacingPhoto.value = false
+  }
+}
 </script>
 
 <template>
   <div class="photo-gallery">
     <div class="cover">
-      <img v-if="cover" :src="cover" class="cover-img" alt="" />
+      <img v-if="cover" :src="cover" class="cover-img" alt="" @click="openPhoto(cover, 16 / 9)" />
       <div v-else class="cover-empty">
         <Bike :size="56" color="var(--color-text-disabled)" />
       </div>
@@ -66,7 +104,7 @@ async function removePhoto(url: string): Promise<void> {
 
     <div v-if="thumbnails.length > 0" class="thumb-row">
       <div v-for="photo in thumbnails" :key="photo" class="thumb">
-        <img :src="photo" class="thumb-img" alt="" @click="setCover(photo)" />
+        <img :src="photo" class="thumb-img" alt="" @click="openPhoto(photo, 1)" />
         <button class="thumb-btn cover-btn" aria-label="設為封面" @click="setCover(photo)">
           <Star :size="11" />
         </button>
@@ -82,6 +120,15 @@ async function removePhoto(url: string): Promise<void> {
       accept="image/*"
       class="hidden-input"
       @change="handleFileChange"
+    />
+
+    <PhotoLightbox
+      v-if="activePhotoUrl"
+      :image-url="activePhotoUrl"
+      :aspect-ratio="activePhotoAspect"
+      :uploading="replacingPhoto"
+      @close="closePhoto"
+      @crop-confirmed="handleCropConfirmed"
     />
   </div>
 </template>
@@ -108,6 +155,7 @@ async function removePhoto(url: string): Promise<void> {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: pointer;
 }
 
 .cover-empty {
@@ -153,6 +201,7 @@ async function removePhoto(url: string): Promise<void> {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: pointer;
 }
 
 .thumb-btn {
