@@ -68,7 +68,10 @@ class VideoRecorderService {
     try {
       this.mimeType = pickMimeType()
       this.chunks = []
-      const recorder = new MediaRecorder(stream, this.mimeType ? { mimeType: this.mimeType } : undefined)
+      const recorder = new MediaRecorder(
+        stream,
+        this.mimeType ? { mimeType: this.mimeType } : undefined,
+      )
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) this.chunks.push(event.data)
       }

@@ -3,8 +3,8 @@ import { ref } from 'vue'
 
 import { cameraService } from '@/services/media/camera.service'
 import { platformService } from '@/services/platform/platform.service'
-import { storageService } from '@/services/firebase/storage.service'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{
@@ -69,29 +69,26 @@ async function handleConfirm(): Promise<void> {
   uploading.value = true
   errorMessage.value = ''
   try {
-    let remoteUrl: string | undefined
-    try {
-      remoteUrl = await storageService.uploadEvidenceFile(
-        props.verificationId,
-        props.itemId,
-        capturedBlob,
-        'mp4',
-      )
-    } catch {
-      remoteUrl = undefined
-    }
+    const evidenceId = crypto.randomUUID()
     const evidence: VerificationEvidence = {
-      id: crypto.randomUUID(),
+      id: evidenceId,
       verificationId: props.verificationId,
       itemId: props.itemId,
       type: 'video',
       localUri: previewUrl.value,
-      remoteUrl,
       createdAt: Date.now(),
       captureSource: isNative ? 'camera' : 'file',
       captureTimestamp: Date.now(),
     }
     await useVerificationStore().addEvidence(evidence)
+    void useUploadQueueStore().enqueue({
+      localId: evidenceId,
+      verificationId: props.verificationId,
+      itemId: props.itemId,
+      type: 'video',
+      blob: capturedBlob,
+      extension: 'mp4',
+    })
     previewUrl.value = ''
     capturedBlob = null
   } finally {

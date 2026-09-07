@@ -5,6 +5,7 @@ import type { Unsubscribe } from 'firebase/firestore'
 import { chatService } from '@/services/chat/chat.service'
 import { conversationService } from '@/services/chat/conversation.service'
 import { storageService } from '@/services/firebase/storage.service'
+import { imageCompressionService } from '@/services/media/image-compression.service'
 import type {
   ChatMessage,
   Conversation,
@@ -117,11 +118,16 @@ export const useChatStore = defineStore('chat', () => {
     sendError.value = ''
     try {
       const messageId = chatService.reserveMessageId(conversation.id)
+      // Same resize/re-encode used for verification evidence (see
+      // upload-queue.store.ts) — a raw phone-camera photo sent in chat was
+      // previously uploaded (and downloaded by the other side) at full
+      // original size with no cap at all.
+      const { blob } = await imageCompressionService.compressImage(file)
       const imageUrl = await storageService.uploadChatImage(
         conversation.id,
         currentUid.value,
         messageId,
-        file,
+        blob,
       )
       await chatService.sendImage(
         conversation.id,

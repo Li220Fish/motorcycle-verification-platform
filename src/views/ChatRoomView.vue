@@ -17,6 +17,7 @@ import { formatDateDivider } from '@/utils/format-time'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { ListingAppointment } from '@/types/listing-appointment'
 import type { Vehicle } from '@/types/vehicle'
+import type { Unsubscribe } from 'firebase/firestore'
 
 const props = defineProps<{ conversationId: string }>()
 
@@ -33,6 +34,13 @@ const messageLog = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const relevantAppointment = ref<ListingAppointment | null>(null)
 const decidingAppointment = ref(false)
+// In-app notice for a status change the OTHER party caused (Task C3) — never
+// shown for a change this session made itself, since handleApprove/
+// handleDecline/handleCancel already update relevantAppointment optimistically
+// before any snapshot confirming the same value arrives.
+const appointmentToast = ref('')
+let appointmentToastTimer: ReturnType<typeof setTimeout> | null = null
+let unsubscribeAppointment: Unsubscribe | null = null
 
 const otherId = computed(() => {
   const conversation = chatStore.currentConversation
@@ -101,30 +109,60 @@ function formatDateTime(timestamp: number): string {
   })
 }
 
+function showAppointmentToast(message: string): void {
+  appointmentToast.value = message
+  if (appointmentToastTimer) clearTimeout(appointmentToastTimer)
+  appointmentToastTimer = setTimeout(() => {
+    appointmentToast.value = ''
+  }, 3500)
+}
+
 /** The relevant buyer's most recent booking for this conversation's
  * listing — an older, already-resolved appointment shouldn't keep showing a
  * stale banner once a newer one exists. "The relevant buyer" depends on
  * which side of the conversation is looking: the seller cares about the
  * other participant's booking, but a buyer viewing their own conversation
  * with the seller IS that buyer — `otherId` there points at the seller, not
- * at them, so it can't be used for both sides. */
-async function loadAppointment(): Promise<void> {
+ * at them, so it can't be used for both sides.
+ *
+ * Live subscription (Task C2), not a one-time fetch — this is exactly what
+ * fixes "已操作但另一端過一段時間才更新": both the seller's approve/decline
+ * and the buyer's cancel now reach the other party's open chat room
+ * immediately. Also drives the in-app toast (Task C3) for changes THIS
+ * session didn't itself just make. */
+function subscribeAppointment(): void {
+  unsubscribeAppointment?.()
+  unsubscribeAppointment = null
+
   const listingId = contextListing.value?.id
   const myUid = authStore.user?.id
-  if (!listingId || !myUid) {
-    relevantAppointment.value = null
-    return
-  }
   const buyerId = isSeller.value ? otherId.value : myUid
-  if (!buyerId) {
+  if (!listingId || !myUid || !buyerId) {
     relevantAppointment.value = null
     return
   }
-  const appointments = await listingService.listAppointments(listingId).catch(() => [])
-  const buyerAppointments = appointments
-    .filter((appointment) => appointment.buyerId === buyerId)
-    .sort((a, b) => b.createdAt - a.createdAt)
-  relevantAppointment.value = buyerAppointments[0] ?? null
+
+  unsubscribeAppointment = listingService.subscribeAppointments(listingId, (appointments) => {
+    const buyerAppointments = appointments
+      .filter((appointment) => appointment.buyerId === buyerId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+    const next = buyerAppointments[0] ?? null
+    const previous = relevantAppointment.value
+
+    if (next && previous && next.id === previous.id && next.status !== previous.status) {
+      if (isSeller.value && next.status === 'cancelled') {
+        showAppointmentToast(`買家已取消 ${formatDateTime(next.scheduledAt)} 的看車預約`)
+      } else if (!isSeller.value && next.status === 'approved') {
+        showAppointmentToast('賣家已同意您的看車預約')
+      } else if (!isSeller.value && next.status === 'declined') {
+        showAppointmentToast('賣家已婉拒您的看車預約')
+      }
+    } else if (isSeller.value && next?.status === 'pending' && next.id !== previous?.id) {
+      showAppointmentToast(`${next.buyerName} 送出了新的看車預約`)
+    }
+
+    relevantAppointment.value = next
+  })
 }
 
 async function handleApprove(): Promise<void> {
@@ -148,6 +186,25 @@ async function handleDecline(): Promise<void> {
     relevantAppointment.value = { ...appointment, status: 'declined' }
     await chatStore.sendText(
       `很抱歉，賣家婉拒了 ${formatDateTime(appointment.scheduledAt)} 的看車預約，歡迎在這裡討論其他時間。`,
+    )
+    await scrollToBottom()
+  } finally {
+    decidingAppointment.value = false
+  }
+}
+
+/** Buyer-only (Task C1) — firestore.rules already allowed pending/approved
+ * → cancelled, but no client code ever produced it before this pass. */
+async function handleCancel(): Promise<void> {
+  const appointment = relevantAppointment.value
+  if (!appointment || isSeller.value) return
+  if (appointment.status !== 'pending' && appointment.status !== 'approved') return
+  decidingAppointment.value = true
+  try {
+    await listingService.updateAppointmentStatus(appointment.listingId, appointment.id, 'cancelled')
+    relevantAppointment.value = { ...appointment, status: 'cancelled' }
+    await chatStore.sendText(
+      `已取消 ${formatDateTime(appointment.scheduledAt)} 的看車預約，歡迎在這裡討論其他時間。`,
     )
     await scrollToBottom()
   } finally {
@@ -220,7 +277,7 @@ watch(
 
 watch(() => chatStore.currentConversation?.context?.vehicleId, loadContextVehicle)
 watch(() => chatStore.currentConversation?.context?.listingId, loadContextListing)
-watch([contextListing, otherId], loadAppointment)
+watch([contextListing, otherId], subscribeAppointment)
 
 onMounted(async () => {
   chatStore.openConversation(props.conversationId)
@@ -229,6 +286,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   chatStore.closeConversation()
+  unsubscribeAppointment?.()
+  if (appointmentToastTimer) clearTimeout(appointmentToastTimer)
 })
 </script>
 
@@ -263,10 +322,24 @@ onUnmounted(() => {
       <p class="ab-text">
         已送出看車預約：{{ formatDateTime(relevantAppointment.scheduledAt) }}，等待賣家確認。
       </p>
+      <div class="ab-actions">
+        <button class="ab-decline" :disabled="decidingAppointment" @click="handleCancel">
+          取消預約
+        </button>
+      </div>
     </div>
     <div v-else-if="relevantAppointment?.status === 'approved'" class="appointment-banner approved">
       <p class="ab-text">雙方面交時間為 {{ formatDateTime(relevantAppointment.scheduledAt) }}</p>
+      <div v-if="!isSeller" class="ab-actions">
+        <button class="ab-decline" :disabled="decidingAppointment" @click="handleCancel">
+          取消預約
+        </button>
+      </div>
     </div>
+
+    <Transition name="toast-fade">
+      <p v-if="appointmentToast" class="appointment-toast">{{ appointmentToast }}</p>
+    </Transition>
 
     <div v-if="chatStore.currentConversation" class="tag-row">
       <span class="tag">{{ chatStore.currentConversation.tag }}</span>
@@ -415,6 +488,27 @@ onUnmounted(() => {
 
 .ab-actions button:disabled {
   opacity: 0.6;
+}
+
+.appointment-toast {
+  margin: 6px var(--space-md) 0;
+  padding: 8px var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-text-primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
 }
 
 .tag-row {

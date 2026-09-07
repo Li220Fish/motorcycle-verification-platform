@@ -1,21 +1,33 @@
 /**
- * Engine Audio + IMU capture — consolidates the 6 underlying Inspection
- * Items (ENG-03..08) into 3 User-facing Sessions (啟動/怠速/油門), per
- * MotoVerify_Engine_Audio_IMU_UI_Agent_Implementation.md. User Step ≠
- * Inspection Item: the UI only ever shows 3 screens; the 6 items underneath
- * are unchanged (same ids, same evidence/answer shape) so Review, the
+ * Engine Audio + IMU capture — Verification v2 (spec §23-§33) consolidates
+ * the 6 underlying Inspection Items (ENG-03..08) into ONE fixed 23.0-second
+ * synchronized Audio+IMU recording (previously 3 separate user-controlled-
+ * duration sessions). User Step ≠ Inspection Item still holds: the UI only
+ * ever shows one continuous capture screen; the 6 items underneath are
+ * unchanged (same ids, same evidence/answer shape) so Review, the
  * lockedOrder gate, and the Report all keep working without special-casing
- * beyond the grouping itself.
+ * beyond the capture UI itself (see EngineInspectionFlow.vue).
  */
 export type EngineTransmissionType = 'scooter' | 'manual'
 
-/** Best-effort read of the existing free-text Vehicle.transmission field —
- *  there's no dedicated vehicle-type enum in the schema, and adding one is
- *  out of scope for this UI/UX-only pass (see the spec's §46 ban list). */
+/** The only two transmission values new listing/vehicle forms write (Task B4
+ *  — "有外露鏈條/沒有外露鏈條" Segmented Control replacing free text). Chosen
+ *  over the old CVT/manual wording because it matches exactly what the
+ *  "傳動／鏈條區域" photo item actually needs to know: is there a chain to
+ *  photograph, not what the transmission is technically called. */
+export const TRANSMISSION_CHAIN_EXPOSED = '有外露鏈條'
+export const TRANSMISSION_NO_EXPOSED_CHAIN = '沒有外露鏈條'
+
+/** Reads Vehicle.transmission to decide scooter-style vs chain-drive photo
+ *  prompts. Checks the new canonical Segmented Control values first (exact
+ *  match, always reliable); falls back to a best-effort regex guess for
+ *  vehicles whose transmission was entered as free text before this pass. */
 export function inferTransmissionType(
   transmission: string | null | undefined,
 ): EngineTransmissionType | null {
   if (!transmission) return null
+  if (transmission === TRANSMISSION_NO_EXPOSED_CHAIN) return 'scooter'
+  if (transmission === TRANSMISSION_CHAIN_EXPOSED) return 'manual'
   if (/cvt|無段|速克達|scooter/i.test(transmission)) return 'scooter'
   if (/手排|檔車|手動|manual/i.test(transmission)) return 'manual'
   return null
@@ -45,24 +57,45 @@ export const ENGINE_SESSION_ITEM_IDS: string[] = [
   ...ENGINE_REV_ITEM_IDS,
 ]
 
-/** Simple, adjustable 3-state timing hint for the Rev session (spec §25) —
- *  deliberately NOT a precise RPM/throttle SOP (none exists yet); just a
- *  rough "when to expect what" cue so the capture doesn't feel silent for
- *  10 seconds. Change the `atSeconds` cutoffs here if the real SOP arrives
- *  later — nothing else needs to change. */
-export interface RevInstructionStep {
+/**
+ * Fixed 23.0-second timeline (spec §24/§27) — system truth, never
+ * user-adjustable: 0.0-8.0s Startup, 8.0-15.0s Idle, 15.0-23.0s Rev, then
+ * auto-stop. Written verbatim as this session's `metadata.phases` on the
+ * captured IMU evidence (see EngineInspectionFlow.vue) so the Trusted
+ * Backend slices Audio/IMU samples by this SAME boundary rather than
+ * re-deriving timing itself (spec §27: "這是 system truth. Gemini / IMU
+ * Analyzer 不重新判斷時間區段").
+ */
+export const ENGINE_SESSION_DURATION_MS = 23000
+
+export interface EngineSessionPhaseBounds {
+  startMs: number
+  endMs: number
+}
+export const ENGINE_SESSION_PHASES: {
+  startup: EngineSessionPhaseBounds
+  idle: EngineSessionPhaseBounds
+  rev: EngineSessionPhaseBounds
+} = {
+  startup: { startMs: 0, endMs: 8000 },
+  idle: { startMs: 8000, endMs: 15000 },
+  rev: { startMs: 15000, endMs: 23000 },
+}
+
+/** The 3 fixed on-screen instructions for the single 23s session (spec §25). */
+export interface EngineSessionInstructionStep {
   atSeconds: number
   label: string
 }
-export const REV_INSTRUCTION_SEQUENCE: RevInstructionStep[] = [
-  { atSeconds: 0, label: '保持怠速' },
-  { atSeconds: 3, label: '適度轉動油門' },
-  { atSeconds: 7, label: '回到怠速' },
+export const ENGINE_SESSION_INSTRUCTION_SEQUENCE: EngineSessionInstructionStep[] = [
+  { atSeconds: 0, label: '請現在發動引擎' },
+  { atSeconds: 8, label: '請保持怠速' },
+  { atSeconds: 15, label: '請依提示拉動油門' },
 ]
 
-export function revInstructionAt(elapsedSeconds: number): string {
-  let current = REV_INSTRUCTION_SEQUENCE[0].label
-  for (const step of REV_INSTRUCTION_SEQUENCE) {
+export function engineSessionInstructionAt(elapsedSeconds: number): string {
+  let current = ENGINE_SESSION_INSTRUCTION_SEQUENCE[0].label
+  for (const step of ENGINE_SESSION_INSTRUCTION_SEQUENCE) {
     if (elapsedSeconds >= step.atSeconds) current = step.label
   }
   return current

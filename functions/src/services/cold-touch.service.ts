@@ -2,16 +2,17 @@ import { getFirestore } from 'firebase-admin/firestore'
 import { GEMINI_MODEL } from '../config'
 import {
   COLD_ENGINE_TOUCH_ITEM_ID,
-  COLD_ENGINE_TOUCH_PROMPT,
   COLD_ENGINE_TOUCH_PROMPT_VERSION,
   COLD_ENGINE_TOUCH_SCHEMA,
   ColdEngineTouchResult,
-} from '../ai/prompts/cold-engine-touch-v2'
+} from '../ai/prompts/cold-engine-touch-v3'
 import { GeminiItemResult, InvalidAiResponseError, RESULT_VALUES } from '../ai/schemas/common'
 import { callGeminiJson, ImagePart } from '../ai/gemini/client'
 import { extractFrames, probeDurationMs } from '../video/video-tools'
 import { resolveVideoEvidence, resolveVideoEvidenceById, ResolvedVideoEvidence } from './evidence.service'
 import { assertRetryEligible, getAnswer, writeAiAnswer } from './answer-writer.service'
+import { withAnalysisStatus } from './analysis-status.service'
+import { hashPromptText, resolvePromptText } from './prompt-config.service'
 
 const ENG_02 = 'ENG-02' // stable existing Answer doc id (see engine-sensor-session.service.ts's
 // ENG-03..08 reconciliation comment for why the semantic id stays metadata-only)
@@ -64,7 +65,14 @@ async function callGeminiColdTouch(params: {
     promptText: params.promptText,
     images: params.images,
     responseSchema: COLD_ENGINE_TOUCH_SCHEMA,
-    cacheDiscriminators: [params.promptVersion, ...params.images.map((image) => image.evidenceId)],
+    // Hash busts the response cache when an admin edits this prompt's text
+    // (see prompt-config.service.ts) — promptVersion alone is a stable route
+    // name that doesn't change just because the text did.
+    cacheDiscriminators: [
+      params.promptVersion,
+      hashPromptText(params.promptText),
+      ...params.images.map((image) => image.evidenceId),
+    ],
     promptVersion: params.promptVersion,
   })
   if (!RESULT_VALUES.includes(result.result)) {
@@ -150,42 +158,49 @@ export async function analyzeColdEngineTouch(params: {
   verificationId: string
   apiKey: string
 }): Promise<GeminiItemResult> {
-  await assertStartupNotYetBegun(params.verificationId)
+  return withAnalysisStatus(params.verificationId, 'coldCheck', async () => {
+    await assertStartupNotYetBegun(params.verificationId)
 
-  const video = await resolveVideoEvidence(params.verificationId, ENG_02)
-  const metadata = video.metadata as ColdTouchMetadata
-  const durationMs = await probeDurationMs(video.buffer)
+    const video = await resolveVideoEvidence(params.verificationId, ENG_02)
+    const metadata = video.metadata as ColdTouchMetadata
+    const durationMs = await probeDurationMs(video.buffer)
 
-  if (!recordingCoversWindow(metadata, durationMs)) {
-    const gemini: ColdEngineTouchResult = {
-      result: 'attention',
-      confidence: null,
-      label: 'cold_state_requirement_failed',
-      note: '未完成完整 5 秒冷車觸碰程序，本次不符合 MotoVerify 冷車採集條件。',
-      contactVisible: false,
-      contactMaintainedFullWindow: false,
-      targetAreaVisible: false,
+    if (!recordingCoversWindow(metadata, durationMs)) {
+      const gemini: ColdEngineTouchResult = {
+        result: 'attention',
+        confidence: null,
+        label: 'cold_state_requirement_failed',
+        note: '未完成完整 5 秒冷車觸碰程序，本次不符合 MotoVerify 冷車採集條件。',
+        contactVisible: false,
+        contactMaintainedFullWindow: false,
+        targetAreaVisible: false,
+      }
+      return writeColdTouchAnswer({
+        verificationId: params.verificationId,
+        video,
+        gemini,
+        attempt: 1,
+      })
     }
+
+    const timestamps = contactWindowFrameTimestamps(metadata, durationMs)
+    const frames = await extractFrames(video.buffer, timestamps)
+    const images: ImagePart[] = frames.map((frame, index) => ({
+      evidenceId: `${video.evidenceId}_frame_${index}`,
+      view: 'cold_touch_frame',
+      base64: frame.toString('base64'),
+      mimeType: 'image/jpeg',
+    }))
+
+    const gemini = await callGeminiColdTouch({
+      apiKey: params.apiKey,
+      promptText: await resolvePromptText('cold-engine-touch-v3'),
+      promptVersion: COLD_ENGINE_TOUCH_PROMPT_VERSION,
+      images,
+    })
+
     return writeColdTouchAnswer({ verificationId: params.verificationId, video, gemini, attempt: 1 })
-  }
-
-  const timestamps = contactWindowFrameTimestamps(metadata, durationMs)
-  const frames = await extractFrames(video.buffer, timestamps)
-  const images: ImagePart[] = frames.map((frame, index) => ({
-    evidenceId: `${video.evidenceId}_frame_${index}`,
-    view: 'cold_touch_frame',
-    base64: frame.toString('base64'),
-    mimeType: 'image/jpeg',
-  }))
-
-  const gemini = await callGeminiColdTouch({
-    apiKey: params.apiKey,
-    promptText: COLD_ENGINE_TOUCH_PROMPT,
-    promptVersion: COLD_ENGINE_TOUCH_PROMPT_VERSION,
-    images,
   })
-
-  return writeColdTouchAnswer({ verificationId: params.verificationId, video, gemini, attempt: 1 })
 }
 
 /** Retry: only while the current result is `unsure` (evidence-quality
@@ -237,9 +252,10 @@ export async function retryColdEngineTouch(params: {
     mimeType: 'image/jpeg',
   }))
 
+  const basePrompt = await resolvePromptText('cold-engine-touch-v3')
   const gemini = await callGeminiColdTouch({
     apiKey: params.apiKey,
-    promptText: `${COLD_ENGINE_TOUCH_PROMPT}\n\nThis is the second and final verification attempt. Do not request another retake.`,
+    promptText: `${basePrompt}\n\nThis is the second and final verification attempt. Do not request another retake.`,
     promptVersion: COLD_ENGINE_TOUCH_PROMPT_VERSION,
     images,
   })

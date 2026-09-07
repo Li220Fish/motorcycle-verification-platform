@@ -4,13 +4,13 @@ export type VerificationStatus = 'draft' | 'in_progress' | 'completed' | 'needs_
 
 export type TransactionDecision = 'continue_considering' | 'need_third_party' | 'not_buying'
 
-/** Trusted-Backend-only (analyze-environment.ts) — Step 3's environment/
- * ambient-audio analysis. Deliberately NOT a vehicle-condition judgement
- * (see PREP-03's own helpText: "不直接影響車況判定結果") — surfaced in the
- * report as informational context on the 驗車環境檢測 item, never as its
- * own result/badge. Loosely typed past `warnings`/`quality` since the report
- * only ever needs those two; the richer visual/audio breakdown is for the
- * admin backend (VerifyDetailSection.vue), not this shared client type. */
+/** Historical-only: Step 3 (驗車環境檢測/PREP-03) and its Trusted-Backend
+ * analysis were removed from the product entirely (no longer part of
+ * Verification v2's item registry, no Cloud Function writes this anymore).
+ * This type is kept solely so already-completed verifications that captured
+ * it before the removal still type-check when read — see
+ * VerifyDetailSection.vue's admin-only historical viewer, the only place
+ * that still reads this field. Never written to for new verifications. */
 export interface EnvironmentContext {
   quality: { overallSuitable: boolean; visualSuitable: boolean; audioSuitable: boolean }
   warnings: string[]
@@ -24,6 +24,21 @@ export interface EnvironmentContext {
 export interface ColdStateContext {
   coldStateValid: boolean
 }
+
+/** Verification v2 — Trusted-Backend-only, one entry per background AI
+ * route ('coreVision' | 'dashboardOcr' | 'coldCheck' | 'engineSensorSession').
+ * Fixes a real gap: every AI call used to be client fire-and-forget with a
+ * swallowed `.catch(() => {})`, so a Gemini 429/5xx/timeout/schema failure
+ * left no trace anywhere — no failed Answer, no retry affordance, nothing.
+ * Each Cloud Function now stamps 'processing' before calling Gemini and
+ * 'completed'/'failed' after, so the client can tell "still analyzing" from
+ * "genuinely failed, offer retry" instead of silence forever. */
+export interface AnalysisStatusEntry {
+  status: 'processing' | 'completed' | 'failed'
+  updatedAt: number
+  error?: string
+}
+export type AnalysisStatusMap = Record<string, AnalysisStatusEntry>
 
 /**
  * A Verification always belongs to a Vehicle (via vehicleId), never to a
@@ -61,12 +76,13 @@ export interface Verification {
 
   environmentContext?: EnvironmentContext
   coldStateContext?: ColdStateContext
+  analysisStatus?: AnalysisStatusMap
 }
 
 // isPublic/protocolVersion/schemaVersion are stamped by verificationService.create()
 // itself, never chosen by the caller — see there. environmentContext/
-// coldStateContext are Trusted-Backend-only (firestore.rules blocks the
-// client from ever setting them, same reasoning as the others).
+// coldStateContext/analysisStatus are Trusted-Backend-only (firestore.rules
+// blocks the client from ever setting them, same reasoning as the others).
 export type VerificationDraft = Omit<
   Verification,
   | 'id'
@@ -77,4 +93,5 @@ export type VerificationDraft = Omit<
   | 'schemaVersion'
   | 'environmentContext'
   | 'coldStateContext'
+  | 'analysisStatus'
 >

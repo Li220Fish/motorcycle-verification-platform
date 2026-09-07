@@ -359,10 +359,7 @@ onMounted(async () => {
     <p v-if="vehicleStore.loading" class="state-text">載入中...</p>
     <p v-else-if="!vehicleStore.currentVehicle" class="state-text">找不到這台車輛。</p>
     <div v-else class="content">
-      <VehiclePhotoGallery
-        :vehicle-id="props.id"
-        :photos="vehicleStore.currentVehicle.photos"
-      />
+      <VehiclePhotoGallery :vehicle-id="props.id" :photos="vehicleStore.currentVehicle.photos" />
 
       <div class="title-block">
         <h2>{{ vehicleStore.currentVehicle.brand }} {{ vehicleStore.currentVehicle.model }}</h2>

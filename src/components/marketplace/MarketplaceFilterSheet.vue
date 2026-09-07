@@ -77,21 +77,6 @@ function handleReset(): void {
         </div>
 
         <div class="filter-group">
-          <div class="toggle-row">
-            <p class="group-title no-margin">只顯示可過戶</p>
-            <button
-              class="switch"
-              :class="{ on: modelValue.transferableOnly }"
-              role="switch"
-              :aria-checked="modelValue.transferableOnly"
-              @click="update({ transferableOnly: !modelValue.transferableOnly })"
-            >
-              <span class="knob" />
-            </button>
-          </div>
-        </div>
-
-        <div class="filter-group">
           <p class="group-title">排序方式</p>
           <div class="option-list">
             <button
@@ -145,7 +130,7 @@ function handleReset(): void {
 .sheet-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justif-y-content: space-between;
 }
 
 .sheet-head h3 {
@@ -155,7 +140,7 @@ function handleReset(): void {
   color: var(--color-text-primary);
 }
 
-.close-btn {
+.closebtn {
   width: 30px;
   height: 30px;
   border-radius: 999px;
@@ -204,42 +189,6 @@ function handleReset(): void {
   border-color: var(--color-primary);
   background: var(--color-primary-bg, #e8f1fd);
   color: var(--color-primary);
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.switch {
-  flex-shrink: 0;
-  width: 42px;
-  height: 24px;
-  border-radius: 999px;
-  border: none;
-  background: var(--color-border);
-  position: relative;
-  transition: background 0.15s ease;
-}
-
-.switch.on {
-  background: var(--color-primary);
-}
-
-.knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #fff;
-  transition: transform 0.15s ease;
-}
-
-.switch.on .knob {
-  transform: translateX(18px);
 }
 
 .option-list {

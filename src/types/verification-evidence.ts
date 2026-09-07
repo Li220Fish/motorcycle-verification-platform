@@ -53,6 +53,12 @@ export interface VerificationAnswer {
   note?: string
   /** For type: 'form' items — the filled-in table values, keyed by FormFieldDef.key. */
   formData?: Record<string, string>
+  /** For multi-select disclosure items (e.g. PREP-02 車況主動揭露) — the
+   *  checked DisclosureOption values (see verification.types.ts). `result`
+   *  is still derived from this (see saveDisclosureAnswer in
+   *  verification.store.ts) so scoring/report code never needs to know
+   *  about this field specifically. */
+  selections?: string[]
   /** Present once the Trusted Backend has analyzed this item (Group A/B/C
    *  vision, Engine Audio/IMU) — absent for plain manual-checklist items. */
   aiResult?: AiResultDoc

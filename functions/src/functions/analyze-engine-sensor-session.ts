@@ -1,47 +1,25 @@
 import { onCall } from 'firebase-functions/v2/https'
 import { GEMINI_API_KEY_SECRET } from '../config'
 import { assertCanAnalyze } from '../services/auth.service'
-import {
-  analyzeEngineIdle,
-  analyzeEngineRev,
-  analyzeEngineStartup,
-} from '../services/engine-sensor-session.service'
+import { analyzeEngineSensorSessionV2 } from '../services/engine-sensor-session.service'
 import { GeminiAudioInspectionProvider } from '../ai/providers/audio-inspection-provider'
+import { withAnalysisFailureTrace } from '../services/analysis-status.service'
 
 const provider = new GeminiAudioInspectionProvider()
 
-type SensorSessionType = 'startup' | 'idle' | 'rev'
-
-/**
- * One dispatch Function per the routing map's recommendation (§76: "我更推薦
- * analyzeEngineSensorSession，避免 client 控制分析種類"). `sessionType` is
- * not a model/prompt/result override — it only names which of the 3 fixed,
- * already-frozen sessions to analyze (mirrors how `itemId` is already a
- * client-supplied parameter on every Group A/B/C retry call in this same
- * spec family), so it doesn't violate that principle.
- */
-export const analyzeEngineSensorSession = onCall(
+/** Verification v2 — supersedes the old 3-dispatch (`sessionType: 'startup'
+ *  | 'idle' | 'rev'`) analyzeEngineSensorSession. ONE call now covers the
+ *  whole 23s session (spec §26/§28), so no `sessionType` parameter is
+ *  needed at all — client sends only `{verificationId}`. */
+export const analyzeEngineSensorSessionV2Fn = onCall(
   { secrets: [GEMINI_API_KEY_SECRET] },
   async (request) => {
-    const { verificationId, sessionType } = (request.data ?? {}) as {
-      verificationId?: string
-      sessionType?: SensorSessionType
-    }
-    if (!verificationId || !sessionType) {
-      throw new Error('verificationId and sessionType are required')
-    }
-    await assertCanAnalyze(verificationId, request.auth?.uid)
-    const apiKey = process.env.GEMINI_API_KEY as string
-
-    switch (sessionType) {
-      case 'startup':
-        return { results: await analyzeEngineStartup({ verificationId, apiKey, provider }) }
-      case 'idle':
-        return await analyzeEngineIdle({ verificationId, apiKey, provider })
-      case 'rev':
-        return await analyzeEngineRev({ verificationId, apiKey, provider })
-      default:
-        throw new Error(`Unknown sessionType: ${sessionType as string}`)
-    }
+    const { verificationId } = (request.data ?? {}) as { verificationId?: string }
+    if (!verificationId) throw new Error('verificationId is required')
+    return withAnalysisFailureTrace(verificationId, 'engineSensorSession', async () => {
+      await assertCanAnalyze(verificationId, request.auth?.uid)
+      const apiKey = process.env.GEMINI_API_KEY as string
+      return analyzeEngineSensorSessionV2({ verificationId, apiKey, provider })
+    })
   },
 )

@@ -189,11 +189,10 @@ export interface ResolvedVideoEvidence {
   metadata: Record<string, unknown>
 }
 
-/** Step 3 (environment) / Step 39 (cold-touch) video evidence — unlike
- *  resolveImageEvidenceForViews, this returns the raw video buffer as-is
- *  (frame extraction happens downstream via video/video-tools.ts) plus the
- *  Evidence doc's own `metadata` (timing window for cold-touch, capture
- *  duration for environment). */
+/** Step 39 (cold-touch) video evidence — unlike resolveImageEvidenceForViews,
+ *  this returns the raw video buffer as-is (frame extraction happens
+ *  downstream via video/video-tools.ts) plus the Evidence doc's own
+ *  `metadata` (the cold-touch contact-window timing). */
 export async function resolveVideoEvidence(
   verificationId: string,
   itemId: string,

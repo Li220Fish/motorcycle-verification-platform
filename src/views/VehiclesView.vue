@@ -7,6 +7,7 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VehicleCard from '@/components/common/VehicleCard.vue'
+import VehicleModelSelect from '@/components/common/VehicleModelSelect.vue'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Vehicle, VehicleDraft } from '@/types/vehicle'
 
@@ -250,8 +251,7 @@ onMounted(() => {
 
     <div class="content">
       <form v-if="showForm" class="vehicle-form" @submit.prevent="handleCreate">
-        <input v-model="form.brand" placeholder="廠牌，例如 YAMAHA" required />
-        <input v-model="form.model" placeholder="車型，例如 勁戰六代" required />
+        <VehicleModelSelect v-model:brand="form.brand" v-model:model="form.model" />
         <input v-model.number="form.manufactureYear" type="number" placeholder="年式" />
         <input v-model.number="form.mileage" type="number" placeholder="里程 (km)" />
         <input v-model="form.licensePlate" placeholder="車牌號碼" />
@@ -340,6 +340,7 @@ onMounted(() => {
 }
 
 .vehicle-form input {
+  width: 100%;
   height: 44px;
   padding: 0 var(--space-md);
   border: 1px solid var(--color-border);

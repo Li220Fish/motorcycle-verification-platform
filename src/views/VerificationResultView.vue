@@ -13,6 +13,12 @@ const props = defineProps<{ id: string }>()
 const verificationStore = useVerificationStore()
 const router = useRouter()
 
+const TIER_LABEL: Record<'basic' | 'detailed' | 'complete', string> = {
+  basic: '基本驗證',
+  detailed: '詳細驗證',
+  complete: '完整驗證',
+}
+
 const attentionCount = computed(
   () =>
     Object.values(verificationStore.answers).filter((answer) => answer.result === 'attention')
@@ -41,8 +47,8 @@ onMounted(() => {
 
       <div class="score-card">
         <div class="score-header">
-          <span>驗證完成度</span>
-          <span class="score-value">{{ verificationStore.overallProgress.percent }}%</span>
+          <span>驗證等級</span>
+          <span class="score-value">{{ TIER_LABEL[verificationStore.verificationTier] }}</span>
         </div>
 
         <div class="category-list">
@@ -65,7 +71,7 @@ onMounted(() => {
         </div>
 
         <p class="mock-caption">
-          「驗證完成度」代表已完成的檢查項目比例，不代表車況評分；車況細節請見完整報告。
+          「基本驗證」為必填項目全數完成；填寫部分主動揭露為「詳細驗證」，全部填寫則為「完整驗證」。此等級不代表車況評分，車況細節請見完整報告。
         </p>
       </div>
 

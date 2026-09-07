@@ -4,11 +4,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   Timestamp,
+  type Unsubscribe,
   updateDoc,
   where,
   writeBatch,
@@ -30,7 +32,14 @@ function stripUndefined<T extends object>(value: T): Record<string, unknown> {
   return result
 }
 
-const PROTOCOL_VERSION = 1
+// Verification v2 migration spec §39 — bumped from 1 to 2 for every NEW
+// verification created from here on (this app's existing convention is a
+// plain incrementing number, not a string label like "verification-v2"; a
+// number that identifies which registry/flow definition applies is the
+// same information, just following the convention already in place).
+// Existing Firestore documents are NEVER rewritten — they keep whatever
+// value they already have, exactly as before this migration.
+const PROTOCOL_VERSION = 2
 const SCHEMA_VERSION = 1
 
 interface VerificationDoc extends Omit<
@@ -45,6 +54,7 @@ interface VerificationDoc extends Omit<
   expiresAt?: Timestamp
   environmentContext?: Verification['environmentContext']
   coldStateContext?: Verification['coldStateContext']
+  analysisStatus?: Verification['analysisStatus']
 }
 
 /**
@@ -93,6 +103,7 @@ function toVerification(id: string, data: VerificationDoc): Verification {
     expiresAt: toMillisOrUndefined(data.expiresAt),
     environmentContext: data.environmentContext,
     coldStateContext: data.coldStateContext,
+    analysisStatus: data.analysisStatus,
   }
 }
 
@@ -149,6 +160,21 @@ async function listByUser(userId: string): Promise<Verification[]> {
 
 async function setStatus(id: string, status: VerificationStatus): Promise<void> {
   await updateDoc(doc(db, COLLECTION, id), { status })
+}
+
+/** Verification v2 — realtime `analysisStatus` (and any other Trusted-
+ * Backend-written field) so the UI can react the moment a background AI call
+ * finishes/fails without polling. Same onSnapshot pattern as
+ * listingService.subscribeListing. */
+function subscribeVerification(
+  id: string,
+  onChange: (verification: Verification | null) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, COLLECTION, id), (snapshot) => {
+    onChange(
+      snapshot.exists() ? toVerification(snapshot.id, snapshot.data() as VerificationDoc) : null,
+    )
+  })
 }
 
 /** Deletes a verification and its answers/evidence subcollections — Firestore
@@ -221,6 +247,18 @@ async function listEvidence(verificationId: string): Promise<VerificationEvidenc
   })
 }
 
+/** Patches just `remoteUrl` on an already-saved evidence doc once its
+ * background Storage upload finishes — a narrower write than saveEvidence()
+ * (which is a full setDoc and would otherwise reset createdAt to "now" via
+ * its serverTimestamp() sentinel on every call). See src/stores/upload-queue.store.ts. */
+async function updateEvidenceRemoteUrl(
+  verificationId: string,
+  evidenceId: string,
+  remoteUrl: string,
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, verificationId, 'evidence', evidenceId), { remoteUrl })
+}
+
 export const verificationService = {
   create,
   get,
@@ -228,6 +266,7 @@ export const verificationService = {
   listByUser,
   setStatus,
   setPublic,
+  subscribeVerification,
   remove,
   complete,
   saveTransactionDecision,
@@ -235,4 +274,5 @@ export const verificationService = {
   listAnswers,
   saveEvidence,
   listEvidence,
+  updateEvidenceRemoteUrl,
 }

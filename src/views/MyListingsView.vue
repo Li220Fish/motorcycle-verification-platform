@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Bike, ChevronRight, Plus } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
@@ -9,8 +9,15 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { listingService } from '@/services/firebase/listing.service'
 import { storageService } from '@/services/firebase/storage.service'
 import { verificationService } from '@/services/firebase/verification.service'
+import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
+import { districtsForRegion, TAIWAN_REGIONS } from '@/data/taiwan-regions'
+import {
+  TRANSMISSION_CHAIN_EXPOSED,
+  TRANSMISSION_NO_EXPOSED_CHAIN,
+} from '@/data/verification/engine-session'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { Vehicle } from '@/types/vehicle'
 
@@ -40,11 +47,18 @@ const form = reactive({
   displacementCc: null as number | null,
   transmission: '',
   color: '',
-  transferable: true,
   modified: false,
   description: '',
 })
 const photoFiles = ref<File[]>([])
+
+const availableDistricts = computed(() => districtsForRegion(form.region))
+watch(
+  () => form.region,
+  () => {
+    if (!availableDistricts.value.includes(form.district)) form.district = ''
+  },
+)
 
 async function loadListings(): Promise<void> {
   if (!authStore.user) return
@@ -71,14 +85,8 @@ async function loadEligibleVehicles(): Promise<void> {
       const completed = verifications.find((v) => v.type === 'seller' && v.status === 'completed')
       if (!completed) continue
       const answers = await verificationService.listAnswers(completed.id)
-      const eligible = answers.filter((answer) => answer.result !== 'not_applicable')
-      const score =
-        eligible.length === 0
-          ? 100
-          : Math.round(
-              (eligible.filter((answer) => answer.result === 'normal').length / eligible.length) *
-                100,
-            )
+      const answersById = Object.fromEntries(answers.map((answer) => [answer.itemId, answer]))
+      const score = computeVerificationScore(scorableAnswers(answersById, 'seller')) ?? 0
       candidates.push({ vehicle, verificationId: completed.id, verificationScore: score })
     }
     eligibleVehicles.value = candidates
@@ -121,7 +129,6 @@ function resetForm(): void {
   form.displacementCc = null
   form.transmission = ''
   form.color = ''
-  form.transferable = true
   form.modified = false
   form.description = ''
   photoFiles.value = []
@@ -135,12 +142,16 @@ async function handleSubmit(): Promise<void> {
   try {
     const listingId = listingService.reserveListingId()
     const uploadedUrls = await Promise.all(
-      photoFiles.value.map((file, index) =>
-        storageService.uploadFileAtPath(
+      photoFiles.value.map(async (file, index) => {
+        // Same resize/re-encode used for verification evidence — a listing
+        // photo previously uploaded (and downloaded by every browsing buyer)
+        // at the phone's full original camera resolution with no cap.
+        const { blob } = await imageCompressionService.compressImage(file)
+        return storageService.uploadFileAtPath(
           `marketplace/${listingId}/${Date.now()}-${index}.jpg`,
-          file,
-        ),
-      ),
+          blob,
+        )
+      }),
     )
     const photos = uploadedUrls.length > 0 ? uploadedUrls : (entry.vehicle.photos ?? [])
 
@@ -154,7 +165,6 @@ async function handleSubmit(): Promise<void> {
       priceTwd: form.priceTwd as number,
       region: form.region.trim(),
       district: form.district.trim(),
-      transferable: form.transferable,
       displacementCc: form.displacementCc as number,
       transmission: form.transmission.trim(),
       color: form.color.trim(),
@@ -216,7 +226,7 @@ async function handleSubmit(): Promise<void> {
                 :value="entry.vehicle.id"
               >
                 {{ entry.vehicle.manufactureYear }} {{ entry.vehicle.brand }}
-                {{ entry.vehicle.model }}（驗證分數 {{ entry.verificationScore }}）
+                {{ entry.vehicle.model }}
               </option>
             </select>
           </label>
@@ -234,12 +244,22 @@ async function handleSubmit(): Promise<void> {
 
           <div class="field-row">
             <label class="field">
-              <span>地區</span>
-              <input v-model="form.region" type="text" placeholder="例如 台北市" required />
+              <span>縣市</span>
+              <select v-model="form.region" required>
+                <option value="" disabled>請選擇縣市</option>
+                <option v-for="region in TAIWAN_REGIONS" :key="region.name" :value="region.name">
+                  {{ region.name }}
+                </option>
+              </select>
             </label>
             <label class="field">
-              <span>區域</span>
-              <input v-model="form.district" type="text" placeholder="例如 大安區" required />
+              <span>行政區</span>
+              <select v-model="form.district" required :disabled="!form.region">
+                <option value="" disabled>請先選擇縣市</option>
+                <option v-for="district in availableDistricts" :key="district" :value="district">
+                  {{ district }}
+                </option>
+              </select>
             </label>
           </div>
 
@@ -260,20 +280,28 @@ async function handleSubmit(): Promise<void> {
             </label>
           </div>
 
-          <label class="field">
-            <span>變速系統</span>
-            <input
-              v-model="form.transmission"
-              type="text"
-              placeholder="例如 CVT 無段變速"
-              required
-            />
-          </label>
+          <div class="field">
+            <span>傳動</span>
+            <div class="segmented-control">
+              <button
+                type="button"
+                class="segment"
+                :class="{ active: form.transmission === TRANSMISSION_NO_EXPOSED_CHAIN }"
+                @click="form.transmission = TRANSMISSION_NO_EXPOSED_CHAIN"
+              >
+                沒有外露鏈條
+              </button>
+              <button
+                type="button"
+                class="segment"
+                :class="{ active: form.transmission === TRANSMISSION_CHAIN_EXPOSED }"
+                @click="form.transmission = TRANSMISSION_CHAIN_EXPOSED"
+              >
+                有外露鏈條
+              </button>
+            </div>
+          </div>
 
-          <label class="toggle-field">
-            <input v-model="form.transferable" type="checkbox" />
-            <span>可過戶</span>
-          </label>
           <label class="toggle-field">
             <input v-model="form.modified" type="checkbox" />
             <span>曾經改裝</span>
@@ -375,6 +403,13 @@ async function handleSubmit(): Promise<void> {
 
 .field {
   flex: 1;
+  /* A flex item's default min-width is `auto`, not 0 — without this, an
+     <input>/<select> with no explicit width refuses to shrink below its own
+     intrinsic content width (browser default ~170-190px for a bare text
+     input), so two fields side by side in .field-row push the row wider
+     than the viewport and the whole page picks up a horizontal scrollbar on
+     narrow screens (e.g. 排氣量/車身顏色 — reported as "RWD 跑版"). */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -391,6 +426,7 @@ async function handleSubmit(): Promise<void> {
 .field input,
 .field select,
 .field textarea {
+  width: 100%;
   height: 44px;
   padding: 0 var(--space-md);
   border: 1px solid var(--color-border);
@@ -410,6 +446,33 @@ async function handleSubmit(): Promise<void> {
 
 .field input[type='file'] {
   padding: 8px;
+}
+
+.segmented-control {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.segment {
+  flex: 1;
+  height: 44px;
+  border: none;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  border-right: 1px solid var(--color-border);
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment.active {
+  background: var(--color-primary);
+  color: #fff;
 }
 
 .toggle-field {

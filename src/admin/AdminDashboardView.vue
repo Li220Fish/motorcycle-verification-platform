@@ -46,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   { title: '主資料與內容', items: [{ key: 'models', label: '車款主檔' }] },
+  { title: '系統設定', items: [{ key: 'prompts', label: 'AI Prompt 設定' }] },
 ]
 
 const TITLES: Record<string, [string, string]> = {
@@ -63,6 +64,7 @@ const TITLES: Record<string, [string, string]> = {
   news: ['車訊新知', 'collection: vehicleNews'],
   probe: ['Probe 裝置', 'collection: voltageSessions（目前無寫入來源）'],
   models: ['車款主檔', 'collection: vehicleModels（新建）'],
+  prompts: ['AI Prompt 設定', 'collection: aiPrompts（新建，覆寫 functions 端預設值）'],
 }
 
 const activeKey = computed(() => props.page || 'overview')
@@ -84,6 +86,7 @@ const SECTION_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {
   news: () => import('./sections/NewsSection.vue'),
   probe: () => import('./sections/ProbeSection.vue'),
   models: () => import('./sections/ModelsSection.vue'),
+  prompts: () => import('./sections/PromptsSection.vue'),
 }
 
 const sectionComponent = computed(() => {
@@ -180,8 +183,8 @@ watch(activeKey, loadBadges)
           <component
             :is="sectionComponent"
             v-if="sectionComponent"
-            :uid="uid"
             :id="id"
+            :uid="uid"
             @open-user="handleUserClick"
           />
           <p v-else class="admin-page-intro">找不到這個後台頁面。</p>

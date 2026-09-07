@@ -104,7 +104,8 @@ async function submit(): Promise<void> {
         ⚠ 上次驗證未通過{{ verification?.note ? `：${verification.note}` : '' }}，請重新上傳行照。
       </p>
       <p class="hint">
-        請輸入行照號碼並上傳行照照片，系統將以 OCR 辨識引擎號碼與車身號碼。通過後才能開始這台車的驗車流程。
+        請輸入行照號碼並上傳行照照片，系統將以 OCR
+        辨識引擎號碼與車身號碼。通過後才能開始這台車的驗車流程。
       </p>
       <label class="field">
         <span>行照號碼</span>

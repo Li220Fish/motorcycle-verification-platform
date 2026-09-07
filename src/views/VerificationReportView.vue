@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import AppHeader from '@/components/common/AppHeader.vue'
 import InspectionReportBody from '@/components/verification/InspectionReportBody.vue'
 import type { ReportSection } from '@/components/verification/InspectionReportBody.vue'
+import type { DiagramMarker } from '@/components/verification/VehicleDiagramOverview.vue'
 import {
   ENGINE_IDLE_ITEM_IDS,
   ENGINE_REV_ITEM_IDS,
@@ -68,28 +69,11 @@ function effectiveItemResult(itemId: string): VerificationAnswer | undefined {
     result: worst.result,
     note: baseAnswer?.note,
     updatedAt: worst.updatedAt,
-    aiResult: notes.length > 0 ? { ...worst.aiResult!, details: { ...worst.aiResult!.details, note: notes.join('\n') } } : undefined,
+    aiResult:
+      notes.length > 0
+        ? { ...worst.aiResult!, details: { ...worst.aiResult!.details, note: notes.join('\n') } }
+        : undefined,
   }
-}
-
-// PREP-03 (驗車環境檢測)'s own Answer never gets an aiResult — the Trusted
-// Backend writes its analysis only to Verification.environmentContext (see
-// analyze-environment.ts), deliberately NOT as a vehicle-condition judgement
-// (PREP-03's own helpText: "不直接影響車況判定結果"). So this only ever adds
-// informational note text to that one item, never touches its result/badge.
-const ENVIRONMENT_WARNING_LABELS: Record<string, string> = {
-  moderate_backlightRisk: '中度逆光風險',
-  high_backlightRisk: '高度逆光風險',
-  moderate_reflectionRisk: '中度反光風險',
-  high_reflectionRisk: '高度反光風險',
-  moderate_shadowRisk: '中度陰影風險',
-  high_shadowRisk: '高度陰影風險',
-  moderate_obstructionRisk: '中度遮擋風險',
-  high_obstructionRisk: '高度遮擋風險',
-  moderate_movingObjectInterference: '中度移動物體干擾',
-  high_movingObjectInterference: '高度移動物體干擾',
-  poor_lighting: '光線不足',
-  ambient_audio_unsuitable: '環境音不適合分析',
 }
 
 const props = defineProps<{ id: string }>()
@@ -125,33 +109,10 @@ const vehicleTitle = computed(() => {
   return `${vehicle.manufactureYear ? `${vehicle.manufactureYear} ` : ''}${vehicle.brand} ${vehicle.model}`.trim()
 })
 
-const environmentNote = computed<string | undefined>(() => {
-  const context = verificationStore.currentVerification?.environmentContext
-  if (!context) return undefined
-  const readableWarnings = context.warnings.map((warning) => ENVIRONMENT_WARNING_LABELS[warning] ?? warning)
-  const suitabilityText = context.quality.overallSuitable
-    ? '整體環境適合拍攝分析。'
-    : '整體環境可能不利於後續影像／聲音分析。'
-  return readableWarnings.length > 0
-    ? `${suitabilityText}（${readableWarnings.join('、')}）`
-    : suitabilityText
-})
-
 const inspectedDate = computed(() => {
   const verification = verificationStore.currentVerification
   if (!verification) return '—'
   return formatDate(verification.completedAt ?? verification.createdAt)
-})
-
-// A real, derived number — not a fabricated demo score: the share of this
-// verification's own answered items (excluding 不適用) that came back 正常.
-const score = computed<number | null>(() => {
-  const eligible = Object.values(verificationStore.answers).filter(
-    (answer) => answer.result !== 'not_applicable',
-  )
-  if (eligible.length === 0) return null
-  const normalCount = eligible.filter((answer) => answer.result === 'normal').length
-  return Math.round((normalCount / eligible.length) * 100)
 })
 
 // evidence.remoteUrl is a Storage object path for real uploads (see
@@ -185,7 +146,9 @@ watch(
 
 const sections = computed<ReportSection[]>(() =>
   verificationStore.sections.map((section) => {
-    const answers = section.items.map((item) => effectiveItemResult(item.id)).filter((answer) => !!answer)
+    const answers = section.items
+      .map((item) => effectiveItemResult(item.id))
+      .filter((answer) => !!answer)
     let statusLabel = '尚未檢查'
     let statusTone: ReportSection['statusTone'] = 'neutral'
     if (answers.length > 0) {
@@ -212,19 +175,120 @@ const sections = computed<ReportSection[]>(() =>
           .filter((evidence) => evidence.type === 'photo')
           .map((evidence) => resolvedPhotoUrls[evidence.id] ?? evidence.localUri)
           .filter((url): url is string => !!url)
+        // Multi-select disclosure items (PREP-02) — show which boxes were
+        // checked alongside the free-text remark, not just the derived
+        // normal/attention badge (which alone can't say WHAT was disclosed).
+        const disclosureLabel = item.disclosureOptions?.length
+          ? answer?.selections
+              ?.map(
+                (value) =>
+                  item.disclosureOptions?.find((option) => option.value === value)?.label ?? value,
+              )
+              .join('、')
+          : undefined
+        const note = [disclosureLabel, answer?.note].filter(Boolean).join('｜') || undefined
         return {
           id: item.id,
           title: item.title,
           badgeLabel: answer ? RESULT_LABEL[answer.result] : '未檢查',
           badgeTone: answer ? RESULT_TONE[answer.result] : 'neutral',
-          note: answer?.note,
-          aiNote: item.id === 'PREP-03' ? environmentNote.value : answer?.aiResult?.details.note,
+          note,
+          aiNote: answer?.aiResult?.details.note,
           photos,
           groupLabel: ENGINE_ITEM_GROUP_LABEL[item.id],
+          required: item.required,
         }
       }),
     }
   }),
+)
+
+// Whole-vehicle diagram (VehicleDiagramOverview.vue) — a handful of dots
+// standing in for the ~30 real checklist items, so several dots deliberately
+// roll up multiple item ids into one worst-of status (引擎 alone covers 9).
+// Anchors are hand-placed percentage points on that component's 700x400
+// illustration, not derived from any shared coordinate system. 後視鏡/前輪胎/
+// 後輪胎 from the original design reference have no backing checklist item
+// any more (dropped in the Verification v2 migration — see photo-slots.ts's
+// header comment) and are intentionally left out rather than showing a
+// permanently-empty "未檢查" dot for a check that no longer exists.
+interface DiagramMarkerDef {
+  key: string
+  label: string
+  anchor: [number, number]
+  itemIds: string[]
+}
+const DIAGRAM_MARKER_DEFS: DiagramMarkerDef[] = [
+  {
+    key: 'appearance',
+    label: '外觀',
+    anchor: [46, 20],
+    itemIds: ['APR-left-side', 'APR-right-side', 'APR-rear'],
+  },
+  { key: 'handle', label: '把手／龍頭', anchor: [41, 33], itemIds: ['APR-triple-clamp'] },
+  {
+    key: 'headlight',
+    label: '前大燈',
+    anchor: [28, 43],
+    itemIds: ['ELEC-01', 'ELEC-02', 'ELEC-03'],
+  },
+  { key: 'signal_f', label: '前方向燈', anchor: [18, 46], itemIds: ['ELEC-06', 'ELEC-07'] },
+  { key: 'fork', label: '前避震', anchor: [23, 63], itemIds: ['APR-front-suspension'] },
+  {
+    key: 'brake',
+    label: '煞車系統',
+    anchor: [33, 84],
+    itemIds: ['APR-front-brake', 'APR-rear-brake'],
+  },
+  {
+    key: 'engine',
+    label: '引擎',
+    anchor: [49.5, 68],
+    itemIds: [
+      'APR-engine-bottom',
+      'ENG-01',
+      'ENG-02',
+      'ENG-03',
+      'ENG-04',
+      'ENG-05',
+      'ENG-06',
+      'ENG-07',
+      'ENG-08',
+    ],
+  },
+  { key: 'taillight', label: '尾燈', anchor: [75, 45], itemIds: ['ELEC-04', 'ELEC-05'] },
+  { key: 'signal_r', label: '後方向燈', anchor: [66, 60], itemIds: ['ELEC-08', 'ELEC-09'] },
+]
+
+function resolveDiagramMarker(def: DiagramMarkerDef): DiagramMarker {
+  const answers = def.itemIds
+    .map((itemId) => effectiveItemResult(itemId))
+    .filter((answer): answer is VerificationAnswer => !!answer)
+  if (answers.length === 0) {
+    return {
+      key: def.key,
+      label: def.label,
+      anchor: def.anchor,
+      badgeLabel: '未檢查',
+      tone: 'neutral',
+      itemIds: def.itemIds,
+    }
+  }
+  const worst = answers.reduce((worstSoFar, candidate) =>
+    RESULT_SEVERITY[candidate.result] > RESULT_SEVERITY[worstSoFar.result] ? candidate : worstSoFar,
+  )
+  return {
+    key: def.key,
+    label: def.label,
+    anchor: def.anchor,
+    badgeLabel: RESULT_LABEL[worst.result],
+    tone: RESULT_TONE[worst.result],
+    itemIds: def.itemIds,
+  }
+}
+
+const diagramMarkers = computed<DiagramMarker[]>(() =>
+  DIAGRAM_MARKER_DEFS.map(resolveDiagramMarker),
 )
 
 watch(
@@ -248,8 +312,8 @@ onMounted(() => {
     <InspectionReportBody
       :vehicle-title="vehicleTitle"
       :inspected-date="inspectedDate"
-      :score="score"
       :sections="sections"
+      :diagram-markers="diagramMarkers"
     />
   </div>
 </template>

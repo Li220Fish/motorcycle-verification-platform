@@ -40,29 +40,17 @@ async function callGroupRetry(
   return response.data.result
 }
 
-export const analyzeInspectionGroupA = (verificationId: string) =>
-  callGroupAnalyze('analyzeInspectionGroupA', verificationId)
-export const retryInspectionGroupAItem = (params: {
+/** Verification v2 — supersedes Group A/B/C (analyzeInspectionGroupA/B/C):
+ * one consolidated route over the reduced Core Vision evidence set
+ * (vehicle_left/right/rear, front_suspension, engine_bottom, conditionally
+ * chain_sprocket). See functions/src/services/core-vision-v2.service.ts. */
+export const analyzeCoreVisionV2 = (verificationId: string) =>
+  callGroupAnalyze('analyzeCoreVisionV2', verificationId)
+export const retryCoreVisionV2Item = (params: {
   verificationId: string
   itemId: string
   newEvidenceId: string
-}) => callGroupRetry('retryInspectionGroupAItem', params)
-
-export const analyzeInspectionGroupB = (verificationId: string) =>
-  callGroupAnalyze('analyzeInspectionGroupB', verificationId)
-export const retryInspectionGroupBItem = (params: {
-  verificationId: string
-  itemId: string
-  newEvidenceId: string
-}) => callGroupRetry('retryInspectionGroupBItem', params)
-
-export const analyzeInspectionGroupC = (verificationId: string) =>
-  callGroupAnalyze('analyzeInspectionGroupC', verificationId)
-export const retryInspectionGroupCItem = (params: {
-  verificationId: string
-  itemId: string
-  newEvidenceId: string
-}) => callGroupRetry('retryInspectionGroupCItem', params)
+}) => callGroupRetry('retryCoreVisionV2Item', params)
 
 export interface OcrResultDto {
   text: string | null
@@ -77,33 +65,20 @@ async function callOcr(name: string, verificationId: string): Promise<OcrResultD
   return response.data
 }
 
+// Plate/chassis OCR (steps 9/23) are removed along with those steps in
+// Verification v2 — dashboard OCR (step 7) is the only surviving OCR route,
+// now on the stricter dashboard-ocr-v2 prompt (server-side only change).
 export const analyzeOcrDashboard = (verificationId: string) =>
   callOcr('analyzeOcrDashboard', verificationId)
-export const analyzeOcrPlate = (verificationId: string) =>
-  callOcr('analyzeOcrPlate', verificationId)
-export const analyzeOcrChassis = (verificationId: string) =>
-  callOcr('analyzeOcrChassis', verificationId)
 
-export type EngineSensorSessionType = 'startup' | 'idle' | 'rev'
-
-export async function analyzeEngineSensorSession(
-  verificationId: string,
-  sessionType: EngineSensorSessionType,
-): Promise<unknown> {
-  const call = httpsCallable<
-    { verificationId: string; sessionType: EngineSensorSessionType },
-    unknown
-  >(functions, 'analyzeEngineSensorSession')
-  const response = await call({ verificationId, sessionType })
-  return response.data
-}
-
-export async function analyzeEnvironmentSession(
-  verificationId: string,
-): Promise<{ status: string }> {
-  const call = httpsCallable<{ verificationId: string }, { status: string }>(
+/** Verification v2 §26/§28 — the 3 separate startup/idle/rev sessions merge
+ * into ONE fixed 23-second synchronized Audio+IMU recording, so this is now
+ * a single no-argument call (no more `sessionType`) — one Gemini audio call,
+ * not three. See functions/src/services/engine-sensor-session.service.ts. */
+export async function analyzeEngineSensorSessionV2(verificationId: string): Promise<unknown> {
+  const call = httpsCallable<{ verificationId: string }, unknown>(
     functions,
-    'analyzeEnvironmentSession',
+    'analyzeEngineSensorSessionV2',
   )
   const response = await call({ verificationId })
   return response.data

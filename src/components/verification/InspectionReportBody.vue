@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { ChevronDown, X } from 'lucide-vue-next'
 
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import VehicleDiagramOverview from '@/components/verification/VehicleDiagramOverview.vue'
+import type { DiagramMarker } from '@/components/verification/VehicleDiagramOverview.vue'
 
 export interface ReportItem {
   id: string
@@ -25,6 +27,12 @@ export interface ReportItem {
    *  sub-header renders once, right before the first item carrying its
    *  label — consecutive items sharing the same label just group under it. */
   groupLabel?: string
+  /** Verification v2 §36 — Optional (self-disclosure) items must be visibly
+   *  distinguished from AI-verified Required items, not rendered identically
+   *  (defaults true so callers that don't pass it — e.g. any future report
+   *  consumer — keep today's plain look rather than silently mislabeling
+   *  everything "使用者提供"). */
+  required?: boolean
 }
 
 export interface ReportSection {
@@ -35,21 +43,71 @@ export interface ReportSection {
   items: ReportItem[]
 }
 
-defineProps<{
-  vehicleTitle: string
-  inspectedDate: string
-  score: number | null
-  sections: ReportSection[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    vehicleTitle: string
+    inspectedDate: string
+    sections: ReportSection[]
+    /** Optional — only the real per-verification report (VerificationReportView.vue)
+     *  resolves these; the Marketplace mock report has no per-item answer data
+     *  to roll up, so it simply doesn't pass any and the diagram card hides
+     *  itself (see VehicleDiagramOverview.vue's `v-if="markers.length > 0"`). */
+    diagramMarkers?: DiagramMarker[]
+  }>(),
+  { diagramMarkers: () => [] },
+)
 
 // Presentational only — the real report (per-verification data) and the
 // Marketplace mock report (per-listing fabricated data) both feed this the
 // same normalized shape so the hero/score/category-accordion UI is defined
 // exactly once.
-const expandedSectionId = ref<string | null>(null)
+//
+// Multiple sections can be open at once (a Set, not one scalar id) — tapping
+// a diagram dot for an item like 引擎 (which spans 3 different sections)
+// needs to open all of them together, so a single-open accordion would
+// fight that. Manual header clicks just toggle their own section's presence
+// in the set independently of whatever else is already open.
+const expandedSectionIds = ref<Set<string>>(new Set())
 function toggleSection(sectionId: string): void {
-  expandedSectionId.value = expandedSectionId.value === sectionId ? null : sectionId
+  const next = new Set(expandedSectionIds.value)
+  if (next.has(sectionId)) next.delete(sectionId)
+  else next.add(sectionId)
+  expandedSectionIds.value = next
 }
+
+// Briefly highlights whichever item row(s) a diagram dot points at, after
+// jumping the matching section(s) open — the color-coded dot alone doesn't
+// say WHICH row down in the list it corresponds to once a section holds
+// more than one item.
+const highlightedItemIds = ref<Set<string>>(new Set())
+let highlightTimer: ReturnType<typeof setTimeout> | undefined
+
+function handleDiagramSelectItems(itemIds: string[]): void {
+  const matchedSections = props.sections.filter((section) =>
+    section.items.some((item) => itemIds.includes(item.id)),
+  )
+  if (matchedSections.length === 0) return
+
+  const nextExpanded = new Set(expandedSectionIds.value)
+  for (const section of matchedSections) nextExpanded.add(section.id)
+  expandedSectionIds.value = nextExpanded
+
+  highlightedItemIds.value = new Set(itemIds)
+  clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => {
+    highlightedItemIds.value = new Set()
+  }, 1800)
+
+  void nextTick(() => {
+    const firstItemId = matchedSections[0].items.find((item) => itemIds.includes(item.id))?.id
+    if (!firstItemId) return
+    document
+      .getElementById(`report-item-${firstItemId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+onBeforeUnmount(() => clearTimeout(highlightTimer))
 
 const activeImageUrl = ref<string | null>(null)
 function openImage(url: string): void {
@@ -67,14 +125,7 @@ function closeImage(): void {
       <p class="hero-date">檢驗日期：{{ inspectedDate }}</p>
     </div>
 
-    <div class="score-card">
-      <p class="score-label">檢驗總評分</p>
-      <p v-if="score !== null" class="score-value">
-        <span class="score-number">{{ score }}</span>
-        <span class="score-max">／100</span>
-      </p>
-      <p v-else class="score-pending">尚無足夠資料計算</p>
-    </div>
+    <VehicleDiagramOverview :markers="diagramMarkers" @select-items="handleDiagramSelectItems" />
 
     <div class="category-list">
       <div v-for="section in sections" :key="section.id" class="category-card">
@@ -84,12 +135,12 @@ function closeImage(): void {
           <ChevronDown
             :size="16"
             class="chevron"
-            :class="{ open: expandedSectionId === section.id }"
+            :class="{ open: expandedSectionIds.has(section.id) }"
           />
         </button>
 
         <Transition name="expand">
-          <div v-if="expandedSectionId === section.id" class="item-list">
+          <div v-if="expandedSectionIds.has(section.id)" class="item-list">
             <template v-for="(item, itemIndex) in section.items" :key="item.id">
               <p
                 v-if="
@@ -99,9 +150,22 @@ function closeImage(): void {
               >
                 {{ item.groupLabel }}
               </p>
-              <div class="item-row" :class="{ grouped: !!item.groupLabel }">
+              <div
+                :id="`report-item-${item.id}`"
+                class="item-row"
+                :class="{
+                  grouped: !!item.groupLabel,
+                  highlighted: highlightedItemIds.has(item.id),
+                }"
+              >
                 <div class="item-text">
-                  <p class="item-title">{{ item.title }}</p>
+                  <p class="item-title">
+                    {{ item.title }}
+                    <span v-if="item.required === false" class="optional-tag">使用者提供</span>
+                  </p>
+                  <p v-if="item.required === false" class="item-optional-note">
+                    此為使用者自行揭露資訊，非 AI 核心判定。
+                  </p>
                   <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
                   <p v-if="item.note" class="item-note">使用者補充：{{ item.note }}</p>
                   <div v-if="item.photos && item.photos.length > 0" class="item-photos">
@@ -159,47 +223,6 @@ function closeImage(): void {
   margin: 4px 0 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.85);
-}
-
-.score-card {
-  padding: var(--space-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.score-label {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.score-value {
-  margin: 0;
-}
-
-.score-number {
-  font-size: 40px;
-  font-weight: 800;
-  color: var(--color-primary);
-}
-
-.score-max {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-disabled);
-}
-
-.score-pending {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-disabled);
 }
 
 .category-list {
@@ -264,6 +287,11 @@ function closeImage(): void {
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
+  transition: background-color 0.3s ease;
+}
+
+.item-row.highlighted {
+  background-color: var(--color-primary-bg, #e8f1fd);
 }
 
 .item-row.grouped {
@@ -283,6 +311,25 @@ function closeImage(): void {
   font-size: 14px;
   font-weight: 700;
   color: var(--color-text-primary);
+}
+
+.optional-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.item-optional-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-disabled);
+  font-style: italic;
 }
 
 .item-ai-note {

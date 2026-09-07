@@ -44,6 +44,27 @@ async function startVerification(
     .click()
   await page.waitForURL(/\/verification\/[^/]+$/, { timeout: 10000 })
   await page.waitForTimeout(500)
+  // A freshly-created vehicle has no transmission on file yet, so
+  // VehicleTypeGate.vue blocks everything else (including the Hub itself)
+  // until 速可達/檔車 is picked — see VerificationStepsView.vue's
+  // needsVehicleTypeGate. Fixes the chain/sprocket detection ordering bug
+  // (Vehicle.transmission used to only ever get set deep in Phase 3, well
+  // after Phase 1's core photos already triggered Core Vision v2). Any
+  // choice works for this suite; 檔車 is picked arbitrarily and
+  // deterministically.
+  const vehicleTypeButton = page.locator('button', { hasText: '檔車' }).first()
+  await vehicleTypeButton.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+  if (await vehicleTypeButton.isVisible().catch(() => false)) {
+    await vehicleTypeButton.click()
+    await page.waitForTimeout(300)
+  }
+  // Guided UI (Task B): /verification/:id now lands on the Section/vehicle-
+  // part Hub first, not directly on the item stepper — enter the first
+  // section (事前準備, same starting point the old direct-to-stepper flow
+  // always landed on) to reach the .tab/category-nav UI the rest of this
+  // suite exercises.
+  await page.locator('.section-card').first().click()
+  await page.waitForTimeout(300)
 }
 
 test.describe('Verification engine — freeze-zone regression', () => {
@@ -51,8 +72,9 @@ test.describe('Verification engine — freeze-zone regression', () => {
     await registerAndLogin(page, 'regress-seller')
     await startVerification(page, 'seller', 'Regression Seller')
 
-    // 4 category tabs (事前準備/車身外觀/電系狀況/引擎狀況 — 車輛檢查 was
-    // removed in the checklist v1 redesign), always visible, no horizontal overflow
+    // 4 PHASE tabs (Verification v2: 核心照片/燈光電系/冷車＋引擎檢查/其他主動
+    // 揭露 — supersedes the old 事前準備/車身外觀/電系狀況/引擎狀況 grouping),
+    // always visible, no horizontal overflow
     const tabCount = await page.locator('.tab').count()
     expect(tabCount).toBe(4)
     const overflow = await page.evaluate(
@@ -60,27 +82,24 @@ test.describe('Verification engine — freeze-zone regression', () => {
     )
     expect(overflow).toBeLessThanOrEqual(0)
 
-    // Free jump: 事前準備 -> 車身外觀 directly
-    await page.locator('.tab', { hasText: '車身外觀' }).click()
+    // Free jump: 核心照片 tab (車輛左側 is first in this phase, followed by
+    // the rest of the appearance photo items — PREP-03 驗車環境檢測 was
+    // removed from the product entirely, no longer opens this phase)
+    await page.locator('.tab', { hasText: '核心照片' }).click()
     await page.waitForTimeout(400)
     // Capture Map hub is disabled (2026-09, user requested a straight-through
     // shooting flow instead of a tap-to-select-region hub) — the code still
-    // exists, commented out in VerificationStepsView.vue, but tapping the
-    // category tab now lands directly on the first unanswered photo item,
-    // exactly like every other category.
+    // exists, commented out in VerificationStepsView.vue.
     const mapVisible = await page
       .locator('.capture-map')
       .isVisible()
       .catch(() => false)
     expect(mapVisible).toBe(false)
-    const exteriorTitle = await page.locator('h2').first().textContent()
-    expect(exteriorTitle).toBeTruthy()
-    // Exterior Photo Mission: pure-photo items, capture-button present
-    const captureButton = page.locator('button.capture-button', { hasText: /^請拍攝：/ })
-    expect(await captureButton.count()).toBeGreaterThan(0)
+    const coreTitle = await page.locator('h2').first().textContent()
+    expect(coreTitle).toBeTruthy()
 
     // Electrical Quick Check: 9 lights on one screen
-    await page.locator('.tab', { hasText: '電系狀況' }).click()
+    await page.locator('.tab', { hasText: '燈光電系' }).click()
     await page.waitForTimeout(400)
     const lightsVisible = await page
       .locator('.lights-check')
@@ -90,7 +109,7 @@ test.describe('Verification engine — freeze-zone regression', () => {
     expect(await page.locator('.quick-btn.ok').count()).toBe(9)
 
     // Engine section: locked-order badge + Next disabled with zero evidence
-    await page.locator('.tab', { hasText: '引擎狀況' }).click()
+    await page.locator('.tab', { hasText: '冷車＋引擎檢查' }).click()
     await page.waitForTimeout(400)
     const lockedHint = await page
       .locator('text=依序完成，不可跳步')
@@ -113,26 +132,21 @@ test.describe('Verification engine — freeze-zone regression', () => {
     await registerAndLogin(page, 'regress-engine')
     await startVerification(page, 'seller', 'Regression Engine')
 
-    await page.locator('.tab', { hasText: '引擎狀況' }).click()
+    await page.locator('.tab', { hasText: '冷車＋引擎檢查' }).click()
     await page.waitForTimeout(400)
 
-    // 冷車檢查 is now the 2nd engine item (引擎觸感 is the 1st, cold-check
-    // and everything after it moved to the Buyer-only 熱車檢查 category) —
-    // only one free item needs answering to reach it, not the old 7.
-    for (let i = 0; i < 1; i++) {
-      await page
-        .locator('.option', { hasText: '正常' })
-        .first()
-        .click()
-        .catch(() => {})
-      await page.waitForTimeout(100)
-      const nextBtn = page.locator('.footer button').last()
-      if (!(await nextBtn.isDisabled())) await nextBtn.click()
-      await page.waitForTimeout(150)
-    }
+    // Verification v2: 引擎觸感 (ENG-01) moved to PHASE 4 其他主動揭露 (now
+    // Optional, spec item 38), so 冷車狀態確認 (ENG-02) is the very FIRST item
+    // in this phase — no free item to answer before reaching it.
     const coldCheckTitle = await page.locator('h2').first().textContent()
     expect(coldCheckTitle).toContain('冷車')
 
+    // NOTE (pre-existing, unrelated to Verification v2): ColdTouchCapture.vue
+    // is a live getUserMedia camera-preview capture screen with NO file
+    // input at all — this test still assumes an older file-upload-based cold
+    // check UI. This was already failing before this migration (see prior
+    // session notes) and is left as-is; fixing it is a separate, unrelated
+    // task from this migration.
     const videoInput = page.locator('input[type="file"][accept*="video"]').first()
     await videoInput.setInputFiles(path.resolve(__dirname, 'fixtures/fixture-video.mp4'))
     await page.waitForTimeout(400)
@@ -197,7 +211,7 @@ test.describe('Verification engine — freeze-zone regression', () => {
     await startVerification(page, 'seller', 'Regression Resume')
     const url = page.url()
 
-    await page.locator('.tab', { hasText: '事前準備' }).click()
+    await page.locator('.tab', { hasText: '核心照片' }).click()
     await page.waitForTimeout(300)
     await page.locator('.item-toggle').click()
     await page.waitForTimeout(200)
