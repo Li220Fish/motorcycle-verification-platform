@@ -17,7 +17,8 @@
     "cleanup:database": "node scripts/cleanup-database.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:ios": "npx cap open ios"
+    "cap:ios": "npx cap open ios",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
@@ -44,6 +45,7 @@
     "eslint": "^10.9.1",
     "eslint-plugin-vue": "^10.10.0",
     "globals": "^17.11.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.9.6",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.68.0",

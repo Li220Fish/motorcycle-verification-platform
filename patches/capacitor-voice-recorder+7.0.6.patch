@@ -1,0 +1,37 @@
+diff --git a/node_modules/capacitor-voice-recorder/Package.swift b/node_modules/capacitor-voice-recorder/Package.swift
+new file mode 100644
+index 0000000..e4ab5f3
+--- /dev/null
++++ b/node_modules/capacitor-voice-recorder/Package.swift
+@@ -0,0 +1,31 @@
++// swift-tools-version: 5.9
++import PackageDescription
++
++let package = Package(
++    name: "CapacitorVoiceRecorder",
++    platforms: [.iOS(.v14)],
++    products: [
++        .library(
++            name: "CapacitorVoiceRecorder",
++            targets: ["VoiceRecorder", "VoiceRecorderObjC"])
++    ],
++    dependencies: [
++        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")
++    ],
++    targets: [
++        .target(
++            name: "VoiceRecorderObjC",
++            path: "ios/Plugin",
++            sources: ["VoiceRecorderPlugin.m"],
++            publicHeadersPath: "."),
++        .target(
++            name: "VoiceRecorder",
++            dependencies: [
++                .product(name: "Capacitor", package: "capacitor-swift-pm"),
++                .product(name: "Cordova", package: "capacitor-swift-pm"),
++                "VoiceRecorderObjC"
++            ],
++            path: "ios/Plugin",
++            exclude: ["Info.plist", "VoiceRecorderPlugin.m", "VoiceRecorderPlugin.h"])
++    ]
++)
