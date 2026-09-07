@@ -1,9 +1,23 @@
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 
 import { storage } from './firebase'
 
 function timestampedName(fileName: string): string {
   return `${Date.now()}-${fileName}`
+}
+
+/** Deletes a previously-uploaded public file by its download URL (as
+ *  returned by uploadFileAtPath/uploadVehiclePhoto etc). Swallows
+ *  "already gone" so a stale reference or a race with another delete never
+ *  surfaces as a user-facing failure — the caller's own Firestore update is
+ *  the source of truth either way. */
+async function deleteFileAtUrl(url: string): Promise<void> {
+  try {
+    await deleteObject(ref(storage, url))
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code !== 'storage/object-not-found') throw error
+  }
 }
 
 /**
@@ -93,6 +107,7 @@ export const storageService = {
   uploadFileAtPath,
   uploadPrivateFile,
   resolveDownloadUrl,
+  deleteFileAtUrl,
   uploadEvidenceFile,
   uploadChatImage,
   uploadDiscussionImage,

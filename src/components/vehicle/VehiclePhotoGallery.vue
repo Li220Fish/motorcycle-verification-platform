@@ -2,12 +2,16 @@
 /**
  * 車輛詳情's own photo gallery — cover photo (always `photos[0]`, matching
  * VehicleDetailView's pre-existing "hero = photos[0]" convention) plus a
- * thumbnail row for the rest. Tapping a thumbnail promotes it to cover by
- * reordering the array; there is no separate "cover" flag on the Vehicle
- * doc, index 0 IS the cover.
+ * thumbnail row for the rest (view/delete only — a leftover of a removed
+ * "add to gallery" path, kept so vehicles that already have extra photos
+ * don't lose them). The "新增照片" button lives on the cover banner and
+ * always replaces the cover — never appends a thumbnail — so a vehicle only
+ * ever has exactly one cover; the old cover file is deleted from Storage
+ * once the replacement is saved, same as re-cropping and deleting a photo
+ * below both clean up their own old file.
  */
 import { computed, ref } from 'vue'
-import { Bike, Plus, Star, Trash2 } from 'lucide-vue-next'
+import { Bike, Plus, Trash2 } from 'lucide-vue-next'
 import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
@@ -19,6 +23,7 @@ const vehicleStore = useVehicleStore()
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const activePhotoUrl = ref<string | null>(null)
+const pendingFile = ref<File | null>(null)
 // Matches wherever the photo actually displays — the cover banner reads as
 // roughly 16:9 (fixed 200px height across a mobile-width card), thumbnails
 // are perfect 1:1 squares — so the crop frame always produces a shape that
@@ -33,28 +38,30 @@ function triggerAdd(): void {
   fileInput.value?.click()
 }
 
-async function handleFileChange(event: Event): Promise<void> {
+function handleFileChange(event: Event): void {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  // Crop happens before anything is uploaded. PhotoLightbox opens straight
+  // into crop mode for a local File (see its `localFile` prop); the frame is
+  // always the 16:9 cover shape since this always targets the cover slot.
+  activePhotoAspect.value = 16 / 9
+  pendingFile.value = file
+}
+
+async function handleNewPhotoCropConfirmed(blob: Blob): Promise<void> {
+  const oldCover = cover.value
   uploading.value = true
   try {
-    // Same resize/re-encode as verification evidence / marketplace listing
-    // photos — always re-encodes to JPEG, so the stored extension follows
-    // the actual bytes rather than the original file's (possibly different)
-    // extension.
-    const { blob } = await imageCompressionService.compressImage(file)
-    const url = await storageService.uploadVehiclePhoto(props.vehicleId, blob, 'jpg')
-    await vehicleStore.updateVehicle(props.vehicleId, { photos: [...props.photos, url] })
+    const { blob: compressed } = await imageCompressionService.compressImage(blob)
+    const url = await storageService.uploadVehiclePhoto(props.vehicleId, compressed, 'jpg')
+    await vehicleStore.updateVehicle(props.vehicleId, { photos: [url, ...thumbnails.value] })
+    pendingFile.value = null
+    if (oldCover) await storageService.deleteFileAtUrl(oldCover)
   } finally {
     uploading.value = false
   }
-}
-
-async function setCover(url: string): Promise<void> {
-  const next = [url, ...props.photos.filter((photo) => photo !== url)]
-  await vehicleStore.updateVehicle(props.vehicleId, { photos: next })
 }
 
 async function removePhoto(url: string): Promise<void> {
@@ -62,6 +69,7 @@ async function removePhoto(url: string): Promise<void> {
   await vehicleStore.updateVehicle(props.vehicleId, {
     photos: props.photos.filter((photo) => photo !== url),
   })
+  await storageService.deleteFileAtUrl(url)
 }
 
 function openPhoto(url: string, aspect: number): void {
@@ -84,6 +92,7 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
     const nextPhotos = props.photos.map((photo) => (photo === originalUrl ? newUrl : photo))
     await vehicleStore.updateVehicle(props.vehicleId, { photos: nextPhotos })
     activePhotoUrl.value = null
+    await storageService.deleteFileAtUrl(originalUrl)
   } finally {
     replacingPhoto.value = false
   }
@@ -98,16 +107,13 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
         <Bike :size="56" color="var(--color-text-disabled)" />
       </div>
       <button class="add-btn" :disabled="uploading" @click="triggerAdd">
-        <Plus :size="14" />{{ uploading ? '上傳中...' : '新增照片' }}
+        <Plus :size="14" />{{ uploading ? '上傳中...' : cover ? '更換封面' : '新增照片' }}
       </button>
     </div>
 
     <div v-if="thumbnails.length > 0" class="thumb-row">
       <div v-for="photo in thumbnails" :key="photo" class="thumb">
         <img :src="photo" class="thumb-img" alt="" @click="openPhoto(photo, 1)" />
-        <button class="thumb-btn cover-btn" aria-label="設為封面" @click="setCover(photo)">
-          <Star :size="11" />
-        </button>
         <button class="thumb-btn delete-btn" aria-label="刪除照片" @click="removePhoto(photo)">
           <Trash2 :size="11" />
         </button>
@@ -123,7 +129,16 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
     />
 
     <PhotoLightbox
-      v-if="activePhotoUrl"
+      v-if="pendingFile"
+      :local-file="pendingFile"
+      :aspect-ratio="activePhotoAspect"
+      :uploading="uploading"
+      @close="pendingFile = null"
+      @crop-confirmed="handleNewPhotoCropConfirmed"
+    />
+
+    <PhotoLightbox
+      v-else-if="activePhotoUrl"
       :image-url="activePhotoUrl"
       :aspect-ratio="activePhotoAspect"
       :uploading="replacingPhoto"
@@ -216,10 +231,6 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-}
-
-.cover-btn {
-  left: 2px;
 }
 
 .delete-btn {

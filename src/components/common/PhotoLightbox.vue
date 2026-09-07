@@ -27,17 +27,20 @@
  * uploading, and replacing the URL in its own data, and controls `uploading`
  * to keep this view showing a busy state until that finishes.
  */
-import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Check, Crop as CropIcon, Loader2, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 
+/** Either an already-uploaded photo (view-first, crop is opt-in via the
+ *  "裁切" button) or a not-yet-uploaded local File (skips straight to crop —
+ *  there's nothing to "view" yet, the caller hasn't uploaded anything). */
 const props = withDefaults(
-  defineProps<{ imageUrl: string; uploading?: boolean; aspectRatio?: number }>(),
+  defineProps<{ imageUrl?: string; localFile?: File; uploading?: boolean; aspectRatio?: number }>(),
   { aspectRatio: 1 },
 )
 const emit = defineEmits<{ close: []; cropConfirmed: [Blob] }>()
 
 type Mode = 'view' | 'loading-crop' | 'crop' | 'error'
-const mode = ref<Mode>('view')
+const mode = ref<Mode>(props.localFile ? 'loading-crop' : 'view')
 const errorMessage = ref('')
 
 let bitmap: ImageBitmap | null = null
@@ -106,20 +109,31 @@ async function enterCropMode(): Promise<void> {
   mode.value = 'loading-crop'
   errorMessage.value = ''
   try {
-    // `cache: 'no-store'` is required, not just an optimization — this image
-    // was almost always already shown via a plain `<img>` tag (view mode,
-    // gallery thumbnails), which primes the browser's disk cache. A default
-    // fetch() then revalidates against that cache entry; Chromium has a bug
-    // where a 304 revalidation response loses its Access-Control-Allow-Origin
-    // header on the way back to fetch(), so the CORS check fails even though
-    // the real server response always carries the header (confirmed via
-    // curl). Forcing a full re-fetch every time sidesteps the 304 path
-    // entirely instead of depending on a Chromium fix.
-    const response = await fetch(props.imageUrl, { cache: 'no-store' })
-    if (!response.ok) throw new Error(`fetch failed: ${response.status}`)
-    const sourceBlob = await response.blob()
+    let sourceBlob: Blob
+    if (props.localFile) {
+      sourceBlob = props.localFile
+    } else {
+      // `cache: 'no-store'` is required, not just an optimization — this image
+      // was almost always already shown via a plain `<img>` tag (view mode,
+      // gallery thumbnails), which primes the browser's disk cache. A default
+      // fetch() then revalidates against that cache entry; Chromium has a bug
+      // where a 304 revalidation response loses its Access-Control-Allow-Origin
+      // header on the way back to fetch(), so the CORS check fails even though
+      // the real server response always carries the header (confirmed via
+      // curl). Forcing a full re-fetch every time sidesteps the 304 path
+      // entirely instead of depending on a Chromium fix.
+      const response = await fetch(props.imageUrl!, { cache: 'no-store' })
+      if (!response.ok) throw new Error(`fetch failed: ${response.status}`)
+      sourceBlob = await response.blob()
+    }
     cleanupBitmap()
-    bitmap = await createImageBitmap(sourceBlob)
+    // A local file is a fresh camera-roll pick, still carrying its original
+    // EXIF orientation — `imageOrientation: 'from-image'` bakes that into the
+    // decode so the preview (and resulting crop) isn't sideways. An
+    // already-uploaded photo went through image-compression.service.ts on
+    // its way in, which already applied this, so re-applying it here would
+    // be a no-op either way.
+    bitmap = await createImageBitmap(sourceBlob, { imageOrientation: 'from-image' })
     previewObjectUrl = URL.createObjectURL(sourceBlob)
     previewUrl.value = previewObjectUrl
     naturalSize.width = bitmap.width
@@ -142,7 +156,17 @@ async function enterCropMode(): Promise<void> {
   }
 }
 
+onMounted(() => {
+  if (props.localFile) void enterCropMode()
+})
+
 function cancelCrop(): void {
+  // A local file never had a "view" state to fall back to — there's nothing
+  // uploaded yet, so cancelling means abandoning the pick entirely.
+  if (props.localFile) {
+    emit('close')
+    return
+  }
   mode.value = 'view'
   cleanupBitmap()
 }
