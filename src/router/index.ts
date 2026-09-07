@@ -140,6 +140,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/settings/preferences',
+      name: 'settings-preferences',
+      component: () => import('@/views/PreferencesSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/settings/privacy',
       name: 'settings-privacy',
       component: () => import('@/views/PrivacyDataView.vue'),

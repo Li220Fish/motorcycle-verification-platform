@@ -6,6 +6,7 @@ import {
   Home,
   Info,
   LogOut,
+  Settings,
   Shield,
   User as UserIcon,
 } from 'lucide-vue-next'
@@ -26,6 +27,7 @@ interface SettingSection {
 const sections: SettingSection[] = [
   { icon: UserIcon, label: '帳號', to: '/settings/account' },
   { icon: Bell, label: '通知', to: '/settings/notifications' },
+  { icon: Settings, label: '調整設置', to: '/settings/preferences' },
   { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
   { icon: Shield, label: '資料與隱私', to: '/settings/privacy' },
   { icon: Info, label: '關於 MotoVerify', to: '/settings/about' },

@@ -5,12 +5,15 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { platformService } from './services/platform/platform.service'
+import { useThemeStore } from './stores/theme.store'
 import './style.css'
 
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+
+void useThemeStore().initialize()
 
 /**
  * Android hardware back button + system edge-swipe-back gesture: Capacitor's
