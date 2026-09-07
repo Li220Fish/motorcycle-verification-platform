@@ -374,6 +374,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
 
 .hero {
   position: relative;
+  margin-top: var(--space-sm);
   height: 260px;
   display: flex;
   align-items: center;
