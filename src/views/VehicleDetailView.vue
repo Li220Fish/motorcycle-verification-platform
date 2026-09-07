@@ -485,7 +485,7 @@ onMounted(async () => {
         </label>
         <label>
           <span>公升數（L）</span>
-          <input v-model="fuelForm.liters" type="number" min="0" step="0.1" />
+          <input v-model="fuelForm.liters" type="number" min="0" step="0.01" />
         </label>
         <label>
           <span>金額（元）</span>
