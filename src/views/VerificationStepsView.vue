@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
+import BasicHealthCheck13 from '@/components/verification/BasicHealthCheck13.vue'
 import CorePhotoCaptureFlow from '@/components/verification/CorePhotoCaptureFlow.vue'
 import ElectricalLightsCheck from '@/components/verification/ElectricalLightsCheck.vue'
 import EngineCompleteChoice from '@/components/verification/EngineCompleteChoice.vue'
@@ -59,6 +60,10 @@ const hubOpen = ref(true)
 // there's nothing left blocking completion at this exact point — asking
 // explicitly ("直接結束" vs "填寫補充項目") beats silently continuing.
 const showEngineCompleteChoice = ref(false)
+// 基本13項健檢 — a standalone checklist opened from the Hub, kept separate
+// from hubOpen/currentIndex since it isn't part of the flat item flow (see
+// BasicHealthCheck13.vue's own header comment for why).
+const basicHealthCheckOpen = ref(false)
 // Chain/sprocket detection bug fix: hasExposedChainSprocket (both the
 // client's Phase 1 item-visibility check and the Trusted Backend's Core
 // Vision v2 gating — see vehicle-context.service.ts) reads Vehicle.
@@ -409,6 +414,16 @@ function handleEnterSectionFromHub(sectionId: string): void {
   hubOpen.value = false
 }
 
+function handleOpenBasicHealthCheck(): void {
+  hubOpen.value = false
+  basicHealthCheckOpen.value = true
+}
+
+function handleCloseBasicHealthCheck(): void {
+  basicHealthCheckOpen.value = false
+  hubOpen.value = true
+}
+
 const ANALYSIS_ROUTE_KEYS = [
   'coreVision',
   'dashboardOcr',
@@ -505,7 +520,9 @@ onMounted(() => {
     @select-section="handleEnterSectionFromHub"
     @complete="handleComplete"
     @retry-analysis="handleRetryAnalysis"
+    @open-basic-health-check="handleOpenBasicHealthCheck"
   />
+  <BasicHealthCheck13 v-else-if="basicHealthCheckOpen" @back="handleCloseBasicHealthCheck" />
   <EngineCompleteChoice
     v-else-if="showEngineCompleteChoice"
     :completing="completing"

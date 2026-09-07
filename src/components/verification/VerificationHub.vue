@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Circle, Loader2, Lock } from 'lucide-vue-next'
+import { Check, Circle, ClipboardCheck, ChevronRight, Loader2, Lock } from 'lucide-vue-next'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import type { MissingRequiredItem, SectionProgress } from '@/stores/verification.store'
@@ -17,7 +17,12 @@ const props = defineProps<{
   completing: boolean
 }>()
 
-const emit = defineEmits<{ selectSection: [string]; complete: []; retryAnalysis: [string] }>()
+const emit = defineEmits<{
+  selectSection: [string]
+  complete: []
+  retryAnalysis: [string]
+  openBasicHealthCheck: []
+}>()
 
 // Human labels for Verification.analysisStatus's route keys (see
 // functions/src/services/analysis-status.service.ts's AnalysisRouteKey) —
@@ -91,6 +96,17 @@ const canSubmit = () =>
     <h2>驗車進度</h2>
     <p class="hint">選擇一個車輛部位開始拍攝</p>
 
+    <button class="basic-check-row" @click="emit('openBasicHealthCheck')">
+      <div class="basic-check-icon">
+        <ClipboardCheck :size="20" color="var(--color-primary)" />
+      </div>
+      <div class="basic-check-info">
+        <span class="basic-check-title">基本13項健檢</span>
+        <span class="basic-check-desc">點擊車輛照片上的項目，快速標示已檢查外觀部位</span>
+      </div>
+      <ChevronRight :size="18" color="var(--color-text-disabled)" />
+    </button>
+
     <div class="section-grid">
       <button
         v-for="section in sections"
@@ -148,6 +164,10 @@ const canSubmit = () =>
 <style scoped>
 .verification-hub {
   padding: var(--space-md);
+  /* This screen has no AppHeader ancestor (it fully replaces the step flow's
+     header while open), so it needs its own top inset — without it, the
+     h2 sits flush under the status bar/notch on iOS. */
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -162,6 +182,47 @@ const canSubmit = () =>
   font-size: 13px;
   color: var(--color-text-secondary);
   margin: 0 0 var(--space-sm);
+}
+
+.basic-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-bg);
+  text-align: left;
+}
+
+.basic-check-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.basic-check-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.basic-check-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.basic-check-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .section-grid {
