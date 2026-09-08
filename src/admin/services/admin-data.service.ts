@@ -20,7 +20,7 @@ import type { MockVehicleNews } from '@/data/home/vehicle-news-mock'
 import type { ListingAppointment } from '@/types/listing-appointment'
 import type { Vehicle } from '@/types/vehicle'
 import type { Verification } from '@/types/verification'
-import type { VerificationAnswer } from '@/types/verification-evidence'
+import type { VerificationAnswer, VerificationEvidence } from '@/types/verification-evidence'
 import type { VoltageSession } from '@/types/voltage-session'
 
 /**
@@ -127,6 +127,23 @@ export async function listVerificationAnswers(
   return snapshot.docs.map((d) => {
     const data = d.data()
     return { ...data, updatedAt: toMillis(data.updatedAt) } as VerificationAnswer
+  })
+}
+
+/** Every evidence file (photo/video) for one verification, itemId included —
+ * used by VerifyDetailSection.vue to let an admin actually watch/view the
+ * raw capture, not just read the AI's verdict. `remoteUrl` here is still a
+ * Storage object PATH (see storage.service.ts's uploadPrivateFile doc
+ * comment) — the caller resolves it to a fresh download URL at render time,
+ * same as the mobile report already does, never persisted or cached past
+ * the current session. */
+export async function listVerificationEvidence(
+  verificationId: string,
+): Promise<VerificationEvidence[]> {
+  const snapshot = await getDocs(collection(db, 'verifications', verificationId, 'evidence'))
+  return snapshot.docs.map((d) => {
+    const data = d.data()
+    return { ...data, createdAt: toMillis(data.createdAt) } as VerificationEvidence
   })
 }
 
@@ -582,4 +599,24 @@ export async function setAiPromptOverride(key: string, text: string): Promise<vo
 
 export async function resetAiPromptOverride(key: string): Promise<void> {
   await deleteDoc(doc(db, 'aiPrompts', key))
+}
+
+/**
+ * One-time maintenance action: corrects every conversations/{id}.
+ * memberSnapshots displayName that's drifted from the member's actual
+ * current users/{uid}.displayName (see functions/src/functions/
+ * admin-sync-conversation-names.ts's doc comment for why this drifted in
+ * the first place). Safe to run more than once — it's a no-op for anything
+ * already correct.
+ */
+export async function syncConversationMemberNames(): Promise<{
+  conversationsScanned: number
+  conversationsUpdated: number
+}> {
+  const call = httpsCallable<
+    Record<string, never>,
+    { conversationsScanned: number; conversationsUpdated: number }
+  >(functions, 'adminSyncConversationMemberNames')
+  const response = await call({})
+  return response.data
 }

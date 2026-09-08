@@ -147,7 +147,9 @@ onUnmounted(() => {
           <Avatar :name="discussionStore.currentPost.authorSnapshot.displayName" :size="32" />
           <div class="author-col">
             <span class="author-row">
-              <span class="author">{{ discussionStore.currentPost.authorSnapshot.displayName }}</span>
+              <span class="author">{{
+                discussionStore.currentPost.authorSnapshot.displayName
+              }}</span>
               <span v-if="isAdminPost" class="official-badge">官方</span>
               <span v-if="discussionStore.currentPost.featured" class="featured-badge">
                 <Sparkles :size="11" />精選

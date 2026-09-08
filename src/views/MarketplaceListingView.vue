@@ -180,6 +180,19 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
   if (!current?.sellerId || !authStore.user) return
   bookingSubmitting.value = true
   try {
+    // Create the conversation BEFORE the appointment doc — the appointment's
+    // onAppointmentCreated Cloud Function looks up this conversation (by
+    // seller+buyer+listingId) to link the "新的看車預約" notification straight
+    // to the chat instead of the listing page, so it must already exist by
+    // the time that trigger fires (also gives the seller somewhere to see
+    // and respond to the booking even if they never separately tap "聊聊" —
+    // see ChatRoomView.vue's appointment banner).
+    const conversationId = await chatStore.findOrCreateConversation(
+      { displayName: authStore.user.displayName || authStore.user.email || '使用者' },
+      current.sellerId,
+      { displayName: current.sellerName },
+      { listingId: current.id },
+    )
     await listingService.createAppointment({
       listingId: current.id,
       buyerId: authStore.user.id,
@@ -188,16 +201,6 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
     })
     bookedTimestamps.value = [...bookedTimestamps.value, payload.scheduledAt]
 
-    // Create the conversation right away (not just when "聊聊" is tapped) so
-    // the seller has somewhere to see and respond to this booking — without
-    // this, a buyer who never separately opens chat would leave the seller
-    // with no way to approve/decline it (see ChatRoomView.vue's banner).
-    const conversationId = await chatStore.findOrCreateConversation(
-      { displayName: authStore.user.displayName || authStore.user.email || '使用者' },
-      current.sellerId,
-      { displayName: current.sellerName },
-      { listingId: current.id },
-    )
     await chatService.sendSystemNote(
       conversationId,
       authStore.user.id,

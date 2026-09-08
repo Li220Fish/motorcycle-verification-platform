@@ -7,6 +7,8 @@ export type NotificationType =
   | 'chat_message'
   | 'listing_favorited'
   | 'booking_request'
+  | 'booking_approved'
+  | 'booking_declined'
   | 'system'
   | 'vehicle_news'
   | 'discussion_featured'

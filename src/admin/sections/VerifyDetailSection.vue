@@ -7,14 +7,16 @@ import {
   listAllVehicles,
   listUserProfiles,
   listVerificationAnswers,
+  listVerificationEvidence,
   type AdminUserProfile,
   type AdminVerificationDetail,
 } from '../services/admin-data.service'
 import { findItemById } from '@/data/verification'
 import { aiVisionItemsForAprItem, aiVisionItemTitle } from '@/data/verification/ai-vision-items'
+import { storageService } from '@/services/firebase/storage.service'
 import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
 import type { Vehicle } from '@/types/vehicle'
-import type { VerificationAnswer } from '@/types/verification-evidence'
+import type { VerificationAnswer, VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -24,6 +26,15 @@ const verification = ref<AdminVerificationDetail | null>(null)
 const vehicle = ref<Vehicle | null>(null)
 const submitter = ref<AdminUserProfile | null>(null)
 const answers = ref<VerificationAnswer[]>([])
+// Resolved, storage.rules-checked download URLs keyed by evidence id — never
+// cached past this page load, same reasoning as the mobile report's
+// identical pattern (VerificationReportView.vue's resolvedPhotoUrls).
+const evidenceByItem = ref<Record<string, VerificationEvidence[]>>({})
+const evidenceUrls = ref<Record<string, string>>({})
+
+function evidenceFor(itemId: string): VerificationEvidence[] {
+  return evidenceByItem.value[itemId] ?? []
+}
 
 const STATUS_LABEL: Record<string, string> = {
   draft: '草稿',
@@ -132,14 +143,34 @@ onMounted(async () => {
   const ver = await getVerificationById(props.id)
   verification.value = ver
   if (ver) {
-    const [vehicles, users, ans] = await Promise.all([
+    const [vehicles, users, ans, evidence] = await Promise.all([
       listAllVehicles(),
       listUserProfiles(),
       listVerificationAnswers(props.id),
+      listVerificationEvidence(props.id),
     ])
     vehicle.value = vehicles.find((v) => v.id === ver.vehicleId) ?? null
     submitter.value = users.find((u) => u.uid === ver.userId) ?? null
     answers.value = ans
+
+    const byItem: Record<string, VerificationEvidence[]> = {}
+    for (const item of evidence) (byItem[item.itemId] ??= []).push(item)
+    evidenceByItem.value = byItem
+
+    const urlEntries = await Promise.all(
+      evidence
+        .filter((item) => !!item.remoteUrl)
+        .map(async (item) => {
+          try {
+            return [item.id, await storageService.resolveDownloadUrl(item.remoteUrl!)] as const
+          } catch {
+            return null
+          }
+        }),
+    )
+    evidenceUrls.value = Object.fromEntries(
+      urlEntries.filter((entry): entry is readonly [string, string] => !!entry),
+    )
   }
   loading.value = false
 })
@@ -294,6 +325,31 @@ onMounted(async () => {
               <p v-if="group.answer.note" class="answer-note">
                 使用者備註：{{ group.answer.note }}
               </p>
+
+              <div v-if="evidenceFor(group.answer.itemId).length > 0" class="evidence-strip">
+                <div
+                  v-for="item in evidenceFor(group.answer.itemId)"
+                  :key="item.id"
+                  class="evidence-tile"
+                >
+                  <video
+                    v-if="item.type === 'video' && evidenceUrls[item.id]"
+                    :src="evidenceUrls[item.id]"
+                    controls
+                    playsinline
+                    class="evidence-media"
+                  />
+                  <img
+                    v-else-if="item.type === 'photo' && evidenceUrls[item.id]"
+                    :src="evidenceUrls[item.id]"
+                    alt=""
+                    class="evidence-media"
+                  />
+                  <span v-else class="evidence-unresolved">
+                    {{ evidenceUrls[item.id] === undefined ? '無法載入證據檔案' : item.type }}
+                  </span>
+                </div>
+              </div>
 
               <div v-if="group.answer.aiResult" class="ai-block">
                 <dl class="admin-kv">
@@ -468,6 +524,41 @@ onMounted(async () => {
   font-size: 12.5px;
   color: var(--muted);
   font-style: italic;
+}
+
+.evidence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.evidence-tile {
+  width: 140px;
+  flex: 0 0 auto;
+}
+
+.evidence-media {
+  width: 140px;
+  max-height: 180px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #000;
+  display: block;
+  object-fit: contain;
+}
+
+.evidence-unresolved {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  height: 80px;
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px;
 }
 
 .ai-block {

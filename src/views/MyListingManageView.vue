@@ -187,20 +187,73 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
   }
 }
 
-// Per-date custom viewing times (replaces the old shared-preset-button
-// list) — each open date keeps its own freely-chosen times, so e.g.
-// tomorrow 10:00-12:00 and the day after a completely different (or no)
-// window is fully expressible, including times a fixed preset list never
-// offered (a buyer wanting a 凌晨 viewing).
+// Rule-based 設定（取代兩個更早的做法：先是「一次一個日期、每個日期時段各自
+// 獨立」，後來改成「先設定一組共用時段、再多選日期」但那組時段是全部日期共
+// 用——使用者實際的需求是「明天 15:00-18:00、後天卻是 12:00-16:00」這種不同
+// 日期需要不同時段組合的情況，兩者都無法表達）。
+//
+// 這裡把 availableSlots（Firestore 儲存格式仍是 per-date 的 Record<date,
+// string[]>，完全不用改 schema、BookingSheet.vue 等既有讀取端都不用動）依
+// 「時段陣列的內容」重新分組成一條條「規則」——時段完全相同的日期自動合併成
+// 同一條規則，時段不同的日期各自成一條規則，就像行事曆把同一組時間的多天events
+// 顯示成一條、不同時間的另外開一條。每條規則可以獨立編輯（改時段/改日期）或
+// 整條刪除，新增規則就是「先設定這組時段，再選要套用的日期」——原本兩步驟的
+// UX 保留，只是現在可以重複做很多次，各自套用到不同日期。
 const workingSlots = ref<Record<string, string[]>>({})
-const editingDate = ref<string | null>(null)
+
+interface SlotRule {
+  key: string
+  times: string[]
+  dates: string[]
+}
+
+const rules = computed<SlotRule[]>(() => {
+  const byTimesKey = new Map<string, { times: string[]; dates: string[] }>()
+  for (const [date, times] of Object.entries(workingSlots.value)) {
+    if (!times || times.length === 0) continue
+    const sortedTimes = [...times].sort()
+    const key = sortedTimes.join(',')
+    const entry = byTimesKey.get(key) ?? { times: sortedTimes, dates: [] }
+    entry.dates.push(date)
+    byTimesKey.set(key, entry)
+  }
+  return [...byTimesKey.values()]
+    .map((entry) => ({ key: entry.times.join(','), times: entry.times, dates: entry.dates.sort() }))
+    .sort((a, b) => (a.dates[0] ?? '').localeCompare(b.dates[0] ?? ''))
+})
+
+const highlightedDates = computed(() =>
+  Object.keys(workingSlots.value).filter((date) => (workingSlots.value[date]?.length ?? 0) > 0),
+)
+
+function formatRuleDates(dates: string[]): string {
+  return dates
+    .map((date) => {
+      const [, month, day] = date.split('-').map(Number)
+      return `${month}/${day}`
+    })
+    .join('、')
+}
+
+// null = editor closed; NEW_RULE_KEY = adding a fresh rule; any other string
+// = editing that existing rule (matches SlotRule.key, i.e. its joined times).
+const NEW_RULE_KEY = '__new__'
+const editingRuleKey = ref<string | null>(null)
+const editingOriginalDates = ref<string[]>([])
+const draftTimes = ref<string[]>([])
+const draftDates = ref<Set<string>>(new Set())
 const newTimeInput = ref('')
+const savingRule = ref(false)
+const ruleMessage = ref('')
+
+const isEditorOpen = computed(() => editingRuleKey.value !== null)
+const draftDatesArray = computed(() => [...draftDates.value])
 
 // A seller who keeps the same handful of viewing times (e.g. always 10:00 /
-// 14:00) shouldn't have to re-pick them one date at a time — remembers the
-// last 5 distinct times added across ANY date, most-recent-first, so they
-// show up as one-tap shortcuts instead. Purely a per-device UI convenience,
-// not listing data, so localStorage is enough — no Firestore field for this.
+// 14:00) shouldn't have to re-type them every time — remembers the last 5
+// distinct times ever added, most-recent-first, so they show up as one-tap
+// shortcuts. Purely a per-device UI convenience, not listing data, so
+// localStorage is enough — no Firestore field for this.
 const RECENT_TIMES_KEY = 'motoverify:recentViewingTimes'
 const MAX_RECENT_TIMES = 5
 
@@ -227,47 +280,90 @@ function rememberTime(time: string): void {
   }
 }
 
-const highlightedDates = computed(() =>
-  Object.keys(workingSlots.value).filter((date) => (workingSlots.value[date]?.length ?? 0) > 0),
-)
-
-const timesForEditingDate = computed(() =>
-  editingDate.value ? (workingSlots.value[editingDate.value] ?? []) : [],
-)
-
-function handleSelectDate(date: string): void {
-  editingDate.value = date
+function openNewRule(): void {
+  editingRuleKey.value = NEW_RULE_KEY
+  editingOriginalDates.value = []
+  draftTimes.value = []
+  draftDates.value = new Set()
   newTimeInput.value = ''
 }
 
-async function persistSlots(next: Record<string, string[]>): Promise<void> {
-  if (!listing.value) return
-  workingSlots.value = next
-  await listingService.update(listing.value.id, { availableSlots: next })
-  listing.value = { ...listing.value, availableSlots: next }
+function openEditRule(rule: SlotRule): void {
+  editingRuleKey.value = rule.key
+  editingOriginalDates.value = rule.dates
+  draftTimes.value = [...rule.times]
+  draftDates.value = new Set(rule.dates)
+  newTimeInput.value = ''
 }
 
-async function addTime(time: string = newTimeInput.value): Promise<void> {
-  const date = editingDate.value
-  if (!date || !time) return
-  const current = workingSlots.value[date] ?? []
-  if (current.includes(time)) {
+function closeEditor(): void {
+  editingRuleKey.value = null
+}
+
+function addDraftTime(time: string = newTimeInput.value): void {
+  if (!time || draftTimes.value.includes(time)) {
     newTimeInput.value = ''
     return
   }
-  const next = { ...workingSlots.value, [date]: [...current, time].sort() }
-  await persistSlots(next)
+  draftTimes.value = [...draftTimes.value, time].sort()
   rememberTime(time)
   newTimeInput.value = ''
 }
 
-async function removeTime(date: string, time: string): Promise<void> {
-  const current = workingSlots.value[date] ?? []
-  const remaining = current.filter((existing) => existing !== time)
+function removeDraftTime(time: string): void {
+  draftTimes.value = draftTimes.value.filter((existing) => existing !== time)
+}
+
+function toggleDraftDate(date: string): void {
+  const next = new Set(draftDates.value)
+  if (next.has(date)) next.delete(date)
+  else next.add(date)
+  draftDates.value = next
+}
+
+async function persistWorkingSlots(next: Record<string, string[]>): Promise<void> {
+  if (!listing.value) return
+  await listingService.update(listing.value.id, { availableSlots: next })
+  workingSlots.value = next
+  listing.value = { ...listing.value, availableSlots: next }
+}
+
+async function saveRule(): Promise<void> {
+  if (!listing.value) return
+  savingRule.value = true
+  ruleMessage.value = ''
+  try {
+    const next = { ...workingSlots.value }
+    // A date this rule used to cover but is no longer checked goes back to
+    // "closed" — unless something else (a different, still-open rule) had
+    // already reclaimed it in the meantime, which the dates-changed check
+    // here naturally never touches since we only ever delete dates that
+    // were THIS rule's own.
+    for (const date of editingOriginalDates.value) {
+      if (!draftDates.value.has(date)) delete next[date]
+    }
+    for (const date of draftDates.value) {
+      if (draftTimes.value.length > 0) next[date] = [...draftTimes.value]
+      else delete next[date]
+    }
+    await persistWorkingSlots(next)
+    ruleMessage.value = '已更新可預約時段'
+    closeEditor()
+  } catch {
+    ruleMessage.value = '更新失敗，請稍後再試'
+  } finally {
+    savingRule.value = false
+    setTimeout(() => {
+      ruleMessage.value = ''
+    }, 2500)
+  }
+}
+
+async function deleteRule(rule: SlotRule): Promise<void> {
+  if (!listing.value) return
   const next = { ...workingSlots.value }
-  if (remaining.length > 0) next[date] = remaining
-  else delete next[date]
-  await persistSlots(next)
+  for (const date of rule.dates) delete next[date]
+  await persistWorkingSlots(next)
 }
 
 // The chat store already holds every conversation the current (seller) user
@@ -374,27 +470,47 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
       <div class="section">
         <h3 class="section-title">設定可預約時段</h3>
         <p class="hint">
-          點選日曆上的日期，個別設定當天開放的賞車時段——不同日期可以設定完全不同的時間，時間也是自由輸入，包含凌晨等任何時段都可以開放。
+          先設定一組時段，再選擇這組時段適用的日期——不同日期可以各自設定完全不同的時段組合（例如明天
+          15:00-18:00、後天卻是 12:00-16:00），新增規則後可以再新增下一組。
         </p>
-        <div class="calendar-card">
-          <MonthCalendar
-            :highlighted-dates="highlightedDates"
-            :selected-date="editingDate"
-            @select-date="handleSelectDate"
-          />
-        </div>
 
-        <div v-if="editingDate" class="date-editor">
-          <p class="sub-title">{{ editingDate }} 的開放時段</p>
-          <div v-if="timesForEditingDate.length > 0" class="time-chip-row">
-            <span v-for="time in timesForEditingDate" :key="time" class="time-chip">
+        <div v-if="rules.length > 0" class="rule-list">
+          <div v-for="rule in rules" :key="rule.key" class="rule-card">
+            <div class="rule-times">
+              <span v-for="time in rule.times" :key="time" class="time-chip static">{{
+                time
+              }}</span>
+            </div>
+            <p class="rule-dates">{{ formatRuleDates(rule.dates) }}</p>
+            <div class="rule-actions">
+              <button type="button" class="rule-edit-btn" @click="openEditRule(rule)">編輯</button>
+              <button type="button" class="rule-delete-btn" @click="deleteRule(rule)">刪除</button>
+            </div>
+          </div>
+        </div>
+        <p v-else class="empty-hint">還沒有設定任何可預約時段。</p>
+
+        <button
+          v-if="!isEditorOpen"
+          type="button"
+          class="add-time-btn"
+          style="margin-top: var(--space-sm)"
+          @click="openNewRule"
+        >
+          <Plus :size="14" /> 新增時段規則
+        </button>
+
+        <div v-if="isEditorOpen" class="rule-editor">
+          <p class="sub-title">Step 1・設定時段</p>
+          <div v-if="draftTimes.length > 0" class="time-chip-row">
+            <span v-for="time in draftTimes" :key="time" class="time-chip">
               {{ time }}
-              <button type="button" aria-label="移除此時段" @click="removeTime(editingDate, time)">
+              <button type="button" aria-label="移除此時段" @click="removeDraftTime(time)">
                 <X :size="12" />
               </button>
             </span>
           </div>
-          <p v-else class="empty-hint">這天還沒有開放任何時段。</p>
+          <p v-else class="empty-hint">還沒有設定任何時段。</p>
           <div v-if="recentTimes.length > 0" class="recent-time-row">
             <span class="recent-time-label">最近使用</span>
             <button
@@ -402,20 +518,42 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
               :key="time"
               type="button"
               class="recent-time-chip"
-              :disabled="timesForEditingDate.includes(time)"
-              @click="addTime(time)"
+              :disabled="draftTimes.includes(time)"
+              @click="addDraftTime(time)"
             >
               {{ time }}
             </button>
           </div>
           <div class="add-time-row">
             <input v-model="newTimeInput" type="time" aria-label="新增時段" />
-            <button type="button" class="add-time-btn" :disabled="!newTimeInput" @click="addTime()">
+            <button
+              type="button"
+              class="add-time-btn"
+              :disabled="!newTimeInput"
+              @click="addDraftTime()"
+            >
               新增時段
             </button>
           </div>
+
+          <p class="sub-title" style="margin-top: var(--space-md)">Step 2・選擇適用日期</p>
+          <p class="hint">點選日曆上的日期（可複選），這些日期都會套用上方這組時段。</p>
+          <div class="calendar-card">
+            <MonthCalendar
+              :highlighted-dates="highlightedDates"
+              :selected-dates="draftDatesArray"
+              @select-date="toggleDraftDate"
+            />
+          </div>
+
+          <div class="rule-editor-actions">
+            <button type="button" class="rule-cancel-btn" @click="closeEditor">取消</button>
+            <PrimaryButton :disabled="savingRule" @click="saveRule">
+              {{ savingRule ? '儲存中...' : '儲存這組時段' }}
+            </PrimaryButton>
+          </div>
         </div>
-        <p v-else class="empty-hint">請先在上方日曆選擇一個日期進行設定。</p>
+        <p v-if="ruleMessage" class="feedback">{{ ruleMessage }}</p>
       </div>
 
       <div class="section">
@@ -659,7 +797,7 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
   color: var(--color-text-secondary);
 }
 
-.date-editor {
+.rule-editor {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -671,6 +809,85 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
   /* Own stacking/overflow context so nothing inside can push the page wider
      than the viewport, regardless of content length. */
   min-width: 0;
+}
+
+.rule-editor-actions {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-sm);
+}
+
+.rule-editor-actions :deep(.btn) {
+  flex: 1;
+}
+
+.rule-cancel-btn {
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.rule-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+
+.rule-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rule-dates {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.rule-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: 4px;
+}
+
+.rule-edit-btn,
+.rule-delete-btn {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.rule-edit-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.rule-delete-btn {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--color-danger, #dc2626);
 }
 
 .time-chip-row {
@@ -703,6 +920,10 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
   background: rgba(255, 255, 255, 0.6);
   color: var(--color-primary);
   flex: 0 0 auto;
+}
+
+.time-chip.static {
+  padding: 6px 14px;
 }
 
 .recent-time-row {
@@ -750,6 +971,10 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
 }
 
 .add-time-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   flex: 0 0 auto;
   height: 44px;
   padding: 0 var(--space-lg);

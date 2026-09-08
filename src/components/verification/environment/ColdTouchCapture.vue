@@ -9,8 +9,8 @@
  * timing metadata ("system truth", spec §21) that the backend later
  * validates against, never something the user can shorten or extend.
  */
-import { nextTick, onBeforeUnmount, ref } from 'vue'
-import { Hand } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { Hand, Loader2 } from 'lucide-vue-next'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import EngineWaveform from '@/components/verification/engine/EngineWaveform.vue'
 import { videoRecorderService } from '@/services/media/video-recorder.service'
@@ -144,6 +144,27 @@ async function finish(): Promise<void> {
   }
 }
 
+// Live-reflects Verification.analysisStatus.coldCheck (Firestore onSnapshot
+// via verification.store.ts's subscribeVerification) — not just a static
+// "AI 判定中" label, since `isItemAdvanceReady` (verification.store.ts) now
+// actually blocks "下一步" until this reads 'completed', so the rider needs
+// to see it flip live and needs a way out if it genuinely fails.
+const coldCheckStatus = computed(
+  () => verificationStore.currentVerification?.analysisStatus?.coldCheck?.status,
+)
+const retryingAnalysis = ref(false)
+
+async function handleRetryAnalysis(): Promise<void> {
+  retryingAnalysis.value = true
+  try {
+    await analyzeColdEngineTouchCheck(props.verificationId)
+  } catch (error) {
+    console.error('[AI analysis] analyzeColdEngineTouchCheck retry failed:', error)
+  } finally {
+    retryingAnalysis.value = false
+  }
+}
+
 function handleRemeasure(): void {
   phase.value = 'intro'
   elapsedMs.value = 0
@@ -246,7 +267,21 @@ onBeforeUnmount(() => {
 
     <template v-else-if="phase === 'done'">
       <div class="panel-card">
-        <p class="done-mark">✓ 冷車檢測已完成，AI 判定中</p>
+        <p v-if="coldCheckStatus === 'completed'" class="done-mark">✓ 冷車檢測已完成，AI 已確認</p>
+        <p v-else-if="coldCheckStatus === 'failed'" class="error-text">
+          AI 判定失敗，請重新送出（不會需要重新錄影）。
+        </p>
+        <p v-else class="checking">
+          <Loader2 :size="16" class="spin" /> 冷車檢測已完成，AI 判定中，請稍候…
+        </p>
+        <button
+          v-if="coldCheckStatus === 'failed'"
+          class="remeasure-btn"
+          :disabled="retryingAnalysis"
+          @click="handleRetryAnalysis"
+        >
+          {{ retryingAnalysis ? '送出中…' : '↻ 重新送出 AI 判定' }}
+        </button>
         <button class="remeasure-btn" @click="handleRemeasure">↻ 重新測量</button>
       </div>
     </template>
@@ -376,11 +411,28 @@ h2 {
 }
 
 .checking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   text-align: center;
   font-size: 14px;
   font-weight: 600;
   color: var(--color-text-secondary);
   padding: var(--space-lg) 0;
+}
+
+.spin {
+  animation: cold-touch-spin 0.8s linear infinite;
+}
+
+@keyframes cold-touch-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .countdown-number {
@@ -440,5 +492,9 @@ h2 {
   font-size: 13px;
   font-weight: 700;
   padding: 4px 8px;
+}
+
+.remeasure-btn:disabled {
+  opacity: 0.5;
 }
 </style>

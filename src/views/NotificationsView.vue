@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import {
   Bell,
   Calendar,
+  CalendarCheck,
+  CalendarX,
   Heart,
   Megaphone,
   MessageCircle,
@@ -25,6 +27,8 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   chat_message: MessageCircle,
   listing_favorited: Heart,
   booking_request: Calendar,
+  booking_approved: CalendarCheck,
+  booking_declined: CalendarX,
   system: Megaphone,
   vehicle_news: Newspaper,
   discussion_featured: Sparkles,
@@ -34,7 +38,9 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   discussion_reply: MessageCircle,
 }
 
-const sorted = computed(() => [...notificationStore.notifications].sort((a, b) => b.createdAt - a.createdAt))
+const sorted = computed(() =>
+  [...notificationStore.notifications].sort((a, b) => b.createdAt - a.createdAt),
+)
 
 async function handleOpen(notification: AppNotification): Promise<void> {
   if (!notification.read) await notificationStore.markAsRead(notification.id)

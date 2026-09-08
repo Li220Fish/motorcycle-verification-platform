@@ -33,13 +33,74 @@ interface ColdTouchMetadata {
  *  edit-lock for ANY item today, so the Trusted Backend re-checking this
  *  itself, rather than trusting client navigation state, is what actually
  *  holds here). */
-async function assertStartupNotYetBegun(verificationId: string): Promise<void> {
+async function coldCheckWindowStillOpen(verificationId: string): Promise<boolean> {
   const existing = await getAnswer(verificationId, STARTUP_ITEM_ID)
-  if (existing) {
-    throw new Error(
-      'Startup has already begun for this verification — Step 39 cold-state check can no longer be performed or redone.',
-    )
+  return !existing
+}
+
+/**
+ * Once the window above has closed there is nothing left to verify — this is
+ * NOT a failure, so it must resolve normally, not throw (an onCall `Error`
+ * here previously surfaced to the client as an opaque 500 "INTERNAL" with no
+ * explanation, and worse, permanently marked 'coldCheck' 'failed' —
+ * Verification.canComplete became permanently unsatisfiable for this
+ * verification, since every 重試 tap hits this exact same guard forever with
+ * no way out. Reproduced live 2026-09-08).
+ *
+ * ColdTouchCapture.vue already wrote a manual placeholder Answer
+ * (`saveAnswer('ENG-02', 'normal')`) the instant the video was recorded —
+ * this keeps that `result` untouched (never silently flips 正常→須注意 or vice
+ * versa) but, unlike the original fix, actually writes an honest `aiResult`
+ * explaining WHY no real Gemini review happened, using the same
+ * backend-decided-with-zero-Gemini-cost shape as writeSystemNotApplicable —
+ * `model: 'motoverify-backend-rules'`, never claiming to be a real model
+ * response. Without this, the report's "AI 判定說明" line stayed completely
+ * blank and a viewer had no way to tell "actually reviewed, genuinely fine"
+ * apart from "never reviewed at all, timing just didn't allow it" — the two
+ * look identical without an explicit note.
+ */
+async function acceptExistingManualAnswer(verificationId: string): Promise<GeminiItemResult> {
+  const existing = await getAnswer(verificationId, ENG_02)
+  const result = existing?.result ?? 'normal'
+  const coldStateValid = result === 'normal'
+  const note =
+    '引擎已啟動，冷車觸感無法再進行 AI 覆核，維持錄影當下車主自行確認的結果，未經 AI 檢視。'
+  const item: GeminiItemResult = {
+    itemId: ENG_02,
+    result,
+    confidence: null,
+    label: 'cold_state_window_closed',
+    note,
+    evidenceIds: [],
+    problematicEvidenceIds: [],
+    retakeInstruction: null,
+    details: { semanticItemId: COLD_ENGINE_TOUCH_ITEM_ID, coldStateValid },
   }
+  await writeAiAnswer({
+    verificationId,
+    item,
+    modelId: 'motoverify-backend-rules',
+    modelVersion: 'cold-check-window-closed-v1',
+    analysisType: 'vision',
+    promptVersion: { global: 'n/a', group: 'n/a', retry: null },
+    attempt: 1,
+    existing,
+  })
+  await getFirestore()
+    .collection('verifications')
+    .doc(verificationId)
+    .set(
+      {
+        coldStateContext: {
+          coldEngineTouchCheck: result,
+          coldStateValid,
+          performedBeforeStartup: false,
+          analysisVersion: 'manual-fallback-window-closed',
+        },
+      },
+      { merge: true },
+    )
+  return item
 }
 
 function contactWindowFrameTimestamps(metadata: ColdTouchMetadata, durationMs: number): number[] {
@@ -159,7 +220,9 @@ export async function analyzeColdEngineTouch(params: {
   apiKey: string
 }): Promise<GeminiItemResult> {
   return withAnalysisStatus(params.verificationId, 'coldCheck', async () => {
-    await assertStartupNotYetBegun(params.verificationId)
+    if (!(await coldCheckWindowStillOpen(params.verificationId))) {
+      return acceptExistingManualAnswer(params.verificationId)
+    }
 
     const video = await resolveVideoEvidence(params.verificationId, ENG_02)
     const metadata = video.metadata as ColdTouchMetadata
@@ -212,7 +275,9 @@ export async function retryColdEngineTouch(params: {
   apiKey: string
   newEvidenceId: string
 }): Promise<GeminiItemResult> {
-  await assertStartupNotYetBegun(params.verificationId)
+  if (!(await coldCheckWindowStillOpen(params.verificationId))) {
+    return acceptExistingManualAnswer(params.verificationId)
+  }
 
   const existing = await getAnswer(params.verificationId, ENG_02)
   assertRetryEligible(existing)

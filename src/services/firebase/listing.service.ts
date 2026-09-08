@@ -273,6 +273,35 @@ function subscribeAppointments(
   })
 }
 
+/** ChatRoomView.vue's variant — that page only ever cares about ONE buyer's
+ * appointments (the other participant in this specific 1:1 conversation),
+ * whether the current viewer IS that buyer or is the seller looking at
+ * them. Unlike subscribeAppointments() above (an unfiltered scan of every
+ * buyer's appointments, fine for the seller-only MyListingManageView.vue),
+ * a buyer's own read here MUST be constrained by `where('buyerId', ...)` —
+ * firestore.rules' appointments read rule allows a doc via
+ * `resource.data.buyerId == myUid()`, and Firestore only honors a
+ * per-document rule condition for a *list* query when the query itself is
+ * narrowed to match it; an unfiltered collection listener silently gets
+ * denied for a buyer (their subscription just never fires), which is
+ * exactly why the appointment banner used to only ever show up for the
+ * seller side of the chat. */
+function subscribeAppointmentsForBuyer(
+  listingId: string,
+  buyerId: string,
+  onChange: (appointments: ListingAppointment[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, COLLECTION, listingId, 'appointments'), where('buyerId', '==', buyerId)),
+    (snapshot) => {
+      const appointments = snapshot.docs
+        .map((docSnapshot) => toAppointment(docSnapshot.id, docSnapshot.data() as AppointmentDoc))
+        .sort((a, b) => a.scheduledAt - b.scheduledAt)
+      onChange(appointments)
+    },
+  )
+}
+
 async function get(id: string): Promise<MockMarketListing | null> {
   const snapshot = await getDoc(doc(db, COLLECTION, id))
   if (!snapshot.exists()) return null
@@ -339,6 +368,7 @@ export const listingService = {
   subscribeListing,
   listAppointments,
   subscribeAppointments,
+  subscribeAppointmentsForBuyer,
   createAppointment,
   updateAppointmentStatus,
   addFavorite,

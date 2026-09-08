@@ -550,6 +550,17 @@ export const useVerificationStore = defineStore('verification', () => {
     const { item } = flatItem
     if (!answers.value[item.id]) return false
 
+    // Step 39 (冷車狀態確認) must actually be reviewed by AI before the rider
+    // can move on to engine startup — once Startup is recorded, the Trusted
+    // Backend permanently refuses to (re)analyze cold state (see
+    // cold-touch.service.ts's coldCheckWindowStillOpen), so letting "下一步"
+    // enable the instant the placeholder answer/evidence exist — before the
+    // fire-and-forget analyzeColdEngineTouchCheck call has actually finished
+    // — is a race that can leave this item permanently unverified rather
+    // than just delayed. `=== 'completed'` on purpose: `undefined` (not
+    // triggered yet / still in flight) must block exactly like 'failed'.
+    if (item.id === 'ENG-02' && analysisStatusFor('coldCheck') !== 'completed') return false
+
     const requiredEvidence = (item.evidence ?? []).filter((requirement) => requirement.required)
     if (requiredEvidence.length === 0) return true
 

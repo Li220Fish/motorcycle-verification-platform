@@ -5,7 +5,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 const props = defineProps<{
   /** 'YYYY-MM-DD' dates to render highlighted (available). */
   highlightedDates: string[]
+  /** Single-select mode (buyer's BookingSheet.vue picking one viewing date). */
   selectedDate?: string | null
+  /** Multi-select mode (seller's MyListingManageView.vue bulk-applying one
+   *  time preset to several dates at once) — pass alongside selectedDate
+   *  left unset; both can render together since a day-cell's "selected"
+   *  style just checks membership in either. */
+  selectedDates?: string[]
 }>()
 const emit = defineEmits<{ selectDate: [string] }>()
 
@@ -25,6 +31,7 @@ function toKey(year: number, month: number, day: number): string {
 }
 
 const highlightedSet = computed(() => new Set(props.highlightedDates))
+const selectedSet = computed(() => new Set(props.selectedDates ?? []))
 
 interface DayCell {
   day: number
@@ -89,7 +96,7 @@ function handleNextMonth(): void {
           class="day-cell"
           :class="{
             highlighted: highlightedSet.has(cell.key),
-            selected: selectedDate === cell.key,
+            selected: selectedDate === cell.key || selectedSet.has(cell.key),
             past: isPast(cell.key),
           }"
           :disabled="isPast(cell.key)"

@@ -30,9 +30,18 @@ export { getAiPromptCatalog } from './functions/get-ai-prompt-catalog'
 export { onMessageCreated } from './functions/notifications/on-message-created'
 export { onFavoriteCreated } from './functions/notifications/on-favorite-created'
 export { onAppointmentCreated } from './functions/notifications/on-appointment-created'
+export { onAppointmentStatusUpdated } from './functions/notifications/on-appointment-status-updated'
 export { onDiscussionCommentCreated } from './functions/notifications/on-discussion-comment-created'
 export { onDiscussionLikeCreated } from './functions/notifications/on-discussion-like-created'
 export { onDiscussionPostCreated } from './functions/notifications/on-discussion-post-created'
 export { onDiscussionPostFeatured } from './functions/notifications/on-discussion-post-featured'
 export { onVehicleNewsCreated } from './functions/notifications/on-vehicle-news-created'
 export { onSystemAnnouncementCreated } from './functions/notifications/on-system-announcement-created'
+
+// Keeps conversations/{id}.memberSnapshots' displayName in sync with each
+// member's actual current users/{uid}.displayName, so 聊天室 stops showing a
+// stale/mismatched name relative to 討論中心 — see on-user-profile-updated.ts
+// (ongoing, fires on rename) and admin-sync-conversation-names.ts (one-time
+// backfill for conversations that were already wrong before this existed).
+export { onUserProfileUpdated } from './functions/on-user-profile-updated'
+export { adminSyncConversationMemberNames } from './functions/admin-sync-conversation-names'

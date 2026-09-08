@@ -62,7 +62,9 @@ onMounted(async () => {
           發送後會立即出現在每一位使用者的通知中心，無法事後編輯或收回，請確認內容無誤。
         </p>
         <div class="admin-form-row">
-          <label class="admin-field"><span>標題</span><input v-model="draft.title" type="text" /></label>
+          <label class="admin-field"
+            ><span>標題</span><input v-model="draft.title" type="text"
+          /></label>
         </div>
         <label class="admin-field" style="margin-top: 10px">
           <span>內容</span>

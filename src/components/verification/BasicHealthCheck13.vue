@@ -78,9 +78,7 @@ const pageItems = computed(() => ITEMS.filter((it) => it.page === currentPage.va
 const isMirrored = computed(() => currentPage.value === 2)
 
 const pageRequiredMet = computed(() =>
-  ITEMS.filter((it) => it.page === currentPage.value && it.required).every(
-    (it) => state[it.key],
-  ),
+  ITEMS.filter((it) => it.page === currentPage.value && it.required).every((it) => state[it.key]),
 )
 
 const doneCount = computed(() => ITEMS.filter((it) => state[it.key]).length)
@@ -88,7 +86,9 @@ const progressPercent = computed(() => (doneCount.value / ITEMS.length) * 100)
 
 const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key]))
 
-const allRequiredDone = computed(() => ITEMS.filter((it) => it.required).every((it) => state[it.key]))
+const allRequiredDone = computed(() =>
+  ITEMS.filter((it) => it.required).every((it) => state[it.key]),
+)
 
 function toggle(key: string): void {
   state[key] = !state[key]
@@ -111,7 +111,9 @@ function finish(): void {
     <AppHeader title="基本13項健檢" back custom-back @back="emit('back')" />
 
     <div class="content">
-      <p class="intro">點擊車輛照片上的項目標籤，即可標示已檢查／未檢查，並確認左右兩側外觀角度。</p>
+      <p class="intro">
+        點擊車輛照片上的項目標籤，即可標示已檢查／未檢查，並確認左右兩側外觀角度。
+      </p>
 
       <div class="bike-card">
         <div class="bike-img-wrap" :class="{ mirrored: isMirrored }">
@@ -137,7 +139,13 @@ function finish(): void {
         <div class="page-nav">
           <button :disabled="currentPage === 1" aria-label="上一頁" @click="goPage(-1)">‹</button>
           <span class="count">{{ currentPage }} / {{ PAGE_COUNT }}</span>
-          <button :disabled="currentPage === PAGE_COUNT || !pageRequiredMet" aria-label="下一頁" @click="goPage(1)">›</button>
+          <button
+            :disabled="currentPage === PAGE_COUNT || !pageRequiredMet"
+            aria-label="下一頁"
+            @click="goPage(1)"
+          >
+            ›
+          </button>
         </div>
         <p v-if="currentPage < PAGE_COUNT && !pageRequiredMet" class="required-hint">
           請先完成本頁標示的必填項目，才能前往下一頁
@@ -147,7 +155,9 @@ function finish(): void {
       <div class="progress-card">
         <div class="progress-head">
           <span>檢查進度</span>
-          <span class="progress-count">{{ doneCount }}<span class="of">/{{ ITEMS.length }}</span></span>
+          <span class="progress-count"
+            >{{ doneCount }}<span class="of">/{{ ITEMS.length }}</span></span
+          >
         </div>
         <div class="progress-track">
           <div class="progress-fill" :style="{ width: progressPercent + '%' }" />

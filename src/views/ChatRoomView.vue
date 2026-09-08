@@ -142,27 +142,29 @@ function subscribeAppointment(): void {
     return
   }
 
-  unsubscribeAppointment = listingService.subscribeAppointments(listingId, (appointments) => {
-    const buyerAppointments = appointments
-      .filter((appointment) => appointment.buyerId === buyerId)
-      .sort((a, b) => b.createdAt - a.createdAt)
-    const next = buyerAppointments[0] ?? null
-    const previous = relevantAppointment.value
+  unsubscribeAppointment = listingService.subscribeAppointmentsForBuyer(
+    listingId,
+    buyerId,
+    (appointments) => {
+      const buyerAppointments = [...appointments].sort((a, b) => b.createdAt - a.createdAt)
+      const next = buyerAppointments[0] ?? null
+      const previous = relevantAppointment.value
 
-    if (next && previous && next.id === previous.id && next.status !== previous.status) {
-      if (isSeller.value && next.status === 'cancelled') {
-        showAppointmentToast(`買家已取消 ${formatDateTime(next.scheduledAt)} 的看車預約`)
-      } else if (!isSeller.value && next.status === 'approved') {
-        showAppointmentToast('賣家已同意您的看車預約')
-      } else if (!isSeller.value && next.status === 'declined') {
-        showAppointmentToast('賣家已婉拒您的看車預約')
+      if (next && previous && next.id === previous.id && next.status !== previous.status) {
+        if (isSeller.value && next.status === 'cancelled') {
+          showAppointmentToast(`買家已取消 ${formatDateTime(next.scheduledAt)} 的看車預約`)
+        } else if (!isSeller.value && next.status === 'approved') {
+          showAppointmentToast('賣家已同意您的看車預約')
+        } else if (!isSeller.value && next.status === 'declined') {
+          showAppointmentToast('賣家已婉拒您的看車預約')
+        }
+      } else if (isSeller.value && next?.status === 'pending' && next.id !== previous?.id) {
+        showAppointmentToast(`${next.buyerName} 送出了新的看車預約`)
       }
-    } else if (isSeller.value && next?.status === 'pending' && next.id !== previous?.id) {
-      showAppointmentToast(`${next.buyerName} 送出了新的看車預約`)
-    }
 
-    relevantAppointment.value = next
-  })
+      relevantAppointment.value = next
+    },
+  )
 }
 
 async function handleApprove(): Promise<void> {

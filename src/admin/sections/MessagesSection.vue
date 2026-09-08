@@ -6,6 +6,7 @@ import {
   listAllReports,
   listUserProfiles,
   resolveReport,
+  syncConversationMemberNames,
   type AdminReport,
   type AdminUserProfile,
 } from '../services/admin-data.service'
@@ -16,6 +17,21 @@ const conversations = ref<Conversation[]>([])
 const reports = ref<AdminReport[]>([])
 const users = ref<AdminUserProfile[]>([])
 const resolving = ref<string | null>(null)
+const syncingNames = ref(false)
+const syncNamesResult = ref('')
+
+async function handleSyncNames(): Promise<void> {
+  syncingNames.value = true
+  syncNamesResult.value = ''
+  try {
+    const { conversationsScanned, conversationsUpdated } = await syncConversationMemberNames()
+    syncNamesResult.value = `已掃描 ${conversationsScanned} 筆對話，修正 ${conversationsUpdated} 筆顯示名稱`
+  } catch {
+    syncNamesResult.value = '同步失敗，請稍後再試'
+  } finally {
+    syncingNames.value = false
+  }
+}
 
 const userReports = computed(() => reports.value.filter((r) => r.targetType === 'user'))
 
@@ -71,6 +87,23 @@ onMounted(async () => {
         <div class="note">來自使用者檢舉</div>
       </div>
     </dl>
+
+    <div class="admin-panel">
+      <div class="admin-panel-head">
+        <h2>聊天顯示名稱同步</h2>
+        <span class="sub">修正 memberSnapshots 與使用者目前顯示名稱不一致的對話</span>
+      </div>
+      <div class="admin-panel-body">
+        <p class="dim" style="margin: 0 0 12px">
+          聊天室的對話對象名稱會在建立對話時凍結一份快照，若對方之後改名或原始名稱來源有誤，
+          既有對話不會自動更新——點下方按鈕會掃描所有對話並修正成目前的真實顯示名稱（可重複執行，不會影響已經正確的對話）。
+        </p>
+        <button class="admin-btn sm" :disabled="syncingNames" @click="handleSyncNames">
+          {{ syncingNames ? '同步中...' : '立即同步聊天顯示名稱' }}
+        </button>
+        <p v-if="syncNamesResult" class="dim" style="margin: 8px 0 0">{{ syncNamesResult }}</p>
+      </div>
+    </div>
 
     <div class="admin-panel">
       <div class="admin-panel-head">
