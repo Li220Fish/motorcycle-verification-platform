@@ -400,6 +400,16 @@ service cloud.firestore {
       match /favoriteListings/{listingId} {
         allow read, create, delete: if signedIn() && myUid() == userId;
       }
+
+      // Written only by Cloud Functions Firestore triggers (Admin SDK,
+      // bypasses these rules) — see functions/src/functions/notifications/.
+      // The client may read its own feed and flip `read`, nothing else.
+      match /notifications/{notificationId} {
+        allow read: if signedIn() && myUid() == userId;
+        allow update: if signedIn() && myUid() == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create, delete: if false;
+      }
     }
 
     // --- accountIds/{accountId} + publicProfiles/{accountId} ---
@@ -536,6 +546,14 @@ service cloud.firestore {
     match /vehicleNews/{document=**} {
       allow read: if signedIn();
       allow write: if isAdmin();
+    }
+
+    // Admin broadcast composer (src/admin/sections' 系統通知) — creating a
+    // doc here fans out a `system` notification to every user via
+    // functions/src/functions/notifications/on-system-announcement-created.ts.
+    // No update/delete UI exists; history stays admin-readable only.
+    match /systemAnnouncements/{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // Admin-editable Gemini prompt overrides (see

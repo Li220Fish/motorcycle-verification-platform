@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Send } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+import { Send, X } from 'lucide-vue-next'
 
-const props = defineProps<{ sending: boolean }>()
-const emit = defineEmits<{ submit: [string] }>()
+const props = defineProps<{ sending: boolean; replyToName?: string | null }>()
+const emit = defineEmits<{ submit: [string]; cancelReply: [] }>()
 
 const text = ref('')
+const inputEl = ref<HTMLInputElement | null>(null)
+
+watch(
+  () => props.replyToName,
+  (name) => {
+    if (name) inputEl.value?.focus()
+  },
+)
 
 function submit(): void {
   const trimmed = text.value.trim()
@@ -16,24 +24,57 @@ function submit(): void {
 </script>
 
 <template>
-  <div class="input-bar">
-    <input v-model="text" placeholder="留下你的想法..." @keydown.enter="submit" />
-    <button class="send-btn" :disabled="!text.trim() || sending" @click="submit">
-      <Send :size="16" color="#fff" />
-    </button>
+  <div class="input-wrap">
+    <div v-if="replyToName" class="reply-banner">
+      <span>回覆 @{{ replyToName }}</span>
+      <button aria-label="取消回覆" @click="$emit('cancelReply')"><X :size="14" /></button>
+    </div>
+    <div class="input-bar">
+      <input
+        ref="inputEl"
+        v-model="text"
+        :placeholder="replyToName ? `回覆 @${replyToName}...` : '留下你的想法...'"
+        @keydown.enter="submit"
+      />
+      <button class="send-btn" :disabled="!text.trim() || sending" @click="submit">
+        <Send :size="16" color="#fff" />
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.input-bar {
+.input-wrap {
   flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--color-primary-bg);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.reply-banner button {
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+}
+
+.input-bar {
   display: flex;
   gap: 8px;
   align-items: center;
   padding: 10px 14px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
 }
 
 .input-bar input {

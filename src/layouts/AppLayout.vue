@@ -7,18 +7,25 @@ import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
+import { useNotificationStore } from '@/stores/notification.store'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const notificationStore = useNotificationStore()
 
 // Kept alive at the layout level (not inside MessagesView) so the unread
 // badge in the bottom nav stays correct on every page, not just /messages.
 watch(
   () => authStore.user?.id,
   (uid) => {
-    if (uid) chatStore.subscribeConversations(uid)
-    else chatStore.stopConversationsSubscription()
+    if (uid) {
+      chatStore.subscribeConversations(uid)
+      notificationStore.subscribe(uid)
+    } else {
+      chatStore.stopConversationsSubscription()
+      notificationStore.stopSubscription()
+    }
   },
   { immediate: true },
 )

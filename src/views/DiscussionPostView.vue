@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Flag, Heart, MessageSquare, MoreVertical, Trash2 } from 'lucide-vue-next'
+import { Flag, Heart, MessageSquare, MoreVertical, Sparkles, Trash2 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import Avatar from '@/components/common/Avatar.vue'
+import { ADMIN_UID, isAdminSession } from '@/admin/services/admin-auth.service'
 import AuthorFollowButton from '@/components/discussion/AuthorFollowButton.vue'
 import CommentInput from '@/components/discussion/CommentInput.vue'
 import CommentItem from '@/components/discussion/CommentItem.vue'
@@ -24,10 +25,42 @@ const liked = ref(false)
 const sendingComment = ref(false)
 const menuOpen = ref(false)
 const actionMessage = ref('')
+const replyingTo = ref<{ commentId: string; authorName: string } | null>(null)
+
+/** Comments are stored/subscribed flat (createdAt asc) — build a lookup from
+ *  commentId to its author's display name so a reply can show "回覆 @xxx"
+ *  without each CommentItem needing its own Firestore read. */
+const commentAuthorNameById = computed(() => {
+  const map = new Map<string, string>()
+  for (const c of discussionStore.comments) map.set(c.id, c.authorSnapshot.displayName)
+  return map
+})
+
+function replyToNameFor(parentCommentId: string | null): string | null {
+  if (!parentCommentId) return null
+  return commentAuthorNameById.value.get(parentCommentId) ?? null
+}
+
+function startReply(commentId: string, authorName: string): void {
+  replyingTo.value = { commentId, authorName }
+}
+
+function cancelReply(): void {
+  replyingTo.value = null
+}
 
 const isAuthor = computed(
   () => !!authStore.user && discussionStore.currentPost?.authorId === authStore.user.id,
 )
+const isAdminPost = computed(() => discussionStore.currentPost?.authorId === ADMIN_UID)
+const canManageFeatured = computed(() => isAdminSession())
+
+async function toggleFeatured(): Promise<void> {
+  menuOpen.value = false
+  const post = discussionStore.currentPost
+  if (!post) return
+  await discussionService.setFeatured(post.id, !post.featured)
+}
 
 async function loadLikeState(): Promise<void> {
   if (!authStore.user) return
@@ -48,7 +81,9 @@ async function submitComment(text: string): Promise<void> {
       authStore.user.id,
       { displayName: authStore.user.displayName ?? '匿名使用者' },
       text,
+      replyingTo.value?.commentId ?? null,
     )
+    replyingTo.value = null
   } finally {
     sendingComment.value = false
   }
@@ -92,6 +127,9 @@ onUnmounted(() => {
     </AppHeader>
 
     <div v-if="menuOpen" class="menu">
+      <button v-if="canManageFeatured" @click="toggleFeatured">
+        <Sparkles :size="15" />{{ discussionStore.currentPost?.featured ? '取消精選' : '設為精選' }}
+      </button>
       <button v-if="isAuthor" class="danger" @click="deletePost">
         <Trash2 :size="15" />刪除文章
       </button>
@@ -108,7 +146,13 @@ onUnmounted(() => {
         <div class="top">
           <Avatar :name="discussionStore.currentPost.authorSnapshot.displayName" :size="32" />
           <div class="author-col">
-            <span class="author">{{ discussionStore.currentPost.authorSnapshot.displayName }}</span>
+            <span class="author-row">
+              <span class="author">{{ discussionStore.currentPost.authorSnapshot.displayName }}</span>
+              <span v-if="isAdminPost" class="official-badge">官方</span>
+              <span v-if="discussionStore.currentPost.featured" class="featured-badge">
+                <Sparkles :size="11" />精選
+              </span>
+            </span>
             <span class="time">{{
               formatRelativeTime(discussionStore.currentPost.createdAt)
             }}</span>
@@ -153,7 +197,9 @@ onUnmounted(() => {
           :key="c.id"
           :comment="c"
           :can-delete="c.authorId === authStore.user?.id"
+          :reply-to-name="replyToNameFor(c.parentCommentId)"
           @delete="deleteComment(c.id)"
+          @reply="startReply(c.id, c.authorSnapshot.displayName)"
         />
       </div>
     </div>
@@ -161,7 +207,9 @@ onUnmounted(() => {
     <CommentInput
       v-if="discussionStore.currentPost"
       :sending="sendingComment"
+      :reply-to-name="replyingTo?.authorName"
       @submit="submitComment"
+      @cancel-reply="cancelReply"
     />
   </div>
 </template>
@@ -245,10 +293,37 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.author-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .author {
   font-size: 13px;
   font-weight: 800;
   color: var(--color-text-primary);
+}
+
+.official-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--color-primary);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.featured-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  padding: 2px 7px;
+  border-radius: 999px;
 }
 
 .time {

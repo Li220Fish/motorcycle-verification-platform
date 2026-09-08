@@ -2,6 +2,7 @@
 import { Heart, MessageSquare } from 'lucide-vue-next'
 
 import Avatar from '@/components/common/Avatar.vue'
+import { ADMIN_UID } from '@/admin/services/admin-auth.service'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { DiscussionPost } from '@/services/discussion/discussion.types'
 
@@ -13,6 +14,7 @@ defineProps<{ post: DiscussionPost }>()
     <div class="top">
       <Avatar :name="post.authorSnapshot.displayName" :size="26" />
       <span class="author">{{ post.authorSnapshot.displayName }}</span>
+      <span v-if="post.authorId === ADMIN_UID" class="official-tag">官方</span>
       <span class="time">· {{ formatRelativeTime(post.createdAt) }}</span>
       <span v-if="post.featured" class="featured-tag">精選</span>
     </div>
@@ -54,6 +56,15 @@ defineProps<{ post: DiscussionPost }>()
 .time {
   font-size: 11px;
   color: var(--color-text-disabled);
+}
+
+.official-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--color-primary);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .featured-tag {

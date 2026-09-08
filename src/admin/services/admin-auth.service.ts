@@ -19,7 +19,13 @@ import { auth } from '@/services/firebase/firebase'
  */
 const ADMIN_EMAIL = 'admin@test.com'
 const ADMIN_PASSWORD = 'test1234'
-const ADMIN_UID = 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+/** Exported so other parts of the main app (not just /admin) can recognize
+ *  admin-authored content by authorId — e.g. discussion.store.ts's "官方"
+ *  badge and the discussion_admin_post notification trigger's client-side
+ *  counterpart. Same uid firestore.rules' isAdmin() and functions/src/
+ *  services/auth.service.ts's isAdminUid() hardcode — keep all three in
+ *  lockstep by hand. */
+export const ADMIN_UID = 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
 
 export async function adminLogin(username: string, password: string): Promise<void> {
   if (username !== 'test' || password !== 'test') {

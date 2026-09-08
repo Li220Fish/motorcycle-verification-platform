@@ -194,6 +194,14 @@ async function softDeletePost(id: string): Promise<void> {
   await updateDoc(doc(db, POSTS, id), { status: 'deleted', updatedAt: serverTimestamp() })
 }
 
+/** Admin-only (firestore.rules' discussionPosts update allows a full
+ *  admin bypass) — the false -> true transition fans a `discussion_featured`
+ *  notification out to every user, see
+ *  functions/src/functions/notifications/on-discussion-post-featured.ts. */
+async function setFeatured(id: string, featured: boolean): Promise<void> {
+  await updateDoc(doc(db, POSTS, id), { featured, updatedAt: serverTimestamp() })
+}
+
 // --- Likes: discussionPosts/{postId}/likes/{uid} — doc ID IS the liker's uid. ---
 
 async function isLiked(postId: string, uid: string): Promise<boolean> {
@@ -296,6 +304,7 @@ export const discussionService = {
   subscribePosts,
   updatePost,
   softDeletePost,
+  setFeatured,
   isLiked,
   toggleLike,
   followUser,

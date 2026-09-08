@@ -69,6 +69,7 @@ async function addComment(
   authorId: string,
   authorSnapshot: AuthorSnapshot,
   text: string,
+  parentCommentId: string | null = null,
 ): Promise<void> {
   const batch = writeBatch(db)
   const commentRef = doc(commentsCollection(postId))
@@ -78,7 +79,7 @@ async function addComment(
     authorSnapshot,
     text,
     status: 'active',
-    parentCommentId: null,
+    parentCommentId,
     createdAt: serverTimestamp(),
   })
   batch.update(doc(db, POSTS, postId), { commentCount: increment(1) })

@@ -1,29 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { Bell } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import Avatar from '@/components/common/Avatar.vue'
 import HomeContent from '@/components/home/HomeContent.vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { useNotificationStore } from '@/stores/notification.store'
 
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 const router = useRouter()
 
 const displayName = computed(
   () => authStore.user?.displayName || authStore.user?.email?.split('@')[0] || '朋友',
 )
-
-// No notification backend exists yet — same "disabled + toast" pattern as
-// other not-yet-built actions (SettingsView) rather than a dead icon or a
-// faked notification panel.
-const noticeMessage = ref('')
-function handleNotificationClick(): void {
-  noticeMessage.value = '通知功能尚未開放'
-  setTimeout(() => {
-    noticeMessage.value = ''
-  }, 2000)
-}
 </script>
 
 <template>
@@ -36,11 +27,11 @@ function handleNotificationClick(): void {
           <span class="greeting-subtitle">查驗車況，買賣都安心</span>
         </span>
       </button>
-      <button class="icon-button" aria-label="通知" @click="handleNotificationClick">
+      <button class="icon-button" aria-label="通知" @click="router.push('/notifications')">
         <Bell :size="20" />
+        <span v-if="notificationStore.unreadCount > 0" class="badge-dot" />
       </button>
     </header>
-    <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
 
     <HomeContent />
   </div>
@@ -98,6 +89,7 @@ function handleNotificationClick(): void {
 }
 
 .icon-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -114,11 +106,14 @@ function handleNotificationClick(): void {
   background: var(--color-surface);
 }
 
-.notice {
-  margin: 0;
-  padding: 4px var(--space-md) 0;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  text-align: center;
+.badge-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  border: 1.5px solid var(--color-background);
 }
 </style>

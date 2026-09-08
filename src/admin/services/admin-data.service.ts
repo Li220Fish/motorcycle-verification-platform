@@ -263,6 +263,36 @@ export async function deleteVehicleNews(id: string): Promise<void> {
   await deleteDoc(doc(db, 'vehicleNews', id))
 }
 
+export interface SystemAnnouncement {
+  id: string
+  title: string
+  body: string
+  createdAt: number
+}
+
+/** Creating a doc here fans a `system` notification out to every user's
+ *  users/{uid}/notifications feed — see functions/src/functions/
+ *  notifications/on-system-announcement-created.ts. firestore.rules gates
+ *  this collection to isAdmin(), same as vehicleNews. */
+export async function sendSystemAnnouncement(title: string, body: string): Promise<void> {
+  await addDoc(collection(db, 'systemAnnouncements'), { title, body, createdAt: serverTimestamp() })
+}
+
+export async function listSystemAnnouncements(): Promise<SystemAnnouncement[]> {
+  const snapshot = await getDocs(collection(db, 'systemAnnouncements'))
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        title: data.title ?? '',
+        body: data.body ?? '',
+        createdAt: toMillis(data.createdAt),
+      }
+    })
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
 /** Written but never actually read back anywhere in the mobile app today —
  * see docs/admin-backend.md's gap list. This is real data if/when a probe
  * measurement session ever gets persisted; currently always empty. */

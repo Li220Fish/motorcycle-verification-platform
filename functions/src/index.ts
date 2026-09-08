@@ -21,3 +21,18 @@ export { verifyVehicleRegistrationDocument } from './functions/analyze-vehicle-r
 // Admin 後台「AI Prompt 設定」— lets an admin view/edit the prompt text sent
 // to Gemini without a code deploy (see services/prompt-config.service.ts).
 export { getAiPromptCatalog } from './functions/get-ai-prompt-catalog'
+
+// In-app notification center — the first Firestore-triggered (as opposed to
+// callable) Functions in this codebase. Each writes into the relevant
+// user(s)' users/{uid}/notifications subcollection via
+// services/notification.service.ts; see src/views/NotificationsView.vue and
+// src/types/notification.ts on the client side.
+export { onMessageCreated } from './functions/notifications/on-message-created'
+export { onFavoriteCreated } from './functions/notifications/on-favorite-created'
+export { onAppointmentCreated } from './functions/notifications/on-appointment-created'
+export { onDiscussionCommentCreated } from './functions/notifications/on-discussion-comment-created'
+export { onDiscussionLikeCreated } from './functions/notifications/on-discussion-like-created'
+export { onDiscussionPostCreated } from './functions/notifications/on-discussion-post-created'
+export { onDiscussionPostFeatured } from './functions/notifications/on-discussion-post-featured'
+export { onVehicleNewsCreated } from './functions/notifications/on-vehicle-news-created'
+export { onSystemAnnouncementCreated } from './functions/notifications/on-system-announcement-created'

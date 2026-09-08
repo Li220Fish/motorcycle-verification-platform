@@ -120,9 +120,10 @@ export const useDiscussionStore = defineStore('discussion', () => {
     authorId: string,
     authorSnapshot: AuthorSnapshot,
     text: string,
+    parentCommentId: string | null = null,
   ) {
     if (!text.trim()) return
-    await commentService.addComment(postId, authorId, authorSnapshot, text.trim())
+    await commentService.addComment(postId, authorId, authorSnapshot, text.trim(), parentCommentId)
   }
 
   async function toggleFollow(
