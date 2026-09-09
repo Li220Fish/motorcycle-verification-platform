@@ -548,6 +548,44 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
   })
 }
 
+export async function updateVehicleModel(
+  id: string,
+  input: CreateVehicleModelInput,
+): Promise<void> {
+  const specs: VehicleModelSpecs = {
+    ...EMPTY_SPECS,
+    engine: {
+      ...EMPTY_SPECS.engine,
+      maxPowerHp: input.specs.maxPowerHp,
+      maxTorqueKgm: input.specs.maxTorqueKgm,
+      fuelTankCapacityL: input.specs.fuelTankCapacityL,
+    },
+    electric: { ...EMPTY_SPECS.electric, motorPowerW: input.specs.motorPowerW },
+    dimensions: {
+      ...EMPTY_SPECS.dimensions,
+      weightKg: input.specs.weightKg,
+      seatHeightMm: input.specs.seatHeightMm,
+    },
+    safety: { abs: input.specs.abs, tcs: input.specs.tcs, cbs: input.specs.cbs },
+    efficiency: {
+      ...EMPTY_SPECS.efficiency,
+      officialAverageKmPerL: input.specs.officialAverageKmPerL,
+    },
+  }
+  await updateDoc(doc(db, 'vehicleModels', id), {
+    brand: input.brand,
+    series: input.series,
+    modelYear: input.modelYear,
+    trimName: input.trimName,
+    bodyType: input.bodyType,
+    powerType: input.powerType,
+    displacementCc: input.displacementCc,
+    transmission: input.transmission,
+    hasChain: input.hasChain,
+    specs,
+  })
+}
+
 export async function deleteVehicleModel(id: string): Promise<void> {
   await deleteDoc(doc(db, 'vehicleModels', id))
 }

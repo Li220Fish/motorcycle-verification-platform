@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
   createVehicleModel,
   deleteVehicleModel,
   listVehicleModels,
+  updateVehicleModel,
   type AdminVehicleModel,
 } from '../services/admin-data.service'
 
@@ -12,6 +13,19 @@ const loading = ref(true)
 const models = ref<AdminVehicleModel[]>([])
 const formOpen = ref(false)
 const submitting = ref(false)
+const editingId = ref<string | null>(null)
+const searchText = ref('')
+
+const filteredModels = computed(() => {
+  const q = searchText.value.trim().toLowerCase()
+  if (!q) return models.value
+  return models.value.filter((m) =>
+    [m.brand, m.series, m.trimName ?? '', m.bodyType ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(q),
+  )
+})
 
 const draft = reactive({
   brand: '',
@@ -65,11 +79,53 @@ async function reload(): Promise<void> {
   models.value = await listVehicleModels()
 }
 
-async function handleCreate(): Promise<void> {
+function openCreateForm(): void {
+  editingId.value = null
+  resetDraft()
+  formOpen.value = true
+}
+
+function openEditForm(model: AdminVehicleModel): void {
+  editingId.value = model.id
+  draft.brand = model.brand
+  draft.series = model.series
+  draft.modelYear = model.modelYear != null ? String(model.modelYear) : ''
+  draft.trimName = model.trimName ?? ''
+  draft.bodyType = model.bodyType ?? ''
+  draft.powerType = model.powerType
+  draft.displacementCc = model.displacementCc != null ? String(model.displacementCc) : ''
+  draft.transmission = model.transmission ?? ''
+  draft.hasChain = model.hasChain
+  draft.maxPowerHp = model.specs.engine.maxPowerHp != null ? String(model.specs.engine.maxPowerHp) : ''
+  draft.maxTorqueKgm =
+    model.specs.engine.maxTorqueKgm != null ? String(model.specs.engine.maxTorqueKgm) : ''
+  draft.fuelTankCapacityL =
+    model.specs.engine.fuelTankCapacityL != null ? String(model.specs.engine.fuelTankCapacityL) : ''
+  draft.motorPowerW = model.specs.electric.motorPowerW != null ? String(model.specs.electric.motorPowerW) : ''
+  draft.weightKg = model.specs.dimensions.weightKg != null ? String(model.specs.dimensions.weightKg) : ''
+  draft.seatHeightMm =
+    model.specs.dimensions.seatHeightMm != null ? String(model.specs.dimensions.seatHeightMm) : ''
+  draft.officialAverageKmPerL =
+    model.specs.efficiency.officialAverageKmPerL != null
+      ? String(model.specs.efficiency.officialAverageKmPerL)
+      : ''
+  draft.abs = model.specs.safety.abs
+  draft.tcs = model.specs.safety.tcs
+  draft.cbs = model.specs.safety.cbs
+  formOpen.value = true
+}
+
+function closeForm(): void {
+  formOpen.value = false
+  editingId.value = null
+  resetDraft()
+}
+
+async function handleSubmit(): Promise<void> {
   if (!draft.brand.trim() || !draft.series.trim()) return
   submitting.value = true
   try {
-    await createVehicleModel({
+    const input = {
       brand: draft.brand.trim(),
       series: draft.series.trim(),
       modelYear: numberOrNull(draft.modelYear),
@@ -91,9 +147,13 @@ async function handleCreate(): Promise<void> {
         tcs: draft.tcs,
         cbs: draft.cbs,
       },
-    })
-    resetDraft()
-    formOpen.value = false
+    }
+    if (editingId.value) {
+      await updateVehicleModel(editingId.value, input)
+    } else {
+      await createVehicleModel(input)
+    }
+    closeForm()
     await reload()
   } finally {
     submitting.value = false
@@ -101,7 +161,9 @@ async function handleCreate(): Promise<void> {
 }
 
 async function handleDelete(id: string): Promise<void> {
+  if (!window.confirm('刪除這筆車款資料？')) return
   await deleteVehicleModel(id)
+  if (editingId.value === id) closeForm()
   await reload()
 }
 
@@ -114,19 +176,24 @@ onMounted(async () => {
 <template>
   <div>
     <p class="admin-page-intro">
-      車款主檔（<code>vehicleModels</code>）。app
-      端目前沒有任何地方讀取或寫入它——車輛的品牌／車型是使用者在建立車輛/刊登時自行輸入的自由文字，
-      沒有經過這份主檔比對或校正。這裡先提供規格資料的新增/檢視/刪除；要讓它真正「發揮作用」（例如統一寫法、擋掉亂填的車型字串），還需要
-      app
-      端改成從這份主檔選擇，而不是自由輸入，詳見後台彙報。convenience/display/lighting/storage/security
+      車輛選單資訊（<code>vehicleModels</code>）——「我的車輛」新增車輛時的廠牌／車系／排氣量／名稱四層選單，
+      以及刊登表單的鏈條傳動判斷，都是直接讀取這份主檔（見
+      <code>src/components/common/VehicleModelSelect.vue</code>）。在這裡新增、修改或刪除的車款，會立即反映在
+      App 的選單裡。convenience/display/lighting/storage/security
       等配備旗標與 fuelReports/reviews 統計目前無填寫介面，欄位保留預設值。
     </p>
 
     <div class="admin-panel">
       <div class="admin-panel-head">
         <h2>標準車款規格</h2>
+        <input
+          v-model="searchText"
+          type="search"
+          class="admin-search"
+          placeholder="搜尋廠牌、車系、名稱..."
+        />
         <div class="spacer"></div>
-        <button class="admin-btn sm primary" @click="formOpen = !formOpen">
+        <button class="admin-btn sm primary" @click="formOpen ? closeForm() : openCreateForm()">
           {{ formOpen ? '取消' : '新增車款' }}
         </button>
       </div>
@@ -217,9 +284,9 @@ onMounted(async () => {
           class="admin-btn primary"
           style="margin-top: 12px"
           :disabled="submitting"
-          @click="handleCreate"
+          @click="handleSubmit"
         >
-          {{ submitting ? '新增中...' : '新增' }}
+          {{ submitting ? '儲存中...' : editingId ? '儲存修改' : '新增' }}
         </button>
       </div>
 
@@ -236,10 +303,10 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!loading && models.length === 0">
+            <tr v-if="!loading && filteredModels.length === 0">
               <td class="admin-empty-cell" colspan="6">尚無資料</td>
             </tr>
-            <tr v-for="m in models" :key="m.id">
+            <tr v-for="m in filteredModels" :key="m.id">
               <td class="strong">
                 {{ m.brand }} {{ m.series }}<span v-if="m.trimName"> {{ m.trimName }}</span>
                 <span v-if="m.modelYear" class="dim"> ({{ m.modelYear }})</span>
@@ -248,7 +315,10 @@ onMounted(async () => {
               <td class="dim">{{ m.powerType === 'electric' ? '電動' : '燃油' }}</td>
               <td class="num dim">{{ m.displacementCc ?? '—' }}</td>
               <td class="num dim">{{ m.specs.engine.maxPowerHp ?? '—' }}</td>
-              <td><button class="admin-btn sm danger" @click="handleDelete(m.id)">刪除</button></td>
+              <td class="admin-row-actions">
+                <button class="admin-btn sm" @click="openEditForm(m)">編輯</button>
+                <button class="admin-btn sm danger" @click="handleDelete(m.id)">刪除</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -271,5 +341,18 @@ onMounted(async () => {
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.admin-search {
+  width: 220px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>
