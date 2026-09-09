@@ -39,10 +39,36 @@ export const useNotificationStore = defineStore('notification', () => {
     await notificationService.markAsRead(currentUid.value, notificationId)
   }
 
+  /** Marks a specific set of ids as read — a collapsed 訊息 group's every
+   *  underlying id, not just the one shown (see NotificationsView.vue). */
+  async function markManyAsRead(ids: string[]): Promise<void> {
+    if (!currentUid.value) return
+    await notificationService.markManyAsRead(currentUid.value, ids)
+  }
+
   async function markAllAsRead(): Promise<void> {
     if (!currentUid.value) return
     const unreadIds = notifications.value.filter((n) => !n.read).map((n) => n.id)
-    await notificationService.markAllAsRead(currentUid.value, unreadIds)
+    await notificationService.markManyAsRead(currentUid.value, unreadIds)
+  }
+
+  async function deleteOne(notificationId: string): Promise<void> {
+    if (!currentUid.value) return
+    await notificationService.deleteOne(currentUid.value, notificationId)
+  }
+
+  /** Swipe-to-delete on a collapsed group removes every id it represents. */
+  async function deleteMany(ids: string[]): Promise<void> {
+    if (!currentUid.value) return
+    await notificationService.deleteMany(currentUid.value, ids)
+  }
+
+  async function clearAll(): Promise<void> {
+    if (!currentUid.value) return
+    await notificationService.deleteMany(
+      currentUid.value,
+      notifications.value.map((n) => n.id),
+    )
   }
 
   return {
@@ -52,6 +78,10 @@ export const useNotificationStore = defineStore('notification', () => {
     subscribe,
     stopSubscription,
     markAsRead,
+    markManyAsRead,
     markAllAsRead,
+    deleteOne,
+    deleteMany,
+    clearAll,
   }
 })

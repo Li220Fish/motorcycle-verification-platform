@@ -1,4 +1,6 @@
 :root {
+  color-scheme: light;
+
   /* Color */
   --color-primary: #1769e8;
   --color-primary-dark: #0f1720;
@@ -46,6 +48,8 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
+
   --color-primary: #4c8dff;
   --color-primary-bg: #16233f;
   --color-background: #0e1116;

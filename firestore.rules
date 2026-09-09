@@ -403,12 +403,14 @@ service cloud.firestore {
 
       // Written only by Cloud Functions Firestore triggers (Admin SDK,
       // bypasses these rules) — see functions/src/functions/notifications/.
-      // The client may read its own feed and flip `read`, nothing else.
+      // The client may read its own feed, flip `read`, and delete its own
+      // (swipe-to-delete / 清除全部 in NotificationsView.vue) — never create.
       match /notifications/{notificationId} {
         allow read: if signedIn() && myUid() == userId;
         allow update: if signedIn() && myUid() == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow create, delete: if false;
+        allow delete: if signedIn() && myUid() == userId;
+        allow create: if false;
       }
     }
 
@@ -577,6 +579,32 @@ service cloud.firestore {
     // (scripts/delete-deprecated-collections.mjs) and have no rule here —
     // they now fall through to the default-deny match below, same as any
     // other nonexistent collection.
+
+    // /dev-log is a link-open internal team tool with no auth screen —
+    // intentionally world-writable, scoped to these collection names only.
+    // Never reuse devlog_settings/devlog_submissions/devlog_overrides/
+    // devlog_deletions for anything that needs real access control.
+    match /devlog_settings/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /devlog_submissions/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Per-entry corrections layered on top of the static git/work-log/
+    // team-sheet data at render time (e.g. a teammate backfilling hours
+    // that never made it into the team sheet) — doc id is the entry id.
+    match /devlog_overrides/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Tombstones — hides an entry from the default timeline without
+    // touching the underlying git/work-log/team-sheet/submission data.
+    // Doc id is the entry id; deleting the tombstone restores the entry.
+    match /devlog_deletions/{document=**} {
+      allow read, write: if true;
+    }
 
     match /{document=**} {
       allow read, write: if false;

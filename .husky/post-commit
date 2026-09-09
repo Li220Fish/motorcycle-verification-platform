@@ -1,0 +1,6 @@
+# Best-effort: push this commit's own newly-prompted entry straight to the
+# dev-log timeline (Firestore) without waiting for someone to rerun
+# build-dev-log.mjs and redeploy. Runs in the background so `git commit`
+# returns immediately; failures (offline, no .env yet) are silent and never
+# affect the commit that already happened.
+(node scripts/sync-devlog.mjs > .git/devlog-sync.log 2>&1 &)

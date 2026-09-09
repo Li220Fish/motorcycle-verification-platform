@@ -406,6 +406,13 @@ export interface AdminVehicleModel {
   powerType: VehiclePowerType
   displacementCc: number | null
   transmission: string | null
+  /** 鏈條傳動 — feeds Vehicle.hasChain (see types/vehicle.ts) when a user
+   * picks this model, which in turn drives whether BasicHealthCheck13.vue's
+   * checklist includes the 鏈條 item. */
+  hasChain: boolean
+  /** Alternate/colloquial names for this model (e.g. 山葉100、老山葉). Reference
+   * data only for now — nothing in the app reads it yet. */
+  synonyms: string[]
   coverImageUrl: string | null
   photos: string[]
   specs: VehicleModelSpecs
@@ -484,6 +491,8 @@ export async function listVehicleModels(): Promise<AdminVehicleModel[]> {
       powerType: data.powerType ?? 'gasoline',
       displacementCc: data.displacementCc ?? null,
       transmission: data.transmission ?? null,
+      hasChain: data.hasChain ?? false,
+      synonyms: data.synonyms ?? [],
       coverImageUrl: data.coverImageUrl ?? null,
       photos: data.photos ?? [],
       specs: { ...EMPTY_SPECS, ...data.specs },
@@ -504,6 +513,8 @@ export interface CreateVehicleModelInput {
   powerType: VehiclePowerType
   displacementCc: number | null
   transmission: string | null
+  hasChain: boolean
+  synonyms: string[]
   specs: {
     maxPowerHp: number | null
     maxTorqueKgm: number | null
@@ -518,7 +529,7 @@ export interface CreateVehicleModelInput {
   }
 }
 
-export async function createVehicleModel(input: CreateVehicleModelInput): Promise<void> {
+export async function createVehicleModel(input: CreateVehicleModelInput): Promise<string> {
   const specs: VehicleModelSpecs = {
     ...EMPTY_SPECS,
     engine: {
@@ -539,7 +550,7 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
       officialAverageKmPerL: input.specs.officialAverageKmPerL,
     },
   }
-  await addDoc(collection(db, 'vehicleModels'), {
+  const ref = await addDoc(collection(db, 'vehicleModels'), {
     brand: input.brand,
     series: input.series,
     modelYear: input.modelYear,
@@ -548,6 +559,8 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     powerType: input.powerType,
     displacementCc: input.displacementCc,
     transmission: input.transmission,
+    hasChain: input.hasChain,
+    synonyms: input.synonyms,
     coverImageUrl: null,
     photos: [],
     specs,
@@ -556,6 +569,50 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     reviewStats: { averageRating: null, reviewCount: 0 },
     createdAt: serverTimestamp(),
   })
+  return ref.id
+}
+
+export async function updateVehicleModel(
+  id: string,
+  input: CreateVehicleModelInput,
+): Promise<void> {
+  const specs: VehicleModelSpecs = {
+    ...EMPTY_SPECS,
+    engine: {
+      ...EMPTY_SPECS.engine,
+      maxPowerHp: input.specs.maxPowerHp,
+      maxTorqueKgm: input.specs.maxTorqueKgm,
+      fuelTankCapacityL: input.specs.fuelTankCapacityL,
+    },
+    electric: { ...EMPTY_SPECS.electric, motorPowerW: input.specs.motorPowerW },
+    dimensions: {
+      ...EMPTY_SPECS.dimensions,
+      weightKg: input.specs.weightKg,
+      seatHeightMm: input.specs.seatHeightMm,
+    },
+    safety: { abs: input.specs.abs, tcs: input.specs.tcs, cbs: input.specs.cbs },
+    efficiency: {
+      ...EMPTY_SPECS.efficiency,
+      officialAverageKmPerL: input.specs.officialAverageKmPerL,
+    },
+  }
+  await updateDoc(doc(db, 'vehicleModels', id), {
+    brand: input.brand,
+    series: input.series,
+    modelYear: input.modelYear,
+    trimName: input.trimName,
+    bodyType: input.bodyType,
+    powerType: input.powerType,
+    displacementCc: input.displacementCc,
+    transmission: input.transmission,
+    hasChain: input.hasChain,
+    synonyms: input.synonyms,
+    specs,
+  })
+}
+
+export async function setVehicleModelCoverImage(id: string, coverImageUrl: string): Promise<void> {
+  await updateDoc(doc(db, 'vehicleModels', id), { coverImageUrl })
 }
 
 export async function deleteVehicleModel(id: string): Promise<void> {

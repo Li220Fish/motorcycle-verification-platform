@@ -15,6 +15,7 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { BIKE_REFERENCE_PHOTO } from './basic-health-check-photo'
 
+const props = defineProps<{ hasChain?: boolean | null }>()
 const emit = defineEmits<{ back: [] }>()
 
 interface ChecklistItem {
@@ -28,7 +29,7 @@ interface ChecklistItem {
   required: boolean
 }
 
-const ITEMS: ChecklistItem[] = [
+const BASE_ITEMS: ChecklistItem[] = [
   { key: 'headlight', label: '大燈', anchor: [20.5, 38.0], page: 1, required: true },
   { key: 'turnsignal', label: '方向燈', anchor: [40.0, 55.8], page: 1, required: true },
   { key: 'electrical', label: '電系是否有改裝', anchor: [41.6, 24.0], page: 1, required: false },
@@ -43,6 +44,24 @@ const ITEMS: ChecklistItem[] = [
   { key: 'reartire', label: '後輪', anchor: [20.0, 77.0], page: 2, required: false },
   { key: 'rearshock', label: '後避震', anchor: [20.1, 45.8], page: 2, required: false },
 ]
+
+/** Only shown when the vehicle's picked catalog model has 鏈條傳動 = true
+ *  (Vehicle.hasChain, set from vehicleModels' CSV import — see
+ *  scripts/import-vehicle-models-csv.mjs). Belt/shaft-driven models (most
+ *  scooters) never see this 14th item. */
+const CHAIN_ITEM: ChecklistItem = {
+  key: 'chain',
+  label: '鏈條',
+  anchor: [32.0, 70.0],
+  page: 2,
+  required: false,
+}
+
+// state/notes are keyed off the full superset (chain included) regardless of
+// props.hasChain, so toggling that prop never changes the reactive objects'
+// shape — only which items actually render.
+const ALL_ITEMS: ChecklistItem[] = [...BASE_ITEMS, CHAIN_ITEM]
+const ITEMS = computed(() => (props.hasChain ? ALL_ITEMS : BASE_ITEMS))
 
 interface NoteItem {
   key: string
@@ -64,7 +83,7 @@ const NOTE_ITEMS: NoteItem[] = [
 ]
 
 const state = reactive<Record<string, boolean>>(
-  Object.fromEntries(ITEMS.map((it) => [it.key, false])),
+  Object.fromEntries(ALL_ITEMS.map((it) => [it.key, false])),
 )
 const notes = reactive<Record<string, string>>(
   Object.fromEntries(NOTE_ITEMS.map((n) => [n.key, ''])),
@@ -74,20 +93,22 @@ const PAGE_COUNT = 2
 const currentPage = ref<1 | 2>(1)
 const finished = ref(false)
 
-const pageItems = computed(() => ITEMS.filter((it) => it.page === currentPage.value))
+const pageItems = computed(() => ITEMS.value.filter((it) => it.page === currentPage.value))
 const isMirrored = computed(() => currentPage.value === 2)
 
 const pageRequiredMet = computed(() =>
-  ITEMS.filter((it) => it.page === currentPage.value && it.required).every((it) => state[it.key]),
+  ITEMS.value
+    .filter((it) => it.page === currentPage.value && it.required)
+    .every((it) => state[it.key]),
 )
 
-const doneCount = computed(() => ITEMS.filter((it) => state[it.key]).length)
-const progressPercent = computed(() => (doneCount.value / ITEMS.length) * 100)
+const doneCount = computed(() => ITEMS.value.filter((it) => state[it.key]).length)
+const progressPercent = computed(() => (doneCount.value / ITEMS.value.length) * 100)
 
 const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key]))
 
 const allRequiredDone = computed(() =>
-  ITEMS.filter((it) => it.required).every((it) => state[it.key]),
+  ITEMS.value.filter((it) => it.required).every((it) => state[it.key]),
 )
 
 function toggle(key: string): void {

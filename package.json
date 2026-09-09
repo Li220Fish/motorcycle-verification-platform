@@ -14,11 +14,15 @@
     "seed:demo-data": "node scripts/seed-demo-data.mjs",
     "seed:mock-vehicles": "node scripts/seed-mock-vehicles.mjs",
     "seed:marketplace-mock": "node scripts/seed-marketplace-mock.mjs",
+    "import:vehicle-models": "node scripts/import-vehicle-models-csv.mjs",
     "cleanup:database": "node scripts/cleanup-database.mjs",
+    "devlog:build": "node scripts/build-dev-log.mjs",
+    "devlog:sync": "node scripts/sync-devlog.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "prepare": "husky"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
@@ -49,6 +53,7 @@
     "eslint-plugin-vue": "^10.10.0",
     "firebase-tools": "^15.29.0",
     "globals": "^17.11.0",
+    "husky": "^9.1.7",
     "patch-package": "^8.0.1",
     "prettier": "^3.9.6",
     "typescript": "~6.0.2",

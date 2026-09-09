@@ -26,6 +26,14 @@ input,
 select,
 textarea {
   font-family: inherit;
+  color: var(--color-text-primary);
+  background-color: transparent;
+  accent-color: var(--color-primary);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-disabled);
 }
 
 h1,

@@ -109,6 +109,20 @@ const selectedVehicleEntry = computed(
   () => eligibleVehicles.value.find((entry) => entry.vehicle.id === form.vehicleId) ?? null,
 )
 
+// hasChain comes from the vehicle's model data (CSV import, see
+// scripts/import-vehicle-models-csv.mjs) — when known, trust it instead of
+// asking the seller to identify their own drivetrain.
+const chainKnownFromVehicle = computed(() => {
+  const hasChain = selectedVehicleEntry.value?.vehicle.hasChain
+  return hasChain === true || hasChain === false
+})
+
+watch(selectedVehicleEntry, (entry) => {
+  if (entry?.vehicle.hasChain === true) form.transmission = TRANSMISSION_CHAIN_EXPOSED
+  else if (entry?.vehicle.hasChain === false) form.transmission = TRANSMISSION_NO_EXPOSED_CHAIN
+  else form.transmission = ''
+})
+
 const canSubmit = computed(
   () =>
     !submitting.value &&
@@ -282,7 +296,10 @@ async function handleSubmit(): Promise<void> {
 
           <div class="field">
             <span>傳動</span>
-            <div class="segmented-control">
+            <p v-if="chainKnownFromVehicle" class="hint">
+              {{ form.transmission }}（依車輛型號資料自動判斷）
+            </p>
+            <div v-else class="segmented-control">
               <button
                 type="button"
                 class="segment"

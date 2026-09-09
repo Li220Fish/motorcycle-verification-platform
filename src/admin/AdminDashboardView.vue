@@ -46,7 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'probe', label: 'Probe 裝置' },
     ],
   },
-  { title: '主資料與內容', items: [{ key: 'models', label: '車款主檔' }] },
+  { title: '資料維護', items: [{ key: 'models', label: '車輛選單資訊' }] },
   { title: '系統設定', items: [{ key: 'prompts', label: 'AI Prompt 設定' }] },
 ]
 
@@ -65,7 +65,7 @@ const TITLES: Record<string, [string, string]> = {
   news: ['車訊新知', 'collection: vehicleNews'],
   notifications: ['系統通知', 'collection: systemAnnouncements（廣播給所有使用者）'],
   probe: ['Probe 裝置', 'collection: voltageSessions（目前無寫入來源）'],
-  models: ['車款主檔', 'collection: vehicleModels（新建）'],
+  models: ['車輛選單資訊', 'collection: vehicleModels'],
   prompts: ['AI Prompt 設定', 'collection: aiPrompts（新建，覆寫 functions 端預設值）'],
 }
 
