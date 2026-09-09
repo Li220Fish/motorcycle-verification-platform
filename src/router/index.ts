@@ -17,6 +17,12 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
+      path: '/dev-log',
+      name: 'dev-log',
+      component: () => import('@/views/DevLogView.vue'),
+      meta: { requiresAuth: false, hideChrome: true },
+    },
+    {
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),

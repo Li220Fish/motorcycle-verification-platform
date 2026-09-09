@@ -1,0 +1,52 @@
+{
+  "teamSummary": {
+    "estimatedHours": 119.5,
+    "actualHours": 123,
+    "completionRate": 44.83,
+    "byType": {
+      "討論": 29,
+      "開發/創作": 82.5,
+      "測試/實驗": 8,
+      "維護": 7.5
+    },
+    "sourceFile": "團隊規劃表 - 需求表.pdf"
+  },
+  "statusResult": {
+    "Ready": "需求已確定，等待實作",
+    "Doing": "實作中，需求尚未完成",
+    "Test": "需求已完成，等待其他成員／外人驗證",
+    "Blocked": "實作受阻，暫停進行",
+    "Done": "驗證完成，功能確定上線"
+  },
+  "entries": [
+    { "id": "sheet-1", "user": "li220fish", "type": "discuss", "priority": "P0", "topic": "工作分配與需求", "summary": "確認團員分工與負責項目", "status": "Done", "start": "2026-08-24", "end": "2026-08-25", "hours": 6, "category": "系統" },
+    { "id": "sheet-2", "user": "li220fish", "type": "dev", "priority": "P0", "topic": "軟體開發方向", "summary": "要做 android、ios APP 或是直接用 Web APP", "status": "Done", "start": "2026-08-26", "end": "2026-08-27", "hours": 1.5, "category": "系統" },
+    { "id": "sheet-3", "user": "jefferylu33", "type": "dev", "priority": "P0", "topic": "硬體研究", "summary": "處理可持續測量電壓之電表（帶有藍芽功能）", "status": "Ready", "start": "2026-08-25", "end": null, "hours": 2.5, "category": "檢定辨識" },
+    { "id": "sheet-4", "user": "Archi", "type": "test", "priority": "P3", "topic": "Gemini 引擎分析驗證", "summary": "驗證 AI agent 對於引擎聲音辨識效果", "status": "Done", "start": "2026-08-25", "end": "2026-08-26", "hours": 0.5, "category": "檢定辨識" },
+    { "id": "sheet-5", "user": "li220fish", "type": "dev", "priority": "P0", "topic": "Web + Native APP 開發", "summary": "整體架構與功能開發", "status": "Doing", "start": "2026-08-26", "end": null, "hours": 36, "category": "系統" },
+    { "id": "sheet-6", "user": "li220fish", "type": "dev", "priority": "P0", "topic": "架設 Firebase", "summary": "架設 Firebase 公網 web app 與 DB", "status": "Doing", "start": "2026-08-26", "end": null, "hours": 1, "category": "系統" },
+    { "id": "sheet-7", "user": "Archi", "type": "test", "priority": "P1", "topic": "引擎音檔波形處理", "summary": "將錄音檔轉成音波量化資料", "status": "Ready", "start": null, "end": null, "hours": 0, "category": "檢定辨識" },
+    { "id": "sheet-8", "user": "li220fish", "type": "dev", "priority": "P1", "topic": "流程步驟驗證", "summary": "確保填寫內容正常", "status": "Test", "start": "2026-08-27", "end": null, "hours": 2.5, "category": "前台" },
+    { "id": "sheet-9", "user": "li220fish", "type": "discuss", "priority": "P2", "topic": "需求討論", "summary": "APP 流程與其他功能", "status": "Done", "start": "2026-08-28", "end": "2026-08-28", "hours": 1, "category": "前台" },
+    { "id": "sheet-10", "user": "Archi", "type": "discuss", "priority": "P1", "topic": "需求討論（商業項目）", "summary": "冠桑提供之意見", "status": "Done", "start": "2026-08-29", "end": null, "hours": 2, "category": "系統" },
+    { "id": "sheet-11", "user": "Archi", "type": "dev", "priority": "P0", "topic": "app 架構 demo", "summary": "冠桑 HTML 實作；demo v0.3 done", "status": "Test", "start": "2026-08-30", "end": "2026-08-30", "hours": 5, "category": "前台" },
+    { "id": "sheet-12", "user": "Archi", "type": "discuss", "priority": "P0", "topic": "app demo 檢討", "summary": "組員針對 demo v0.3 進行討論及增訂；備註：車輛介紹功能 should be in market page", "status": "Done", "start": "2026-08-30", "end": "2026-08-30", "hours": 2, "category": "前台" },
+    { "id": "sheet-13", "user": "Archi", "type": "dev", "priority": "P1", "topic": "商業提案 v0.3", "summary": "冠桑整理討論內容重新定義十大定義，針對海內外市場研究調查", "status": "Doing", "start": "2026-08-31", "end": "2026-08-31", "hours": 1.5, "category": "系統" },
+    { "id": "sheet-14", "user": "Archi", "type": "dev", "priority": "P0", "topic": "Motoverify_message 功能開發與實作", "summary": "冠桑進行 Motoverify_message 功能開發與實作並進行內測；透過 git 綁 Vercel 作為資料庫進行跨平台帳號傳訊息實作", "status": "Test", "start": "2026-08-31", "end": "2026-08-31", "hours": 5, "category": "前台" },
+    { "id": "sheet-15", "user": "li220fish", "type": "test", "priority": "P2", "topic": "開會對 APP／後台功能測試", "summary": "功能與流程討論", "status": "Done", "start": "2026-09-02", "end": "2026-09-02", "hours": 2, "category": "系統" },
+    { "id": "sheet-16", "user": "li220fish", "type": "discuss", "priority": "P1", "topic": "資料標籤與處理討論", "summary": "1.【前台】電車的資料如何處理（油耗等）\n2.【前台】市場可篩選的內容\n3.【前台】車子的標籤（越野車、電車等）\n8.【前台】車子資訊的文章格式\n4.【後台】今天要處理的事，如何去設定（人工排查、程式自動偵測）\n5.【後台】需要處理的車輛，需定義系統要檢查什麼內容\n6.【後台】交易市場，需定義系統要檢查什麼內容\n7.【後台】車款主檔的同義詞界定\n9.【檢驗】各項目的檢驗標準與方法", "status": "Doing", "start": "2026-09-03", "end": "2026-09-03", "hours": 6, "category": "系統" },
+    { "id": "sheet-17", "user": "li220fish", "type": "dev", "priority": "P2", "topic": "假資料", "summary": "內容定表、繪製儲存圖；假帳號、車子資訊等", "status": "Doing", "start": "2026-09-02", "end": "2026-09-04", "hours": 7, "category": "系統" },
+    { "id": "sheet-18", "user": "li220fish", "type": "dev", "priority": "P1", "topic": "後台功能上版", "summary": "將 html 轉換成 vue 後推上 firebase", "status": "Done", "start": "2026-09-04", "end": "2026-09-04", "hours": 0.5, "category": "後台" },
+    { "id": "sheet-19", "user": "jefferylu33", "type": "dev", "priority": "P1", "topic": "建立機車模型流程", "summary": "建置並測試 mmbcu 是否可以透過照片建立模型", "status": "Blocked", "start": "2026-08-28", "end": null, "hours": 5, "category": "檢定辨識" },
+    { "id": "sheet-20", "user": "jefferylu33", "type": "test", "priority": "P0", "topic": "測試可持續測量電壓之電表（帶有藍芽功能）", "summary": "測試硬體", "status": "Doing", "start": "2026-09-03", "end": null, "hours": 0, "category": "檢定辨識" },
+    { "id": "sheet-21", "user": "li220fish", "type": "maint", "priority": "P0", "topic": "資料庫修正", "summary": "明確資料庫的設計", "status": "Doing", "start": "2026-09-04", "end": "2026-09-04", "hours": 7.5, "category": "系統" },
+    { "id": "sheet-22", "user": "jefferylu33", "type": "test", "priority": "P1", "topic": "APP 測試", "summary": "第三版 APP 功能驗證", "status": "Done", "start": "2026-09-04", "end": "2026-09-04", "hours": 0.5, "category": "前台" },
+    { "id": "sheet-23", "user": "Archi", "type": "test", "priority": "P0", "topic": "APP 操作流程測試（實際驗車）", "summary": "實際使用 APP 進行測試", "status": "Done", "start": "2026-09-05", "end": "2026-09-05", "hours": 3, "category": "檢定辨識" },
+    { "id": "sheet-24", "user": "Archi", "type": "dev", "priority": "P0", "topic": "APP 優化討論", "summary": "反饋測驗問題", "status": "Done", "start": "2026-09-05", "end": "2026-09-05", "hours": 3, "category": "前台" },
+    { "id": "sheet-25", "user": "Archi", "type": "dev", "priority": "P0", "topic": "IOS APP 燒錄", "summary": "使用 mac 進行 APP 燒錄", "status": "Done", "start": "2026-09-05", "end": "2026-09-05", "hours": 6, "category": "系統" },
+    { "id": "sheet-26", "user": "Archi", "type": "dev", "priority": "P0", "topic": "APP 優化", "summary": "深色模式、小數點、封面圖片上傳", "status": "Ready", "start": "2026-09-06", "end": "2026-09-08", "hours": 3, "category": "前台" },
+    { "id": "sheet-27", "user": "Archi", "type": "test", "priority": "P1", "topic": "油耗功能測試", "summary": "油耗功能測試", "status": "Ready", "start": "2026-09-07", "end": "2026-09-07", "hours": 2, "category": "前台" },
+    { "id": "sheet-28", "user": "Archi", "type": "dev", "priority": "P0", "topic": "優化驗車流程", "summary": "基本 13 項檢測及一覽表開發", "status": "Doing", "start": "2026-09-07", "end": null, "hours": 3, "category": "檢定辨識" },
+    { "id": "sheet-29", "user": "Archi", "type": "discuss", "priority": "P1", "topic": "APP v0.5 優化討論", "summary": "bug 與使用體驗討論", "status": "Done", "start": "2026-09-09", "end": "2026-09-09", "hours": 12, "category": "系統" }
+  ]
+}
