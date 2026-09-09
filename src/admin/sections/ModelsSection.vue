@@ -213,7 +213,10 @@ async function uploadModelPhoto(id: string, file: File): Promise<string> {
 }
 
 async function handleSubmit(): Promise<void> {
-  if (!draft.brand.trim() || !draft.series.trim()) return
+  if (!draft.brand.trim() || !draft.series.trim() || !draft.trimName.trim()) {
+    submitError.value = '廠牌、車系、名稱為必填欄位。'
+    return
+  }
   submitting.value = true
   submitError.value = ''
   try {
@@ -316,18 +319,21 @@ onMounted(async () => {
             </datalist>
           </label>
           <label class="admin-field">
+            <span>名稱</span>
+            <input v-model="draft.trimName" type="text" placeholder="PCX 160、勁戰六代 Cygnus-X" />
+          </label>
+        </div>
+        <p class="admin-field-hint">
+          「名稱」會顯示在 App「我的車輛」選單的最後一層（廠牌／車系／排氣量／名稱），務必填寫。
+        </p>
+        <div class="admin-form-row" style="margin-top: 10px">
+          <label class="admin-field">
             <span>年式</span>
             <select v-model="draft.modelYear">
               <option value="">未填</option>
               <option v-for="y in yearOptions" :key="y" :value="String(y)">{{ y }}</option>
             </select>
           </label>
-        </div>
-        <div class="admin-form-row" style="margin-top: 10px">
-          <label class="admin-field"
-            ><span>版本／配置</span
-            ><input v-model="draft.trimName" type="text" placeholder="ABS 版"
-          /></label>
           <label class="admin-field">
             <span>車型類別</span>
             <input
@@ -473,6 +479,12 @@ onMounted(async () => {
   margin: 14px 0 8px;
   font-size: 12.5px;
   font-weight: 700;
+  color: var(--muted);
+}
+
+.admin-field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--muted);
 }
 
