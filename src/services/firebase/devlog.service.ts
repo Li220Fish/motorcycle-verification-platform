@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -13,6 +14,7 @@ import {
 import { db } from './firebase'
 import type {
   CountdownState,
+  DevLogDeletion,
   DevLogOverride,
   DevLogSubmissionDoc,
   DevLogSubmissionInput,
@@ -29,6 +31,10 @@ function submissionsCollection() {
 
 function overridesCollection() {
   return collection(db, 'devlog_overrides')
+}
+
+function deletionsCollection() {
+  return collection(db, 'devlog_deletions')
 }
 
 function countdownDocRef() {
@@ -96,6 +102,31 @@ async function saveOverride(entryId: string, override: DevLogOverride): Promise<
   await setDoc(doc(overridesCollection(), entryId), override)
 }
 
+/** Tombstones (not real deletes) so the timeline can show "removed by X at Y"
+ * instead of the entry just silently vanishing. */
+function subscribeDeletions(
+  onChange: (deletions: Record<string, DevLogDeletion>) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    deletionsCollection(),
+    (snapshot) => {
+      const map: Record<string, DevLogDeletion> = {}
+      for (const d of snapshot.docs) map[d.id] = d.data() as DevLogDeletion
+      onChange(map)
+    },
+    (error) => onError?.(error),
+  )
+}
+
+async function deleteEntry(entryId: string, deletion: DevLogDeletion): Promise<void> {
+  await setDoc(doc(deletionsCollection(), entryId), deletion)
+}
+
+async function restoreEntry(entryId: string): Promise<void> {
+  await deleteDoc(doc(deletionsCollection(), entryId))
+}
+
 export const devlogService = {
   subscribeSubmissions,
   addSubmission,
@@ -103,4 +134,7 @@ export const devlogService = {
   saveCountdown,
   subscribeOverrides,
   saveOverride,
+  subscribeDeletions,
+  deleteEntry,
+  restoreEntry,
 }

@@ -74,10 +74,26 @@ export interface DevLogSubmissionInput {
   result: string | null
   durationHours: number | null
   rawMarkdown: string
+  /** Present only for docs written by scripts/sync-devlog.mjs (a collaborator's
+   * own machine, auto-pushing their own newly-prompted commits) — lets the
+   * viewer merge this doc onto the matching static git entry by id instead of
+   * appending it as a separate timeline row. Absent for hand-typed .md uploads. */
+  gitHash?: string
+  shortHash?: string
+  files?: string[]
 }
 
 export interface DevLogSubmissionDoc extends DevLogSubmissionInput {
   submittedAt: string
+}
+
+/** A tombstone hiding one entry (any source) from the default timeline view
+ * without touching the underlying git/work-log/team-sheet/submission data —
+ * "leaves a stamp" per the team's requirement. Doc id = the entry's `id`. */
+export interface DevLogDeletion {
+  deletedBy: string
+  deletedAt: string
+  reason?: string
 }
 
 /** A correction/patch applied on top of a base entry (git/manual-log/

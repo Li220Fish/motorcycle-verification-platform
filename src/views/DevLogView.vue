@@ -7,6 +7,7 @@ import type {
   CountdownState,
   DevLogCategory,
   DevLogData,
+  DevLogDeletion,
   DevLogEntry,
   DevLogOverride,
   DevLogSubmissionInput,
@@ -124,11 +125,15 @@ function normalizeSubmission(
   id: string,
   data: DevLogSubmissionInput & { submittedAt: string },
 ): DevLogEntry {
+  // scripts/sync-devlog.mjs writes gitHash — use the commit hash itself as the
+  // entry id so this doc REPLACES the matching static git entry (richer prompt
+  // than whatever the last static rebuild found) instead of appearing twice.
+  const isGitSync = !!data.gitHash
   return {
-    id: 'submission-' + id,
-    source: 'submission',
-    hash: null,
-    shortHash: null,
+    id: isGitSync ? data.gitHash! : 'submission-' + id,
+    source: isGitSync ? 'git' : 'submission',
+    hash: data.gitHash || null,
+    shortHash: data.shortHash || null,
     user: data.user || '匿名協作者',
     email: null,
     timestamp: data.timestamp || data.submittedAt || null,
@@ -140,8 +145,8 @@ function normalizeSubmission(
     summary: data.summary || null,
     prompt: data.prompt || null,
     promptExtraCount: 0,
-    files: [],
-    stat: data.diff ? '協作者提交的程式碼' : null,
+    files: data.files || [],
+    stat: data.diff ? (isGitSync ? '即時同步的程式碼' : '協作者提交的程式碼') : null,
     diff: data.diff || null,
     diffTruncated: false,
     result: data.result || '（協作提交）',
@@ -181,9 +186,45 @@ function applyOverride(entry: DevLogEntry, override: DevLogOverride | undefined)
   return next
 }
 
-const allEntries = computed<DevLogEntry[]>(() =>
-  baseEntries.concat(submissions.value).map((e) => applyOverride(e, overrides.value[e.id])),
-)
+// ---------- deletions (tombstones — Firestore) ----------
+const deletions = ref<Record<string, DevLogDeletion>>({})
+let unsubscribeDeletions: (() => void) | null = null
+
+const EDITOR_NAME_KEY = 'ride-devlog-editor-name'
+const editorName = ref('')
+try {
+  editorName.value = localStorage.getItem(EDITOR_NAME_KEY) || ''
+} catch {
+  editorName.value = ''
+}
+
+async function handleDelete(entry: DevLogEntry) {
+  let who = editorName.value.trim()
+  if (!who) {
+    who = (window.prompt('請輸入你的名字（會記錄在刪除紀錄上）') || '').trim()
+    if (!who) return
+    editorName.value = who
+    try {
+      localStorage.setItem(EDITOR_NAME_KEY, who)
+    } catch {
+      /* private browsing — not fatal */
+    }
+  }
+  await devlogService.deleteEntry(entry.id, { deletedBy: who, deletedAt: new Date().toISOString() })
+}
+async function handleRestore(entry: DevLogEntry) {
+  await devlogService.restoreEntry(entry.id)
+}
+
+const allEntries = computed<DevLogEntry[]>(() => {
+  const map = new Map<string, DevLogEntry>()
+  for (const e of baseEntries) map.set(e.id, e)
+  // a git-sync submission with the same id as a static entry replaces it
+  // (richer prompt data); one with a fresh id (a commit pushed after the
+  // last static rebuild, or a hand-typed .md upload) is added as new.
+  for (const s of submissions.value) map.set(s.id, s)
+  return Array.from(map.values()).map((e) => applyOverride(e, overrides.value[e.id]))
+})
 
 // ---------- countdown (Firestore) ----------
 const countdown = ref<CountdownState | null>(null)
@@ -472,14 +513,6 @@ function parseSubmissionMarkdown(md: string): ParsedSubmission {
 
 // ---------- inline entry editing (per-entry correction, e.g. backfilling
 // hours a teammate's work never got logged with) ----------
-const EDITOR_NAME_KEY = 'ride-devlog-editor-name'
-const editorName = ref('')
-try {
-  editorName.value = localStorage.getItem(EDITOR_NAME_KEY) || ''
-} catch {
-  editorName.value = ''
-}
-
 const editingId = ref<string | null>(null)
 const editDraft = reactive({
   topic: '',
@@ -676,6 +709,9 @@ onMounted(() => {
   unsubscribeOverrides = devlogService.subscribeOverrides((map) => {
     overrides.value = map
   })
+  unsubscribeDeletions = devlogService.subscribeDeletions((map) => {
+    deletions.value = map
+  })
   countdownTicker = setInterval(() => {
     countdownNow.value = Date.now()
   }, 1000)
@@ -696,6 +732,7 @@ onUnmounted(() => {
   unsubscribeSubmissions?.()
   unsubscribeCountdown?.()
   unsubscribeOverrides?.()
+  unsubscribeDeletions?.()
   if (countdownTicker) clearInterval(countdownTicker)
   if (copyPromptStatusTimer) clearTimeout(copyPromptStatusTimer)
   headerResizeObserver?.disconnect()
@@ -998,7 +1035,16 @@ onUnmounted(() => {
         <div class="day-heading">{{ g.key }}</div>
         <ol class="entries">
           <li v-for="e in g.items" :key="e.id" class="entry" :class="'cat-' + e.category">
-            <details class="card">
+            <div v-if="deletions[e.id]" class="card tombstone">
+              <span class="time-chip num">{{ fmtEntryTime(e) }}</span>
+              <span class="topic strike">{{ e.topic }}</span>
+              <span class="tombstone-note"
+                >已於 {{ new Date(deletions[e.id].deletedAt).toLocaleString('zh-TW') }} 由
+                {{ deletions[e.id].deletedBy }} 刪除</span
+              >
+              <button type="button" class="edit-btn" @click="handleRestore(e)">還原</button>
+            </div>
+            <details v-else class="card">
               <summary>
                 <svg class="chevron" viewBox="0 0 16 16" fill="none">
                   <path
@@ -1089,6 +1135,9 @@ onUnmounted(() => {
                     @click="openEdit(e)"
                   >
                     ✎ 編輯
+                  </button>
+                  <button type="button" class="edit-btn danger" @click="handleDelete(e)">
+                    🗑 刪除
                   </button>
                 </div>
 
@@ -1655,6 +1704,27 @@ onUnmounted(() => {
 .src-badge.edited {
   color: var(--color-warning);
   border-color: var(--color-warning);
+}
+.edit-btn.danger:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.tombstone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  opacity: 0.6;
+}
+.tombstone .topic.strike {
+  text-decoration: line-through;
+  flex: 1 1 200px;
+}
+.tombstone-note {
+  font-size: 11px;
+  color: var(--color-text-disabled);
+  white-space: nowrap;
 }
 
 main {

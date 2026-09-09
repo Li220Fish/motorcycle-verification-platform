@@ -582,8 +582,8 @@ service cloud.firestore {
 
     // /dev-log is a link-open internal team tool with no auth screen —
     // intentionally world-writable, scoped to these collection names only.
-    // Never reuse devlog_settings/devlog_submissions/devlog_overrides for
-    // anything that needs real access control.
+    // Never reuse devlog_settings/devlog_submissions/devlog_overrides/
+    // devlog_deletions for anything that needs real access control.
     match /devlog_settings/{document=**} {
       allow read, write: if true;
     }
@@ -596,6 +596,13 @@ service cloud.firestore {
     // team-sheet data at render time (e.g. a teammate backfilling hours
     // that never made it into the team sheet) — doc id is the entry id.
     match /devlog_overrides/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Tombstones — hides an entry from the default timeline without
+    // touching the underlying git/work-log/team-sheet/submission data.
+    // Doc id is the entry id; deleting the tombstone restores the entry.
+    match /devlog_deletions/{document=**} {
       allow read, write: if true;
     }
 
