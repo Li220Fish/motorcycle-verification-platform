@@ -108,9 +108,12 @@ function cleanBody(body) {
 // ---------- 2. categorization ----------
 
 function categorize(files) {
-  const hits = { 後台: 0, 檢定辨識: 0, 系統: 0, 前台: 0 };
+  const hits = { 後台: 0, 檢定辨識: 0, 系統: 0, 前台: 0, 開發管理: 0 };
   for (const f of files) {
-    if (/^src\/admin\//.test(f)) hits['後台']++;
+    // this dev-log dashboard's own source/data — distinct from the ride騎吧
+    // app's own 系統 work, so it doesn't drown out real infra commits there.
+    if (/dev-?log/i.test(f)) hits['開發管理']++;
+    else if (/^src\/admin\//.test(f)) hits['後台']++;
     else if (
       /src\/(services\/(verification|recognition|analysis|motion|bluetooth)|components\/(verification|probe))\//.test(f) ||
       /src\/views\/.*[Vv]erif/.test(f)

@@ -1,4 +1,4 @@
-export type DevLogCategory = '前台' | '後台' | '系統' | '檢定辨識'
+export type DevLogCategory = '前台' | '後台' | '系統' | '檢定辨識' | '開發管理'
 export type DevLogSource = 'git' | 'manual-log' | 'team-sheet' | 'submission'
 
 export interface DevLogEntry {

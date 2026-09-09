@@ -17,7 +17,7 @@ const baseEntries = devLogData.entries
 const summary = devLogData.summary
 const teamSummary = devLogData.teamSummary
 
-const CAT_ORDER: DevLogCategory[] = ['前台', '後台', '系統', '檢定辨識']
+const CAT_ORDER: DevLogCategory[] = ['前台', '後台', '系統', '檢定辨識', '開發管理']
 const TYPE_LABEL: Record<string, string> = {
   feat: '功能',
   fix: '修復',
@@ -1157,6 +1157,8 @@ onUnmounted(() => {
   --cat-系統-bg: #e2f3f1;
   --cat-檢定辨識: var(--color-success);
   --cat-檢定辨識-bg: var(--color-success-bg);
+  --cat-開發管理: var(--color-warning);
+  --cat-開發管理-bg: var(--color-warning-bg);
 
   --status-Done: var(--color-success);
   --status-Doing: var(--color-primary);
@@ -1493,6 +1495,11 @@ onUnmounted(() => {
   border-color: var(--cat-系統);
   color: #fff;
 }
+.pill[aria-pressed='true'].cat-開發管理 {
+  background: var(--cat-開發管理);
+  border-color: var(--cat-開發管理);
+  color: #fff;
+}
 .pill[aria-pressed='true'].cat-檢定辨識 {
   background: var(--cat-檢定辨識);
   border-color: var(--cat-檢定辨識);
@@ -1702,6 +1709,9 @@ main {
 .entry.cat-檢定辨識::before {
   background: var(--cat-檢定辨識);
 }
+.entry.cat-開發管理::before {
+  background: var(--cat-開發管理);
+}
 
 .card {
   background: var(--color-surface);
@@ -1767,6 +1777,10 @@ details[open] > summary .chevron {
 .badge.cat-檢定辨識 {
   background: var(--cat-檢定辨識-bg);
   color: var(--cat-檢定辨識);
+}
+.badge.cat-開發管理 {
+  background: var(--cat-開發管理-bg);
+  color: var(--cat-開發管理);
 }
 
 .tag {
