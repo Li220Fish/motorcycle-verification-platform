@@ -643,6 +643,24 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
+const DEVLOG_PROMPT =
+  '那你把我在此專案中迄今新開發的內容的以.md方式列出，內容需包含使用者、時間戳記、主題、分類（前台、後台、系統、檢定辨識）、摘要、prompt、產出的source code（可收合）、 結果，並量化開發的時間。'
+const copyPromptStatus = ref('')
+let copyPromptStatusTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyDevLogPrompt() {
+  try {
+    await navigator.clipboard.writeText(DEVLOG_PROMPT)
+    copyPromptStatus.value = '已複製，貼給你自己的 Claude 就能產生範本內容'
+  } catch {
+    copyPromptStatus.value = '複製失敗，請手動選取文字複製'
+  }
+  if (copyPromptStatusTimer) clearTimeout(copyPromptStatusTimer)
+  copyPromptStatusTimer = setTimeout(() => {
+    copyPromptStatus.value = ''
+  }, 4000)
+}
+
 // ---------- sticky day-heading offset tracks the (dynamically sized) header ----------
 const headerEl = ref<HTMLElement | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
@@ -679,6 +697,7 @@ onUnmounted(() => {
   unsubscribeCountdown?.()
   unsubscribeOverrides?.()
   if (countdownTicker) clearInterval(countdownTicker)
+  if (copyPromptStatusTimer) clearTimeout(copyPromptStatusTimer)
   headerResizeObserver?.disconnect()
 })
 </script>
@@ -918,6 +937,9 @@ onUnmounted(() => {
           {{ showTemplate ? '關閉範本' : '查看範本' }}
         </button>
         <button class="template-btn" type="button" @click="downloadTemplate">下載範本 .md</button>
+        <button class="template-btn" type="button" @click="copyDevLogPrompt">
+          複製日誌md prompt
+        </button>
         <input
           ref="fileInput"
           type="file"
@@ -925,9 +947,7 @@ onUnmounted(() => {
           hidden
           @change="onFileChosen"
         />
-        <span class="upload-note"
-          >任何知道此網址的人都可以在此上傳工作記錄，會即時同步給所有協作者</span
-        >
+        <span v-if="copyPromptStatus" class="upload-note">{{ copyPromptStatus }}</span>
       </div>
 
       <div v-if="showTemplate" class="upload-panel">
