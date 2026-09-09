@@ -183,7 +183,12 @@ function loadSessionMessages() {
           }
           continue;
         }
-        const text = rawText;
+        // Strip IDE-injected context blocks (selection snippets, system reminders) —
+        // they're harness noise around the message, not part of what the user typed.
+        const text = rawText
+          .replace(/<ide_selection>[\s\S]*?<\/ide_selection>/g, '')
+          .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+          .trim();
         if (text && !text.startsWith('<system-reminder') && !/^<command-name>/.test(text)) {
           userTurns.push({ ts: Date.parse(ts), text, sessionId: obj.sessionId || file });
         }
