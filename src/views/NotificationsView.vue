@@ -88,9 +88,10 @@ async function handleClearAll(): Promise<void> {
   await notificationStore.clearAll()
 }
 
-// --- Swipe-right-to-reveal-delete — one row open at a time. A pointer drag
-// that moves more than a few px suppresses the row's own click (so releasing
-// the swipe doesn't also "open" the notification underneath it).
+// --- Swipe-left-to-reveal-delete (right-handed users mostly swipe with the
+// thumb moving left, toward the palm) — one row open at a time. A pointer
+// drag that moves more than a few px suppresses the row's own click (so
+// releasing the swipe doesn't also "open" the notification underneath it).
 const REVEAL_WIDTH = 72
 const openKey = ref<string | null>(null)
 const drag = reactive({ key: null as string | null, startX: 0, baseOffset: 0, offset: 0 })
@@ -98,13 +99,13 @@ let dragMoved = false
 
 function offsetFor(key: string): number {
   if (drag.key === key) return drag.offset
-  return openKey.value === key ? REVEAL_WIDTH : 0
+  return openKey.value === key ? -REVEAL_WIDTH : 0
 }
 
 function onPointerDown(key: string, event: PointerEvent): void {
   drag.key = key
   drag.startX = event.clientX
-  drag.baseOffset = openKey.value === key ? REVEAL_WIDTH : 0
+  drag.baseOffset = openKey.value === key ? -REVEAL_WIDTH : 0
   drag.offset = drag.baseOffset
   dragMoved = false
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
@@ -113,13 +114,13 @@ function onPointerDown(key: string, event: PointerEvent): void {
 function onPointerMove(key: string, event: PointerEvent): void {
   if (drag.key !== key) return
   const raw = drag.baseOffset + (event.clientX - drag.startX)
-  drag.offset = Math.min(REVEAL_WIDTH, Math.max(0, raw))
+  drag.offset = Math.max(-REVEAL_WIDTH, Math.min(0, raw))
   if (Math.abs(event.clientX - drag.startX) > 6) dragMoved = true
 }
 
 function endDrag(key: string): void {
   if (drag.key !== key) return
-  openKey.value = drag.offset > REVEAL_WIDTH / 2 ? key : null
+  openKey.value = drag.offset < -REVEAL_WIDTH / 2 ? key : null
   drag.key = null
   drag.offset = 0
 }
@@ -242,7 +243,9 @@ async function handleDelete(group: DisplayGroup): Promise<void> {
 
 .delete-action {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 72px;
   border: none;
   background: var(--color-danger);
