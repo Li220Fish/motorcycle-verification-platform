@@ -18,6 +18,7 @@ const formOpen = ref(false)
 const submitting = ref(false)
 const editingId = ref<string | null>(null)
 const searchText = ref('')
+const submitError = ref('')
 
 const filteredModels = computed(() => {
   const q = searchText.value.trim().toLowerCase()
@@ -153,6 +154,7 @@ async function reload(): Promise<void> {
 function openCreateForm(): void {
   editingId.value = null
   resetDraft()
+  submitError.value = ''
   formOpen.value = true
 }
 
@@ -186,6 +188,7 @@ function openEditForm(model: AdminVehicleModel): void {
   draft.synonymsText = model.synonyms.join('、')
   photoFile.value = null
   existingCoverImageUrl.value = model.coverImageUrl
+  submitError.value = ''
   formOpen.value = true
 }
 
@@ -195,9 +198,24 @@ function closeForm(): void {
   resetDraft()
 }
 
+async function uploadModelPhoto(id: string, file: File): Promise<string> {
+  // Compression is a nice-to-have (resizes+re-encodes); a decode/encode edge
+  // case on some admin-supplied file (e.g. dragged in from a webpage rather
+  // than a straightforward local photo) shouldn't block the whole submit —
+  // fall back to uploading the original file untouched.
+  try {
+    const { blob } = await imageCompressionService.compressImage(file)
+    return await storageService.uploadVehicleModelPhoto(id, blob)
+  } catch (error) {
+    console.error('[ModelsSection] photo compression failed, uploading original file', error)
+    return await storageService.uploadVehicleModelPhoto(id, file)
+  }
+}
+
 async function handleSubmit(): Promise<void> {
   if (!draft.brand.trim() || !draft.series.trim()) return
   submitting.value = true
+  submitError.value = ''
   try {
     const input = {
       brand: draft.brand.trim(),
@@ -226,12 +244,14 @@ async function handleSubmit(): Promise<void> {
     const id = editingId.value ?? (await createVehicleModel(input))
     if (editingId.value) await updateVehicleModel(editingId.value, input)
     if (photoFile.value) {
-      const { blob } = await imageCompressionService.compressImage(photoFile.value)
-      const url = await storageService.uploadVehicleModelPhoto(id, blob)
+      const url = await uploadModelPhoto(id, photoFile.value)
       await setVehicleModelCoverImage(id, url)
     }
     closeForm()
     await reload()
+  } catch (error) {
+    console.error('[ModelsSection] handleSubmit failed', error)
+    submitError.value = error instanceof Error ? error.message : '儲存失敗，請稍後再試。'
   } finally {
     submitting.value = false
   }
@@ -399,6 +419,8 @@ onMounted(async () => {
           <label class="admin-check"><input v-model="draft.cbs" type="checkbox" /> CBS</label>
         </div>
 
+        <p v-if="submitError" class="admin-form-error">{{ submitError }}</p>
+
         <button
           class="admin-btn primary"
           style="margin-top: 12px"
@@ -492,5 +514,12 @@ onMounted(async () => {
 .admin-row-actions {
   display: flex;
   gap: 8px;
+}
+
+.admin-form-error {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0413a;
 }
 </style>
