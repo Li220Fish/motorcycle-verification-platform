@@ -14,6 +14,7 @@
     "seed:demo-data": "node scripts/seed-demo-data.mjs",
     "seed:mock-vehicles": "node scripts/seed-mock-vehicles.mjs",
     "seed:marketplace-mock": "node scripts/seed-marketplace-mock.mjs",
+    "import:vehicle-models": "node scripts/import-vehicle-models-csv.mjs",
     "cleanup:database": "node scripts/cleanup-database.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npx cap open android",

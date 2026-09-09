@@ -522,7 +522,11 @@ onMounted(() => {
     @retry-analysis="handleRetryAnalysis"
     @open-basic-health-check="handleOpenBasicHealthCheck"
   />
-  <BasicHealthCheck13 v-else-if="basicHealthCheckOpen" @back="handleCloseBasicHealthCheck" />
+  <BasicHealthCheck13
+    v-else-if="basicHealthCheckOpen"
+    :has-chain="vehicleStore.currentVehicle?.hasChain"
+    @back="handleCloseBasicHealthCheck"
+  />
   <EngineCompleteChoice
     v-else-if="showEngineCompleteChoice"
     :completing="completing"

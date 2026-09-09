@@ -34,6 +34,11 @@ export interface Vehicle {
   color?: string | null
   modified?: boolean
   modificationNote?: string | null
+  /** From the picked vehicleModels/{id}'s own 鏈條傳動 flag (see
+   * scripts/import-vehicle-models-csv.mjs) — drives whether
+   * BasicHealthCheck13.vue's checklist includes the 鏈條 item. `null`/unset
+   * for vehicles created via manual entry (no catalog match). */
+  hasChain?: boolean | null
 
   licensePlate?: string
 

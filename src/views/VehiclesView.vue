@@ -9,6 +9,7 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VehicleCard from '@/components/common/VehicleCard.vue'
 import VehicleModelSelect from '@/components/common/VehicleModelSelect.vue'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import type { VehicleModelOption } from '@/services/firebase/vehicle-model.service'
 import type { Vehicle, VehicleDraft } from '@/types/vehicle'
 
 const vehicleStore = useVehicleStore()
@@ -191,7 +192,22 @@ const form = reactive<VehicleDraft>({
   mileage: null,
   licensePlate: '',
   photos: [],
+  modelId: null,
+  displacementCc: null,
+  transmission: null,
+  hasChain: null,
 })
+
+/** Populates the fields the catalog already knows — modelId/displacementCc/
+ *  transmission/hasChain — so a picked model doesn't just fill in
+ *  brand/model text but also feeds BasicHealthCheck13.vue's 鏈條 item later.
+ *  `null` (manual entry / cleared selection) resets them the same way. */
+function handleModelPicked(option: VehicleModelOption | null): void {
+  form.modelId = option?.id ?? null
+  form.displacementCc = option?.displacementCc ?? null
+  form.transmission = option?.transmission ?? null
+  form.hasChain = option?.hasChain ?? null
+}
 
 async function handleCreate(): Promise<void> {
   submitting.value = true
@@ -202,6 +218,10 @@ async function handleCreate(): Promise<void> {
     form.manufactureYear = null
     form.mileage = null
     form.licensePlate = ''
+    form.modelId = null
+    form.displacementCc = null
+    form.transmission = null
+    form.hasChain = null
     showForm.value = false
   } finally {
     submitting.value = false
@@ -251,7 +271,11 @@ onMounted(() => {
 
     <div class="content">
       <form v-if="showForm" class="vehicle-form" @submit.prevent="handleCreate">
-        <VehicleModelSelect v-model:brand="form.brand" v-model:model="form.model" />
+        <VehicleModelSelect
+          v-model:brand="form.brand"
+          v-model:model="form.model"
+          @model-picked="handleModelPicked"
+        />
         <input v-model.number="form.manufactureYear" type="number" placeholder="年式" />
         <input v-model.number="form.mileage" type="number" placeholder="里程 (km)" />
         <input v-model="form.licensePlate" placeholder="車牌號碼" />

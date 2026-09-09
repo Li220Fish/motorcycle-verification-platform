@@ -22,6 +22,7 @@ const draft = reactive({
   powerType: 'gasoline' as 'gasoline' | 'electric',
   displacementCc: '',
   transmission: '',
+  hasChain: false,
   maxPowerHp: '',
   maxTorqueKgm: '',
   fuelTankCapacityL: '',
@@ -43,6 +44,7 @@ function resetDraft(): void {
   draft.powerType = 'gasoline'
   draft.displacementCc = ''
   draft.transmission = ''
+  draft.hasChain = false
   draft.maxPowerHp = ''
   draft.maxTorqueKgm = ''
   draft.fuelTankCapacityL = ''
@@ -76,6 +78,7 @@ async function handleCreate(): Promise<void> {
       powerType: draft.powerType,
       displacementCc: numberOrNull(draft.displacementCc),
       transmission: draft.transmission.trim() || null,
+      hasChain: draft.hasChain,
       specs: {
         maxPowerHp: numberOrNull(draft.maxPowerHp),
         maxTorqueKgm: numberOrNull(draft.maxTorqueKgm),
@@ -170,6 +173,9 @@ onMounted(async () => {
             ><span>變速系統</span
             ><input v-model="draft.transmission" type="text" placeholder="CVT 無段變速"
           /></label>
+        </div>
+        <div class="admin-form-row" style="margin-top: 10px">
+          <label class="admin-check"><input v-model="draft.hasChain" type="checkbox" /> 鏈條傳動</label>
         </div>
 
         <p class="admin-form-subhead">規格（選填）</p>

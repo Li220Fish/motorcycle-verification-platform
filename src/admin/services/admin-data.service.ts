@@ -389,6 +389,10 @@ export interface AdminVehicleModel {
   powerType: VehiclePowerType
   displacementCc: number | null
   transmission: string | null
+  /** 鏈條傳動 — feeds Vehicle.hasChain (see types/vehicle.ts) when a user
+   * picks this model, which in turn drives whether BasicHealthCheck13.vue's
+   * checklist includes the 鏈條 item. */
+  hasChain: boolean
   coverImageUrl: string | null
   photos: string[]
   specs: VehicleModelSpecs
@@ -467,6 +471,7 @@ export async function listVehicleModels(): Promise<AdminVehicleModel[]> {
       powerType: data.powerType ?? 'gasoline',
       displacementCc: data.displacementCc ?? null,
       transmission: data.transmission ?? null,
+      hasChain: data.hasChain ?? false,
       coverImageUrl: data.coverImageUrl ?? null,
       photos: data.photos ?? [],
       specs: { ...EMPTY_SPECS, ...data.specs },
@@ -487,6 +492,7 @@ export interface CreateVehicleModelInput {
   powerType: VehiclePowerType
   displacementCc: number | null
   transmission: string | null
+  hasChain: boolean
   specs: {
     maxPowerHp: number | null
     maxTorqueKgm: number | null
@@ -531,6 +537,7 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     powerType: input.powerType,
     displacementCc: input.displacementCc,
     transmission: input.transmission,
+    hasChain: input.hasChain,
     coverImageUrl: null,
     photos: [],
     specs,
