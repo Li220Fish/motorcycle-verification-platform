@@ -154,6 +154,7 @@ function normalizeSubmission(
     laborHours: null,
     priority: null,
     status: null,
+    manual: !!data.manualEntry,
   }
 }
 
@@ -676,6 +677,108 @@ function downloadTemplate() {
   URL.revokeObjectURL(url)
 }
 
+// ---------- quick-add (floating "+" button — typed straight in, no .md file) ----------
+const quickAddOpen = ref(false)
+const quickAddDraft = reactive({
+  topic: '',
+  user: '',
+  timeLocal: '',
+  category: '系統' as DevLogCategory,
+  type: 'dev',
+  hours: '',
+  summary: '',
+  prompt: '',
+  diff: '',
+  result: '',
+})
+const quickAddStatus = ref<{ kind: 'ok' | 'err'; text: string } | null>(null)
+const quickAddSubmitting = ref(false)
+
+function openQuickAdd() {
+  quickAddDraft.topic = ''
+  quickAddDraft.user = editorName.value
+  quickAddDraft.timeLocal = toLocalInputValue(new Date().toISOString())
+  quickAddDraft.category = '系統'
+  quickAddDraft.type = 'dev'
+  quickAddDraft.hours = ''
+  quickAddDraft.summary = ''
+  quickAddDraft.prompt = ''
+  quickAddDraft.diff = ''
+  quickAddDraft.result = ''
+  quickAddStatus.value = null
+  quickAddOpen.value = true
+}
+async function submitQuickAdd() {
+  if (!quickAddDraft.topic.trim()) {
+    quickAddStatus.value = { kind: 'err', text: '請至少填寫主題' }
+    return
+  }
+  quickAddSubmitting.value = true
+  quickAddStatus.value = null
+  const input: DevLogSubmissionInput = {
+    topic: quickAddDraft.topic.trim(),
+    user: quickAddDraft.user.trim() || '匿名協作者',
+    timestamp: quickAddDraft.timeLocal ? new Date(quickAddDraft.timeLocal).toISOString() : null,
+    category: quickAddDraft.category,
+    type: quickAddDraft.type,
+    summary: quickAddDraft.summary.trim() || null,
+    prompt: quickAddDraft.prompt.trim() || null,
+    diff: quickAddDraft.diff.trim() || null,
+    result: quickAddDraft.result.trim() || null,
+    durationHours: quickAddDraft.hours ? parseFloat(quickAddDraft.hours) : null,
+    rawMarkdown: '',
+    manualEntry: true,
+  }
+  try {
+    if (quickAddDraft.user.trim()) {
+      editorName.value = quickAddDraft.user.trim()
+      try {
+        localStorage.setItem(EDITOR_NAME_KEY, editorName.value)
+      } catch {
+        /* private browsing — not fatal */
+      }
+    }
+    await devlogService.addSubmission(input)
+    quickAddStatus.value = { kind: 'ok', text: '已新增！' }
+    setTimeout(() => {
+      quickAddOpen.value = false
+    }, 800)
+  } catch (e) {
+    quickAddStatus.value = {
+      kind: 'err',
+      text: '新增失敗：' + (e instanceof Error ? e.message : '未知錯誤'),
+    }
+  } finally {
+    quickAddSubmitting.value = false
+  }
+}
+
+// ---------- CSV export (floating "✕" button) ----------
+function csvEscape(value: unknown): string {
+  const s = value == null ? '' : String(value)
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
+  return s
+}
+function exportCsv() {
+  const rows: string[][] = [['時間戳記', '分類', '目的', '開發者', '標題', '工時']]
+  const list = allEntries.value.filter((e) => !deletions.value[e.id])
+  for (const e of list) {
+    const hours = e.durationMs != null ? (e.durationMs / 3600000).toFixed(2) : ''
+    rows.push([e.timestamp || '', e.category, TYPE_LABEL[e.type] || e.type, e.user, e.topic, hours])
+  }
+  const csv = rows.map((r) => r.map(csvEscape).join(',')).join('\r\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const stamp = new Date().toISOString().slice(0, 10)
+  a.download = `騎吧開發誌_${stamp}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 const DEVLOG_PROMPT =
   '那你把我在此專案中迄今新開發的內容的以.md方式列出，內容需包含使用者、時間戳記、主題、分類（前台、後台、系統、檢定辨識）、摘要、prompt、產出的source code（可收合）、 結果，並量化開發的時間。'
 const copyPromptStatus = ref('')
@@ -1060,6 +1163,7 @@ onUnmounted(() => {
                 <span class="badge" :class="'cat-' + e.category">{{ e.category }}</span>
                 <span class="tag" :class="e.type">{{ TYPE_LABEL[e.type] || e.type }}</span>
                 <span v-if="e.edited" class="src-badge edited">已編輯</span>
+                <span v-if="e.manual" class="src-badge manual">手動新增</span>
                 <span class="topic">{{ e.topic }}</span>
                 <span class="user-chip"
                   ><span
@@ -1193,6 +1297,60 @@ onUnmounted(() => {
       資料產生於 {{ new Date(summary.generatedAt).toLocaleString('zh-TW') }}，彙整自 git
       log、工作日誌與團隊規劃表；協作提交即時同步。
     </footer>
+
+    <div v-if="quickAddOpen" class="upload-panel quick-add-panel">
+      <h3>手動新增時間軸項目</h3>
+      <p class="quick-add-hint">
+        這筆會標註「手動新增」，跟自動彙整（Git／工作日誌／團隊表）與 .md 上傳區隔開。
+      </p>
+      <div class="upload-grid">
+        <label>主題<input v-model="quickAddDraft.topic" type="text" placeholder="必填" /></label>
+        <label
+          >使用者<input v-model="quickAddDraft.user" type="text" placeholder="你的名字"
+        /></label>
+        <label>時間<input v-model="quickAddDraft.timeLocal" type="datetime-local" /></label>
+        <label
+          >分類
+          <select v-model="quickAddDraft.category">
+            <option v-for="c in CAT_ORDER" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
+        <label
+          >目的
+          <select v-model="quickAddDraft.type">
+            <option v-for="[k, v] in Object.entries(TYPE_LABEL)" :key="k" :value="k">
+              {{ v }}
+            </option>
+          </select>
+        </label>
+        <label>時數<input v-model="quickAddDraft.hours" type="number" step="0.5" /></label>
+      </div>
+      <label>摘要<textarea v-model="quickAddDraft.summary"></textarea></label>
+      <label>Prompt<textarea v-model="quickAddDraft.prompt"></textarea></label>
+      <label>產出程式碼<textarea v-model="quickAddDraft.diff" class="mono"></textarea></label>
+      <label>結果<textarea v-model="quickAddDraft.result"></textarea></label>
+      <div v-if="quickAddStatus" class="upload-status" :class="quickAddStatus.kind">
+        {{ quickAddStatus.text }}
+      </div>
+      <div class="upload-actions">
+        <button class="template-btn" type="button" @click="quickAddOpen = false">取消</button>
+        <button
+          class="upload-btn"
+          type="button"
+          :disabled="quickAddSubmitting"
+          @click="submitQuickAdd"
+        >
+          新增到時間軸
+        </button>
+      </div>
+    </div>
+
+    <div class="fab-stack">
+      <button type="button" class="fab fab-add" title="手動新增時間軸項目" @click="openQuickAdd">
+        +
+      </button>
+      <button type="button" class="fab fab-csv" title="匯出時間軸 CSV" @click="exportCsv">✕</button>
+    </div>
   </div>
 </template>
 
@@ -1705,6 +1863,10 @@ onUnmounted(() => {
   color: var(--color-warning);
   border-color: var(--color-warning);
 }
+.src-badge.manual {
+  color: var(--cat-後台);
+  border-color: var(--cat-後台);
+}
 .edit-btn.danger:hover {
   border-color: var(--color-danger);
   color: var(--color-danger);
@@ -2096,5 +2258,58 @@ details[open] > summary .chevron {
     padding-left: 14px;
     padding-right: 14px;
   }
+}
+
+.fab-stack {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  z-index: 50;
+}
+.fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.12s;
+}
+.fab:hover {
+  transform: scale(1.06);
+}
+.fab-add {
+  background: #297cf2;
+}
+.fab-csv {
+  background: #23a547;
+  font-size: 20px;
+}
+
+.quick-add-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  z-index: 51;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+.quick-add-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-disabled);
 }
 </style>

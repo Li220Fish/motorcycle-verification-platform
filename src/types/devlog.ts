@@ -27,6 +27,7 @@ export interface DevLogEntry {
   priority: string | null
   status: string | null
   edited?: boolean
+  manual?: boolean
 }
 
 export interface DevLogSummary {
@@ -81,6 +82,10 @@ export interface DevLogSubmissionInput {
   gitHash?: string
   shortHash?: string
   files?: string[]
+  /** Set by the quick-add floating button (typed straight into a form, no
+   * .md file) — the timeline shows a "手動新增" badge so it reads distinctly
+   * from a real .md upload or an auto-synced commit. */
+  manualEntry?: boolean
 }
 
 export interface DevLogSubmissionDoc extends DevLogSubmissionInput {
