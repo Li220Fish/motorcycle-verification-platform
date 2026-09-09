@@ -21,7 +21,8 @@
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "prepare": "husky"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
@@ -52,6 +53,7 @@
     "eslint-plugin-vue": "^10.10.0",
     "firebase-tools": "^15.29.0",
     "globals": "^17.11.0",
+    "husky": "^9.1.7",
     "patch-package": "^8.0.1",
     "prettier": "^3.9.6",
     "typescript": "~6.0.2",
