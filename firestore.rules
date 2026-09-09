@@ -403,12 +403,14 @@ service cloud.firestore {
 
       // Written only by Cloud Functions Firestore triggers (Admin SDK,
       // bypasses these rules) — see functions/src/functions/notifications/.
-      // The client may read its own feed and flip `read`, nothing else.
+      // The client may read its own feed, flip `read`, and delete its own
+      // (swipe-to-delete / 清除全部 in NotificationsView.vue) — never create.
       match /notifications/{notificationId} {
         allow read: if signedIn() && myUid() == userId;
         allow update: if signedIn() && myUid() == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow create, delete: if false;
+        allow delete: if signedIn() && myUid() == userId;
+        allow create: if false;
       }
     }
 

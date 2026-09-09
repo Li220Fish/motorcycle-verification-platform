@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -14,7 +15,10 @@ import {
 import { db } from './firebase'
 import type { AppNotification, NotificationType } from '@/types/notification'
 
-const PAGE_SIZE = 50
+/** NotificationsView.vue only ever shows the latest 40 (its own requirement,
+ *  independent of any client-side grouping/dedup it does on top of this
+ *  raw feed) — no pagination UI exists beyond that. */
+const PAGE_SIZE = 40
 
 interface NotificationDoc {
   type: NotificationType
@@ -64,13 +68,40 @@ async function markAsRead(uid: string, notificationId: string): Promise<void> {
   await updateDoc(doc(notificationsCollection(uid), notificationId), { read: true })
 }
 
-async function markAllAsRead(uid: string, unreadIds: string[]): Promise<void> {
-  if (unreadIds.length === 0) return
+/** Also used to mark every notification underneath a collapsed 訊息 group as
+ *  read at once (NotificationsView.vue), not just "mark all as read" — the
+ *  name stays generic since both call sites just want "these specific ids,
+ *  flipped to read". */
+async function markManyAsRead(uid: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return
   const batch = writeBatch(db)
-  for (const id of unreadIds) {
+  for (const id of ids) {
     batch.update(doc(notificationsCollection(uid), id), { read: true })
   }
   await batch.commit()
 }
 
-export const notificationService = { subscribeNotifications, markAsRead, markAllAsRead }
+async function deleteOne(uid: string, notificationId: string): Promise<void> {
+  await deleteDoc(doc(notificationsCollection(uid), notificationId))
+}
+
+/** Swipe-to-delete on a collapsed 訊息 group deletes every underlying doc it
+ *  represents, not just the one shown — otherwise an older hidden message
+ *  from the same conversation would "resurface" after the visible one is
+ *  removed. Also backs 清除全部. */
+async function deleteMany(uid: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  const batch = writeBatch(db)
+  for (const id of ids) {
+    batch.delete(doc(notificationsCollection(uid), id))
+  }
+  await batch.commit()
+}
+
+export const notificationService = {
+  subscribeNotifications,
+  markAsRead,
+  markManyAsRead,
+  deleteOne,
+  deleteMany,
+}
