@@ -8,14 +8,39 @@
  * the deep per-item evidence/answer pipeline the rest of verification.store.ts
  * drives — that wiring is a separate follow-up once this UI is confirmed.
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Check } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { BIKE_REFERENCE_PHOTO } from './basic-health-check-photo'
+import {
+  BASIC_HEALTH_CHECK_BASE_ITEMS,
+  BASIC_HEALTH_CHECK_CHAIN_ITEM,
+  basicHealthCheckItemsFor,
+  type HealthCheckAnchor,
+} from '@/data/verification/basic-health-check-items'
+import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 
-const props = defineProps<{ hasChain?: boolean | null }>()
+const props = defineProps<{
+  hasChain?: boolean | null
+  /** vehicleModels/{id} to fetch the reference photo + per-item anchors
+   *  from. Omitted (or fetch skipped) when anchorsOverride is supplied
+   *  directly instead — see the admin preview path below. */
+  modelId?: string | null
+  /** Per-item anchor overrides — when provided, used as-is instead of
+   *  fetching by modelId. Lets HealthCheckAnnotationPreview.vue (admin) feed
+   *  in-progress/unsaved draft anchors without a Firestore round-trip. */
+  anchorsOverride?: Record<string, HealthCheckAnchor> | null
+  /** Same idea as anchorsOverride, for the reference photo — lets the admin
+   *  preview show *this* model's photo even before modelId's fetch would. */
+  coverImageOverride?: string | null
+  /** Admin preview mode (HealthCheckAnnotationPreview.vue): hides the bottom
+   *  "完成" bar and the header's back-navigation affordance, since this
+   *  isn't a real verification flow — just a live render of the in-progress
+   *  anchor data. */
+  previewMode?: boolean
+}>()
 const emit = defineEmits<{ back: [] }>()
 
 interface ChecklistItem {
@@ -23,45 +48,75 @@ interface ChecklistItem {
   label: string
   /** [x%, y%] position of the feature on the reference photo. Page 2 reuses
    *  the same photo mirrored (scaleX(-1)), so its anchors are pre-mirrored
-   *  (100 - original_x) to line up with the flipped image. */
+   *  (100 - original_x) to line up with the flipped image — see
+   *  HealthCheckAnnotationEditor.vue's coordinate-capture comment for why no
+   *  extra math is needed when an admin places these. */
   anchor: [number, number]
   page: 1 | 2
   required: boolean
 }
 
-const BASE_ITEMS: ChecklistItem[] = [
-  { key: 'headlight', label: '大燈', anchor: [20.5, 38.0], page: 1, required: true },
-  { key: 'turnsignal', label: '方向燈', anchor: [40.0, 55.8], page: 1, required: true },
-  { key: 'electrical', label: '電系是否有改裝', anchor: [41.6, 24.0], page: 1, required: false },
-  { key: 'taillight', label: '尾燈', anchor: [85.0, 45.2], page: 1, required: true },
-  { key: 'seat', label: '坐墊外觀', anchor: [51.7, 35.7], page: 1, required: true },
-  { key: 'othermod', label: '其他改裝品', anchor: [58.4, 80.0], page: 1, required: false },
-  { key: 'triple', label: '三角台', anchor: [68.5, 53.0], page: 2, required: false },
-  { key: 'frontshock', label: '前避震', anchor: [66.8, 65.0], page: 2, required: false },
-  { key: 'frontbrake', label: '前煞車', anchor: [77.7, 79.4], page: 2, required: true },
-  { key: 'fronttire', label: '前輪', anchor: [70.0, 90.0], page: 2, required: false },
-  { key: 'rearbrake', label: '後煞車', anchor: [24.8, 60.4], page: 2, required: true },
-  { key: 'reartire', label: '後輪', anchor: [20.0, 77.0], page: 2, required: false },
-  { key: 'rearshock', label: '後避震', anchor: [20.1, 45.8], page: 2, required: false },
-]
-
-/** Only shown when the vehicle's picked catalog model has 鏈條傳動 = true
- *  (Vehicle.hasChain, set from vehicleModels' CSV import — see
- *  scripts/import-vehicle-models-csv.mjs). Belt/shaft-driven models (most
- *  scooters) never see this 14th item. */
-const CHAIN_ITEM: ChecklistItem = {
-  key: 'chain',
-  label: '鏈條',
-  anchor: [32.0, 70.0],
-  page: 2,
-  required: false,
-}
-
 // state/notes are keyed off the full superset (chain included) regardless of
 // props.hasChain, so toggling that prop never changes the reactive objects'
 // shape — only which items actually render.
-const ALL_ITEMS: ChecklistItem[] = [...BASE_ITEMS, CHAIN_ITEM]
-const ITEMS = computed(() => (props.hasChain ? ALL_ITEMS : BASE_ITEMS))
+const ALL_ITEM_KEYS = [...BASIC_HEALTH_CHECK_BASE_ITEMS, BASIC_HEALTH_CHECK_CHAIN_ITEM].map(
+  (it) => it.key,
+)
+
+const fetchedAnchors = ref<Record<string, HealthCheckAnchor> | null>(null)
+const fetchedCoverImageUrl = ref<string | null>(null)
+const loadingModel = ref(false)
+
+async function loadModelData(modelId: string): Promise<void> {
+  loadingModel.value = true
+  try {
+    const data = await vehicleModelService.getHealthCheckData(modelId)
+    fetchedAnchors.value = data?.healthCheckAnchors ?? null
+    fetchedCoverImageUrl.value = data?.coverImageUrl ?? null
+  } catch (error) {
+    console.error('[BasicHealthCheck13] failed to load model health-check data', error)
+    fetchedAnchors.value = null
+    fetchedCoverImageUrl.value = null
+  } finally {
+    loadingModel.value = false
+  }
+}
+
+onMounted(() => {
+  if (!props.anchorsOverride && props.modelId) void loadModelData(props.modelId)
+})
+watch(
+  () => props.modelId,
+  (modelId) => {
+    if (!props.anchorsOverride && modelId) void loadModelData(modelId)
+  },
+)
+
+const activeAnchors = computed(() => props.anchorsOverride ?? fetchedAnchors.value)
+const photoUrl = computed(
+  () => props.coverImageOverride ?? fetchedCoverImageUrl.value ?? BIKE_REFERENCE_PHOTO,
+)
+
+const ITEMS = computed<ChecklistItem[]>(() => {
+  const defs = basicHealthCheckItemsFor(props.hasChain)
+  const anchors = activeAnchors.value
+  if (!anchors) return []
+  return defs
+    .filter((def) => anchors[def.key])
+    .map((def) => ({
+      key: def.key,
+      label: def.label,
+      required: def.required,
+      anchor: [anchors[def.key].x, anchors[def.key].y] as [number, number],
+      page: anchors[def.key].page,
+    }))
+})
+
+// True once loading has settled and there's simply nothing to show — either
+// this model has never been annotated (anchors === null) or every item was
+// filtered out for lacking a placed anchor. Distinct from "still loading" so
+// the checklist doesn't flash an empty state before the fetch resolves.
+const notAnnotated = computed(() => !loadingModel.value && ITEMS.value.length === 0)
 
 interface NoteItem {
   key: string
@@ -83,7 +138,7 @@ const NOTE_ITEMS: NoteItem[] = [
 ]
 
 const state = reactive<Record<string, boolean>>(
-  Object.fromEntries(ALL_ITEMS.map((it) => [it.key, false])),
+  Object.fromEntries(ALL_ITEM_KEYS.map((key) => [key, false])),
 )
 const notes = reactive<Record<string, string>>(
   Object.fromEntries(NOTE_ITEMS.map((n) => [n.key, ''])),
@@ -103,12 +158,15 @@ const pageRequiredMet = computed(() =>
 )
 
 const doneCount = computed(() => ITEMS.value.filter((it) => state[it.key]).length)
-const progressPercent = computed(() => (doneCount.value / ITEMS.value.length) * 100)
+const progressPercent = computed(() =>
+  ITEMS.value.length > 0 ? (doneCount.value / ITEMS.value.length) * 100 : 0,
+)
 
 const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key]))
 
-const allRequiredDone = computed(() =>
-  ITEMS.value.filter((it) => it.required).every((it) => state[it.key]),
+const allRequiredDone = computed(
+  () =>
+    ITEMS.value.length > 0 && ITEMS.value.filter((it) => it.required).every((it) => state[it.key]),
 )
 
 function toggle(key: string): void {
@@ -129,15 +187,28 @@ function finish(): void {
 
 <template>
   <div>
-    <AppHeader title="基本13項健檢" back custom-back @back="emit('back')" />
+    <AppHeader title="基本13項健檢" :back="!previewMode" custom-back @back="emit('back')" />
 
-    <div class="content">
-      <p class="intro">點擊車輛照片上的項目標籤，即可標示已檢查／未檢查，並確認左右兩側外觀角度。</p>
+    <div v-if="loadingModel" class="content">
+      <p class="intro">載入中...</p>
+    </div>
+
+    <div v-else-if="notAnnotated" class="content">
+      <div class="empty-state">
+        <p>此車款尚未設定健檢標記位置，請聯繫客服協助處理。</p>
+        <PrimaryButton v-if="!previewMode" block @click="emit('back')">返回</PrimaryButton>
+      </div>
+    </div>
+
+    <div v-else class="content">
+      <p class="intro">
+        點擊車輛照片上的項目標籤，即可標示已檢查／未檢查，並確認左右兩側外觀角度。
+      </p>
 
       <div class="bike-card">
         <div class="bike-img-wrap" :class="{ mirrored: isMirrored }">
           <div class="bike-photo">
-            <img :src="BIKE_REFERENCE_PHOTO" class="bike-illustration" alt="車輛參考圖" />
+            <img :src="photoUrl" class="bike-illustration" alt="車輛參考圖" />
           </div>
           <button
             v-for="it in pageItems"
@@ -158,7 +229,13 @@ function finish(): void {
         <div class="page-nav">
           <button :disabled="currentPage === 1" aria-label="上一頁" @click="goPage(-1)">‹</button>
           <span class="count">{{ currentPage }} / {{ PAGE_COUNT }}</span>
-          <button :disabled="currentPage === PAGE_COUNT || !pageRequiredMet" aria-label="下一頁" @click="goPage(1)">›</button>
+          <button
+            :disabled="currentPage === PAGE_COUNT || !pageRequiredMet"
+            aria-label="下一頁"
+            @click="goPage(1)"
+          >
+            ›
+          </button>
         </div>
         <p v-if="currentPage < PAGE_COUNT && !pageRequiredMet" class="required-hint">
           請先完成本頁標示的必填項目，才能前往下一頁
@@ -168,7 +245,9 @@ function finish(): void {
       <div class="progress-card">
         <div class="progress-head">
           <span>檢查進度</span>
-          <span class="progress-count">{{ doneCount }}<span class="of">/{{ ITEMS.length }}</span></span>
+          <span class="progress-count"
+            >{{ doneCount }}<span class="of">/{{ ITEMS.length }}</span></span
+          >
         </div>
         <div class="progress-track">
           <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
@@ -183,7 +262,7 @@ function finish(): void {
       </div>
     </div>
 
-    <div class="bottom-bar">
+    <div v-if="!previewMode && !loadingModel && !notAnnotated" class="bottom-bar">
       <PrimaryButton v-if="!finished" block :disabled="!allRequiredDone" @click="finish">
         完成基本13項健檢
       </PrimaryButton>
@@ -208,6 +287,19 @@ function finish(): void {
   font-size: 12.5px;
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+.empty-state {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg, 24px);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }
 
 .bike-card {

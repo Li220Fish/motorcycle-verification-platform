@@ -13,6 +13,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 
 import { auth, db, functions } from '@/services/firebase/firebase'
+import type { HealthCheckAnchor } from '@/data/verification/basic-health-check-items'
 import type { Conversation } from '@/services/chat/chat.types'
 import type { DiscussionPost } from '@/services/discussion/discussion.types'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
@@ -398,6 +399,13 @@ export interface AdminVehicleModel {
   synonyms: string[]
   coverImageUrl: string | null
   photos: string[]
+  /** Per-item marker placement for 基本13項健檢 (BasicHealthCheck13.vue),
+   *  admin-edited via admin/sections/HealthCheckSection.vue. Keyed by item
+   *  key (see src/data/verification/basic-health-check-items.ts). A missing
+   *  key means "not yet placed" for that item — the runtime component falls
+   *  back to a "尚未設定" state rather than guessing a position. `null` =
+   *  this model has never been annotated at all. */
+  healthCheckAnchors: Record<string, HealthCheckAnchor> | null
   specs: VehicleModelSpecs
   features: VehicleModelFeatures
   /** Truth = vehicleModels/{id}/fuelReports subcollection (spec §20) — no
@@ -478,6 +486,7 @@ export async function listVehicleModels(): Promise<AdminVehicleModel[]> {
       synonyms: data.synonyms ?? [],
       coverImageUrl: data.coverImageUrl ?? null,
       photos: data.photos ?? [],
+      healthCheckAnchors: data.healthCheckAnchors ?? null,
       specs: { ...EMPTY_SPECS, ...data.specs },
       features: { ...EMPTY_FEATURES, ...data.features },
       realFuelStats: data.realFuelStats ?? { averageKmPerL: null, vehicleCount: 0 },
@@ -546,6 +555,7 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     synonyms: input.synonyms,
     coverImageUrl: null,
     photos: [],
+    healthCheckAnchors: null,
     specs,
     features: EMPTY_FEATURES,
     realFuelStats: { averageKmPerL: null, vehicleCount: 0 },
@@ -596,6 +606,17 @@ export async function updateVehicleModel(
 
 export async function setVehicleModelCoverImage(id: string, coverImageUrl: string): Promise<void> {
   await updateDoc(doc(db, 'vehicleModels', id), { coverImageUrl })
+}
+
+/** Overwrites the full per-item anchor map for one model's 基本13項健檢 —
+ *  see HealthCheckAnnotationEditor.vue's save button. Always writes the
+ *  complete map (not a per-key merge) since the editor holds a full draft
+ *  copy already seeded from the existing data. */
+export async function setVehicleModelHealthCheckAnchors(
+  id: string,
+  anchors: Record<string, HealthCheckAnchor>,
+): Promise<void> {
+  await updateDoc(doc(db, 'vehicleModels', id), { healthCheckAnchors: anchors })
 }
 
 export async function deleteVehicleModel(id: string): Promise<void> {
