@@ -103,6 +103,13 @@ async function uploadVehicleRegistrationDocument(
   )
 }
 
+/** Admin-curated 車輛選單資訊 sample photo (see admin/sections/ModelsSection.vue).
+ *  Public like marketplace/vehicle photos — storage.rules gates writes to
+ *  admin only for this path. */
+async function uploadVehicleModelPhoto(modelId: string, file: Blob): Promise<string> {
+  return uploadFileAtPath(`vehicleModels/${modelId}/${timestampedName('cover.jpg')}`, file)
+}
+
 export const storageService = {
   uploadFileAtPath,
   uploadPrivateFile,
@@ -113,4 +120,5 @@ export const storageService = {
   uploadDiscussionImage,
   uploadVehiclePhoto,
   uploadVehicleRegistrationDocument,
+  uploadVehicleModelPhoto,
 }

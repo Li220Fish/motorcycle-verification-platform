@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import {
   createVehicleModel,
   deleteVehicleModel,
   listVehicleModels,
+  setVehicleModelCoverImage,
   updateVehicleModel,
   type AdminVehicleModel,
 } from '../services/admin-data.service'
+import { storageService } from '@/services/firebase/storage.service'
+import { imageCompressionService } from '@/services/media/image-compression.service'
 
 const loading = ref(true)
 const models = ref<AdminVehicleModel[]>([])
@@ -37,6 +40,7 @@ const draft = reactive({
   displacementCc: '',
   transmission: '',
   hasChain: false,
+  synonymsText: '',
   maxPowerHp: '',
   maxTorqueKgm: '',
   fuelTankCapacityL: '',
@@ -49,6 +53,37 @@ const draft = reactive({
   cbs: false,
 })
 
+// admin-typed sample photo for this model (see storageService.uploadVehicleModelPhoto) —
+// separate from `draft` since a File isn't something v-model on a plain
+// reactive object round-trips cleanly.
+const photoFile = ref<File | null>(null)
+const existingCoverImageUrl = ref<string | null>(null)
+const photoPreviewUrl = ref<string | null>(null)
+
+watch(photoFile, (file, _prev, onCleanup) => {
+  if (!file) {
+    photoPreviewUrl.value = null
+    return
+  }
+  const url = URL.createObjectURL(file)
+  photoPreviewUrl.value = url
+  onCleanup(() => URL.revokeObjectURL(url))
+})
+
+function handlePhotoChange(event: Event): void {
+  const input = event.target as HTMLInputElement
+  photoFile.value = input.files?.[0] ?? null
+}
+
+const SYNONYM_SEPARATOR = /[、,，]/
+
+function parseSynonyms(text: string): string[] {
+  return text
+    .split(SYNONYM_SEPARATOR)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
 function resetDraft(): void {
   draft.brand = ''
   draft.series = ''
@@ -59,6 +94,7 @@ function resetDraft(): void {
   draft.displacementCc = ''
   draft.transmission = ''
   draft.hasChain = false
+  draft.synonymsText = ''
   draft.maxPowerHp = ''
   draft.maxTorqueKgm = ''
   draft.fuelTankCapacityL = ''
@@ -69,6 +105,8 @@ function resetDraft(): void {
   draft.abs = false
   draft.tcs = false
   draft.cbs = false
+  photoFile.value = null
+  existingCoverImageUrl.value = null
 }
 
 function numberOrNull(value: string): number | null {
@@ -112,6 +150,9 @@ function openEditForm(model: AdminVehicleModel): void {
   draft.abs = model.specs.safety.abs
   draft.tcs = model.specs.safety.tcs
   draft.cbs = model.specs.safety.cbs
+  draft.synonymsText = model.synonyms.join('、')
+  photoFile.value = null
+  existingCoverImageUrl.value = model.coverImageUrl
   formOpen.value = true
 }
 
@@ -135,6 +176,7 @@ async function handleSubmit(): Promise<void> {
       displacementCc: numberOrNull(draft.displacementCc),
       transmission: draft.transmission.trim() || null,
       hasChain: draft.hasChain,
+      synonyms: parseSynonyms(draft.synonymsText),
       specs: {
         maxPowerHp: numberOrNull(draft.maxPowerHp),
         maxTorqueKgm: numberOrNull(draft.maxTorqueKgm),
@@ -148,10 +190,12 @@ async function handleSubmit(): Promise<void> {
         cbs: draft.cbs,
       },
     }
-    if (editingId.value) {
-      await updateVehicleModel(editingId.value, input)
-    } else {
-      await createVehicleModel(input)
+    const id = editingId.value ?? (await createVehicleModel(input))
+    if (editingId.value) await updateVehicleModel(editingId.value, input)
+    if (photoFile.value) {
+      const { blob } = await imageCompressionService.compressImage(photoFile.value)
+      const url = await storageService.uploadVehicleModelPhoto(id, blob)
+      await setVehicleModelCoverImage(id, url)
     }
     closeForm()
     await reload()
@@ -243,6 +287,25 @@ onMounted(async () => {
         </div>
         <div class="admin-form-row" style="margin-top: 10px">
           <label class="admin-check"><input v-model="draft.hasChain" type="checkbox" /> 鏈條傳動</label>
+        </div>
+        <div class="admin-form-row" style="margin-top: 10px">
+          <label class="admin-field admin-field-wide">
+            <span>同義詞</span>
+            <input
+              v-model="draft.synonymsText"
+              type="text"
+              placeholder="以頓號分隔，例如：山葉100、老山葉、迅光100"
+            />
+          </label>
+        </div>
+        <div class="admin-form-row" style="margin-top: 10px; align-items: flex-end">
+          <label class="admin-field">
+            <span>範例圖片上傳</span>
+            <input type="file" accept="image/*" @change="handlePhotoChange" />
+          </label>
+          <div v-if="photoPreviewUrl || existingCoverImageUrl" class="admin-photo-preview">
+            <img :src="photoPreviewUrl ?? existingCoverImageUrl!" alt="" />
+          </div>
         </div>
 
         <p class="admin-form-subhead">規格（選填）</p>
@@ -349,6 +412,25 @@ onMounted(async () => {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   font-size: 13px;
+}
+
+.admin-field-wide {
+  flex: 1 1 100%;
+}
+
+.admin-photo-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+
+.admin-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .admin-row-actions {
