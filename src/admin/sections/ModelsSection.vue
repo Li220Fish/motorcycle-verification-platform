@@ -30,6 +30,28 @@ const filteredModels = computed(() => {
   )
 })
 
+// 廠牌/車系/車型類別 are open-ended vocabularies that grow as data is added —
+// a <datalist> lets the admin pick an existing value or type a new one in
+// the same text field, rather than needing a separate "other" escape hatch.
+// 車系 is scoped to the currently-selected brand so it doesn't mix in every
+// other brand's series names.
+const brandOptions = computed(() =>
+  Array.from(new Set(models.value.map((m) => m.brand))).sort(),
+)
+const seriesOptions = computed(() =>
+  Array.from(
+    new Set(models.value.filter((m) => m.brand === draft.brand).map((m) => m.series)),
+  ).sort(),
+)
+const bodyTypeOptions = computed(() =>
+  Array.from(new Set(models.value.map((m) => m.bodyType).filter((v): v is string => !!v))).sort(),
+)
+
+const CURRENT_YEAR = new Date().getFullYear()
+const yearOptions = Array.from({ length: CURRENT_YEAR + 1 - 1990 + 1 }, (_, i) => CURRENT_YEAR + 1 - i)
+
+const TRANSMISSION_OPTIONS = ['CVT', '鏈條', '皮帶', '軸傳動']
+
 const draft = reactive({
   brand: '',
   series: '',
@@ -74,6 +96,17 @@ function handlePhotoChange(event: Event): void {
   const input = event.target as HTMLInputElement
   photoFile.value = input.files?.[0] ?? null
 }
+
+// Picking 鏈條 as the transmission implies chain drive — auto-check the
+// existing 鏈條傳動 box rather than making the admin set both. One-directional
+// on purpose: switching away from 鏈條 afterward doesn't un-check it, since a
+// bike can have an exposed chain independent of its stated transmission type.
+watch(
+  () => draft.transmission,
+  (value) => {
+    if (value === '鏈條') draft.hasChain = true
+  },
+)
 
 const SYNONYM_SEPARATOR = /[、,，]/
 
@@ -248,25 +281,45 @@ onMounted(async () => {
         style="border-bottom: 1px solid var(--line-soft)"
       >
         <div class="admin-form-row">
-          <label class="admin-field"
-            ><span>廠牌</span><input v-model="draft.brand" type="text" placeholder="HONDA"
-          /></label>
-          <label class="admin-field"
-            ><span>車系</span><input v-model="draft.series" type="text" placeholder="PCX 160"
-          /></label>
-          <label class="admin-field"
-            ><span>年式</span><input v-model="draft.modelYear" type="number" placeholder="2024"
-          /></label>
+          <label class="admin-field">
+            <span>廠牌</span>
+            <input v-model="draft.brand" type="text" list="brand-options" placeholder="HONDA" />
+            <datalist id="brand-options">
+              <option v-for="b in brandOptions" :key="b" :value="b" />
+            </datalist>
+          </label>
+          <label class="admin-field">
+            <span>車系</span>
+            <input v-model="draft.series" type="text" list="series-options" placeholder="PCX 160" />
+            <datalist id="series-options">
+              <option v-for="s in seriesOptions" :key="s" :value="s" />
+            </datalist>
+          </label>
+          <label class="admin-field">
+            <span>年式</span>
+            <select v-model="draft.modelYear">
+              <option value="">未填</option>
+              <option v-for="y in yearOptions" :key="y" :value="String(y)">{{ y }}</option>
+            </select>
+          </label>
         </div>
         <div class="admin-form-row" style="margin-top: 10px">
           <label class="admin-field"
             ><span>版本／配置</span
             ><input v-model="draft.trimName" type="text" placeholder="ABS 版"
           /></label>
-          <label class="admin-field"
-            ><span>車型類別</span
-            ><input v-model="draft.bodyType" type="text" placeholder="速可達 / 街車 / 檔車"
-          /></label>
+          <label class="admin-field">
+            <span>車型類別</span>
+            <input
+              v-model="draft.bodyType"
+              type="text"
+              list="bodytype-options"
+              placeholder="速可達 / 街車 / 打檔車"
+            />
+            <datalist id="bodytype-options">
+              <option v-for="t in bodyTypeOptions" :key="t" :value="t" />
+            </datalist>
+          </label>
           <label class="admin-field">
             <span>動力形式</span>
             <select v-model="draft.powerType">
@@ -280,10 +333,13 @@ onMounted(async () => {
             ><span>排氣量 (cc)</span
             ><input v-model="draft.displacementCc" type="number" placeholder="155"
           /></label>
-          <label class="admin-field"
-            ><span>變速系統</span
-            ><input v-model="draft.transmission" type="text" placeholder="CVT 無段變速"
-          /></label>
+          <label class="admin-field">
+            <span>傳動系統</span>
+            <select v-model="draft.transmission">
+              <option value="">未指定</option>
+              <option v-for="t in TRANSMISSION_OPTIONS" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </label>
         </div>
         <div class="admin-form-row" style="margin-top: 10px">
           <label class="admin-check"><input v-model="draft.hasChain" type="checkbox" /> 鏈條傳動</label>
