@@ -112,7 +112,7 @@ watch(
 const SYNONYM_SEPARATOR = /[、,，]/
 
 function parseSynonyms(text: string): string[] {
-  return text
+  return String(text ?? '')
     .split(SYNONYM_SEPARATOR)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
@@ -143,8 +143,9 @@ function resetDraft(): void {
   existingCoverImageUrl.value = null
 }
 
-function numberOrNull(value: string): number | null {
-  return value.trim() === '' ? null : Number(value)
+function numberOrNull(value: string | number | null | undefined): number | null {
+  const text = String(value ?? '').trim()
+  return text === '' ? null : Number(text)
 }
 
 async function reload(): Promise<void> {
@@ -213,7 +214,10 @@ async function uploadModelPhoto(id: string, file: File): Promise<string> {
 }
 
 async function handleSubmit(): Promise<void> {
-  if (!draft.brand.trim() || !draft.series.trim() || !draft.trimName.trim()) {
+  const brand = String(draft.brand ?? '').trim()
+  const series = String(draft.series ?? '').trim()
+  const trimName = String(draft.trimName ?? '').trim()
+  if (!brand || !series || !trimName) {
     submitError.value = '廠牌、車系、名稱為必填欄位。'
     return
   }
@@ -221,14 +225,14 @@ async function handleSubmit(): Promise<void> {
   submitError.value = ''
   try {
     const input = {
-      brand: draft.brand.trim(),
-      series: draft.series.trim(),
+      brand,
+      series,
       modelYear: numberOrNull(draft.modelYear),
-      trimName: draft.trimName.trim() || null,
-      bodyType: draft.bodyType.trim() || null,
+      trimName: trimName || null,
+      bodyType: String(draft.bodyType ?? '').trim() || null,
       powerType: draft.powerType,
       displacementCc: numberOrNull(draft.displacementCc),
-      transmission: draft.transmission.trim() || null,
+      transmission: String(draft.transmission ?? '').trim() || null,
       hasChain: draft.hasChain,
       synonyms: parseSynonyms(draft.synonymsText),
       specs: {
