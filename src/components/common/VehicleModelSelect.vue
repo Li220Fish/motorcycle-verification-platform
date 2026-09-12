@@ -63,7 +63,9 @@ onMounted(async () => {
 const brands = computed(() =>
   [...new Set(options.value.map((option) => option.brand))].filter(Boolean).sort(),
 )
-const optionsForBrand = computed(() => options.value.filter((option) => option.brand === brand.value))
+const optionsForBrand = computed(() =>
+  options.value.filter((option) => option.brand === brand.value),
+)
 const seriesForBrand = computed(() =>
   [...new Set(optionsForBrand.value.map((option) => option.series))].filter(Boolean).sort(),
 )
@@ -77,7 +79,9 @@ const bucketsForSeries = computed(() => {
   return BUCKETS.filter((bucket) => present.has(bucket.key))
 })
 const optionsForBucket = computed(() =>
-  optionsForSeries.value.filter((option) => bucketFor(option.displacementCc)?.key === bucketKey.value),
+  optionsForSeries.value.filter(
+    (option) => bucketFor(option.displacementCc)?.key === bucketKey.value,
+  ),
 )
 
 // A series with only one displacement bucket doesn't need the extra tap —

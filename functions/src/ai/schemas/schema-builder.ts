@@ -38,3 +38,21 @@ export function buildResultsSchema(itemIds: readonly string[]): Record<string, u
     required: ['results'],
   }
 }
+
+/** Engine Audio only — same `{results:[...]}` envelope as buildResultsSchema
+ *  above, plus one extra top-level field: a free-text (per user decision —
+ *  no fixed enum) one-sentence description of what engine type this sounds
+ *  like (see engine-audio-v2.ts's ENGINE TYPE DESCRIPTION section). Kept
+ *  separate from buildResultsSchema rather than adding an optional param
+ *  there, since no other caller (Group A/B/C vision, OCR) needs this field. */
+export function buildEngineAudioSchema(itemIds: readonly string[]): Record<string, unknown> {
+  const base = buildResultsSchema(itemIds)
+  return {
+    ...base,
+    properties: {
+      ...(base.properties as Record<string, unknown>),
+      engineTypeNote: { type: 'string' },
+    },
+    required: [...(base.required as string[]), 'engineTypeNote'],
+  }
+}

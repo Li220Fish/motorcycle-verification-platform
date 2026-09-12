@@ -10,7 +10,10 @@ import type {
 import { inferTransmissionType } from '@/data/verification/engine-session'
 import {
   analyzeColdEngineTouchCheck,
-  analyzeCoreVisionV2,
+  analyzeCoreVisionEngineBottom,
+  analyzeCoreVisionFrontSuspension,
+  analyzeCoreVisionRear,
+  analyzeCoreVisionSides,
   analyzeDocumentMaintenance,
   analyzeEngineSensorSessionV2,
   analyzeOcrDashboard,
@@ -261,41 +264,55 @@ export const useVerificationStore = defineStore('verification', () => {
     evidenceByItem.value = { ...evidenceByItem.value, [evidence.itemId]: [...list, evidence] }
     localDraftService.saveEvidence(evidence.verificationId, evidence)
     verificationService.saveEvidence(evidence).catch(() => {})
-    void maybeTriggerCoreVisionV2(evidence.itemId)
+    void maybeTriggerCoreVisionAnalysis(evidence.itemId)
   }
 
-  // Verification v2 §9/§14 — Core Vision v2's required evidence set
-  // (supersedes the old Group A/B/C trigger lists, which covered removed
-  // items like front-wheel/rear-wheel/engine-left/engine-right/exhaust, and
+  // 2026-09 split — the original single Core Vision v2 route (one Gemini
+  // call over left+right+rear+front-suspension+engine-bottom) is now 4
+  // independent routes, one per photo group, so each fires as soon as ITS
+  // OWN required photo(s) exist rather than waiting on all 5 (supersedes the
+  // old Group A/B/C trigger lists, which covered removed items like
+  // front-wheel/rear-wheel/engine-left/engine-right/exhaust, and
   // now-Optional-no-AI items like rear-suspension/front-brake/rear-brake/
   // triple-clamp/seat). Fired fire-and-forget from the one choke point every
   // photo capture already goes through (addEvidence). APR-transmission-chain
   // only ever gets evidence when hasExposedChainSprocket is true (the item
   // is filtered out of the flow entirely otherwise — see flatItems above),
-  // so it's only added to the "must all be present" check when applicable.
-  const CORE_VISION_V2_TRIGGER_ITEM_IDS = [
-    'APR-left-side',
-    'APR-right-side',
-    'APR-rear',
-    'APR-front-suspension',
-    'APR-engine-bottom',
+  // so it's only added to the engine-bottom group's "must all be present"
+  // check when applicable.
+  const CORE_VISION_TRIGGER_GROUPS: Array<{
+    itemIds: string[]
+    conditionalItemId?: string
+    trigger: (verificationId: string) => Promise<unknown>
+  }> = [
+    { itemIds: ['APR-left-side', 'APR-right-side'], trigger: analyzeCoreVisionSides },
+    { itemIds: ['APR-rear'], trigger: analyzeCoreVisionRear },
+    { itemIds: ['APR-front-suspension'], trigger: analyzeCoreVisionFrontSuspension },
+    {
+      itemIds: ['APR-engine-bottom'],
+      conditionalItemId: 'APR-transmission-chain',
+      trigger: analyzeCoreVisionEngineBottom,
+    },
   ]
 
   function hasEvidence(itemId: string): boolean {
     return (evidenceByItem.value[itemId]?.length ?? 0) > 0
   }
 
-  async function maybeTriggerCoreVisionV2(changedItemId: string): Promise<void> {
+  async function maybeTriggerCoreVisionAnalysis(changedItemId: string): Promise<void> {
     const verificationId = currentVerification.value?.id
     if (!verificationId) return
 
-    const requiredForCore = hasExposedChainSprocket.value
-      ? [...CORE_VISION_V2_TRIGGER_ITEM_IDS, 'APR-transmission-chain']
-      : CORE_VISION_V2_TRIGGER_ITEM_IDS
-    if (requiredForCore.includes(changedItemId) && requiredForCore.every(hasEvidence)) {
-      analyzeCoreVisionV2(verificationId).catch((error) =>
-        console.error('[AI analysis] analyzeCoreVisionV2 trigger failed:', error),
-      )
+    for (const group of CORE_VISION_TRIGGER_GROUPS) {
+      const requiredItemIds =
+        group.conditionalItemId && hasExposedChainSprocket.value
+          ? [...group.itemIds, group.conditionalItemId]
+          : group.itemIds
+      if (!requiredItemIds.includes(changedItemId)) continue
+      if (!requiredItemIds.every(hasEvidence)) continue
+      group
+        .trigger(verificationId)
+        .catch((error) => console.error('[AI analysis] core vision group trigger failed:', error))
     }
 
     // Dashboard OCR (Step 7) — single-photo, fires the instant it exists,
@@ -328,12 +345,23 @@ export const useVerificationStore = defineStore('verification', () => {
    * (see withAnalysisFailureTrace server-side), so the Hub's hint/retry row
    * will reflect the outcome via the live analysisStatus subscription. */
   async function retryAnalysis(
-    key: 'coreVision' | 'dashboardOcr' | 'coldCheck' | 'engineSensorSession',
+    key:
+      | 'coreVisionSides'
+      | 'coreVisionRear'
+      | 'coreVisionFrontSuspension'
+      | 'coreVisionEngineBottom'
+      | 'dashboardOcr'
+      | 'coldCheck'
+      | 'engineSensorSession',
   ): Promise<void> {
     const verificationId = currentVerification.value?.id
     if (!verificationId) return
     try {
-      if (key === 'coreVision') await analyzeCoreVisionV2(verificationId)
+      if (key === 'coreVisionSides') await analyzeCoreVisionSides(verificationId)
+      else if (key === 'coreVisionRear') await analyzeCoreVisionRear(verificationId)
+      else if (key === 'coreVisionFrontSuspension')
+        await analyzeCoreVisionFrontSuspension(verificationId)
+      else if (key === 'coreVisionEngineBottom') await analyzeCoreVisionEngineBottom(verificationId)
       else if (key === 'dashboardOcr') await analyzeOcrDashboard(verificationId)
       else if (key === 'coldCheck') await analyzeColdEngineTouchCheck(verificationId)
       else if (key === 'engineSensorSession') await analyzeEngineSensorSessionV2(verificationId)
@@ -342,14 +370,39 @@ export const useVerificationStore = defineStore('verification', () => {
     }
   }
 
-  function removeEvidenceLocally(itemId: string, evidenceId: string): void {
+  /**
+   * A real delete — Storage object + Firestore doc — not just hidden from
+   * this session's in-memory list. Previously (`removeEvidenceLocally`) this
+   * only ever touched local state, so a superseded retake's old photo/video
+   * kept living in Firestore forever: invisible in the app itself (which
+   * only ever reads local state), but still very much there for anything
+   * reading Firestore directly — e.g. the admin evidence viewer showing 2-3
+   * old retakes of the same item stacked up (found live 2026-09). Every
+   * call site wants this real behavior: an explicit user delete should
+   * actually delete, and a capture flow replacing an old photo with a new
+   * one should leave exactly one behind, not one hidden plus N orphaned.
+   */
+  async function removeEvidence(itemId: string, evidenceId: string): Promise<void> {
     const list = (evidenceByItem.value[itemId] ?? []).filter(
       (evidence) => evidence.id !== evidenceId,
     )
     evidenceByItem.value = { ...evidenceByItem.value, [itemId]: list }
-    if (currentVerification.value) {
-      localDraftService.removeEvidence(currentVerification.value.id, evidenceId)
+    const verificationId = currentVerification.value?.id
+    if (verificationId) {
+      localDraftService.removeEvidence(verificationId, evidenceId)
+      await verificationService.deleteEvidence(verificationId, evidenceId).catch(() => {})
     }
+  }
+
+  /** For single-photo items: after a new capture lands, discard every OTHER
+   * evidence doc already on file for that item — a retake replaces, it never
+   * accumulates. Called with the just-added evidence's own id so it's never
+   * the one discarded, regardless of call order. */
+  async function discardOtherEvidence(itemId: string, keepEvidenceId: string): Promise<void> {
+    const superseded = (evidenceByItem.value[itemId] ?? []).filter(
+      (evidence) => evidence.id !== keepEvidenceId,
+    )
+    await Promise.all(superseded.map((evidence) => removeEvidence(itemId, evidence.id)))
   }
 
   /**
@@ -510,13 +563,23 @@ export const useVerificationStore = defineStore('verification', () => {
 
   /** Verification v2 §38 Final Report Gate — the background AI routes that
    * must have actually finished (not just been fired) before a report can be
-   * generated: Core Vision, Dashboard OCR, Cold Check, and the Engine Sensor
-   * Session (audio+IMU). Keyed by the same route names each Cloud Function
-   * stamps onto Verification.analysisStatus (see analysis-status.service.ts
-   * server-side) — absence of a key here just means "not triggered yet",
-   * which is already covered by missingRequiredItems blocking completion
-   * first, so this only ever needs to check for 'processing'/'failed'. */
-  const REQUIRED_ANALYSIS_KEYS = ['coreVision', 'dashboardOcr', 'coldCheck', 'engineSensorSession']
+   * generated: the 4 Core Vision groups (2026-09 split — see
+   * core-vision-split.service.ts), Dashboard OCR, Cold Check, and the Engine
+   * Sensor Session (audio+IMU). Keyed by the same route names each Cloud
+   * Function stamps onto Verification.analysisStatus (see
+   * analysis-status.service.ts server-side) — absence of a key here just
+   * means "not triggered yet", which is already covered by
+   * missingRequiredItems blocking completion first, so this only ever needs
+   * to check for 'processing'/'failed'. */
+  const REQUIRED_ANALYSIS_KEYS = [
+    'coreVisionSides',
+    'coreVisionRear',
+    'coreVisionFrontSuspension',
+    'coreVisionEngineBottom',
+    'dashboardOcr',
+    'coldCheck',
+    'engineSensorSession',
+  ]
   function analysisStatusFor(key: string): 'processing' | 'completed' | 'failed' | undefined {
     return currentVerification.value?.analysisStatus?.[key]?.status
   }
@@ -606,7 +669,8 @@ export const useVerificationStore = defineStore('verification', () => {
     loadFlow,
     saveAnswer,
     addEvidence,
-    removeEvidenceLocally,
+    removeEvidence,
+    discardOtherEvidence,
     resolveNextIndex,
     resumeIndex,
     sectionProgress,

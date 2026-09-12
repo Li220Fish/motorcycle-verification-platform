@@ -7,6 +7,7 @@ import {
 import { GeminiItemResult } from '../ai/schemas/common'
 import { validateGeminiResults } from '../ai/validator'
 import { AudioInspectionProvider } from '../ai/providers/audio-inspection-provider'
+import { markEngineTypeOnEvidence } from './evidence.service'
 import { resolveAudioEvidence, resolveImuEvidence } from './evidence.service'
 import { writeAiAnswer } from './answer-writer.service'
 import { ImuSample, preprocessImu } from '../imu/imu-preprocessor'
@@ -60,8 +61,21 @@ interface EngineSessionImuJson {
   samples: ImuSample[]
 }
 
+/** Normalizes each sample's `tMs` to be relative to the session's own first
+ *  sample before slicing — defends against EngineInspectionFlow.vue builds
+ *  older than 2026-09 (real installed APKs update on their own schedule, not
+ *  instantly) that wrote `tMs` as an absolute Date.now() epoch value instead
+ *  of relative-to-recording-start, which made every sample fall outside
+ *  every phase's [startMs,endMs) window and always failed idle/rev IMU
+ *  classification with "感測資料量不足" regardless of the actual recording
+ *  quality (found live 2026-09, fixed at the source too). A no-op for
+ *  already-relative data (session start already reads ~0). */
 function sliceSamples(samples: ImuSample[], bounds: { startMs: number; endMs: number }): ImuSample[] {
-  return samples.filter((sample) => sample.tMs >= bounds.startMs && sample.tMs < bounds.endMs)
+  const originMs = samples[0]?.tMs ?? 0
+  return samples.filter((sample) => {
+    const relativeMs = sample.tMs - originMs
+    return relativeMs >= bounds.startMs && relativeMs < bounds.endMs
+  })
 }
 
 async function getColdStateValid(verificationId: string): Promise<boolean> {
@@ -90,7 +104,7 @@ async function analyzeEngineAudioV2(params: {
   // items (ENG-03..06) — any one of them resolves the same evidence.
   const audio = await resolveAudioEvidence(params.verificationId, STARTUP_ENG_IDS[0])
   const promptText = await resolvePromptText('engine-audio-v2')
-  const results = await params.provider.analyze({
+  const { results, engineTypeNote } = await params.provider.analyze({
     apiKey: params.apiKey,
     promptText,
     // See core-vision-v2.service.ts for why this is hash-suffixed.
@@ -103,6 +117,9 @@ async function analyzeEngineAudioV2(params: {
     attempt: 1,
     validEvidenceIds: new Set([audio.evidenceId]),
   })
+  if (engineTypeNote) {
+    await markEngineTypeOnEvidence(params.verificationId, audio.evidenceId, engineTypeNote)
+  }
 
   const audioEngIdBySemantic: Record<string, string> = {
     starter_motor_sound: STARTUP_ENG_IDS[0],
@@ -179,9 +196,11 @@ async function analyzeImuItem(params: {
 /** ONE dispatch for the whole 23s session: ONE Gemini audio call (4 items)
  * + 2 deterministic IMU classifications (idle/rev), sliced from the SAME
  * single 0-23s sample array using the client-embedded phase boundaries
- * (spec §27: "Gemini / IMU Analyzer 不重新判斷時間區段"). 0-8s (startup) IMU
+ * (spec §27: "Gemini / IMU Analyzer 不重新判斷時間區段"). 0-5s (startup) IMU
  * data is stored on the evidence doc but intentionally not classified here
- * (spec §32: "0–8 sec：保存 IMU raw data，目前不產核心 Result"). */
+ * (spec §32: "0–8 sec：保存 IMU raw data，目前不產核心 Result" — boundary
+ * itself moved to 0-5s in 2026-09's phase-timing update, see
+ * ENGINE_SESSION_PHASES in src/data/verification/engine-session.ts). */
 export async function analyzeEngineSensorSessionV2(params: {
   verificationId: string
   apiKey: string

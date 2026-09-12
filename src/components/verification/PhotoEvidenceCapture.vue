@@ -120,6 +120,10 @@ async function handleConfirm(): Promise<void> {
       },
     }
     await verificationStore.addEvidence(evidence)
+    // A retake replaces this item's photo, it never accumulates — this
+    // component only ever holds one photo per itemId at a time. Runs AFTER
+    // the new evidence is recorded, so the item is never briefly empty.
+    void verificationStore.discardOtherEvidence(props.itemId, evidenceId)
     void uploadQueueStore.enqueue({
       localId: evidenceId,
       verificationId: props.verificationId,

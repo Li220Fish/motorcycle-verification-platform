@@ -7,6 +7,8 @@ import {
   setAiPromptOverride,
   type AdminAiPrompt,
 } from '../services/admin-data.service'
+import { PROMPT_ITEM_MAP } from '../services/prompt-item-map'
+import { findItemById } from '@/data/verification'
 
 const loading = ref(true)
 const prompts = ref<AdminAiPrompt[]>([])
@@ -24,6 +26,23 @@ const isDirty = computed(
   () => !!selected.value && draftText.value !== effectiveText(selected.value),
 )
 const isEmpty = computed(() => draftText.value.trim().length === 0)
+
+interface RelatedItem {
+  id: string
+  title: string
+}
+
+const relatedItems = computed<RelatedItem[]>(() => {
+  if (!selected.value) return []
+  const mapping = PROMPT_ITEM_MAP[selected.value.key]
+  if (!mapping) return []
+  return mapping.itemIds.map((id) => ({
+    id,
+    title: findItemById('seller', id)?.title ?? id,
+  }))
+})
+
+const relatedNote = computed(() => PROMPT_ITEM_MAP[selected.value?.key ?? '']?.note)
 
 function formatUpdatedAt(ms: number | null): string {
   if (!ms) return '—'
@@ -137,6 +156,18 @@ onMounted(async () => {
               </span>
               <span v-else>目前使用程式碼預設值，尚未被覆寫過。</span>
             </p>
+
+            <div class="related-items">
+              <span class="related-items-label">影響的檢測項目</span>
+              <template v-if="relatedItems.length > 0">
+                <span v-for="item in relatedItems" :key="item.id" class="admin-pill mute">
+                  {{ item.title }}
+                  <span class="mono related-item-id">{{ item.id }}</span>
+                </span>
+              </template>
+              <span v-else-if="relatedNote" class="related-items-note">{{ relatedNote }}</span>
+              <span v-else class="related-items-note">尚未建立對照。</span>
+            </div>
           </div>
 
           <div class="admin-checker">
@@ -192,5 +223,31 @@ onMounted(async () => {
 .admin-checker textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
+}
+
+.related-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.related-items-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.related-item-id {
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.related-items-note {
+  font-size: 12px;
+  color: var(--faint);
+  font-style: italic;
 }
 </style>

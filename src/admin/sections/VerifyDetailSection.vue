@@ -11,12 +11,21 @@ import {
   type AdminUserProfile,
   type AdminVerificationDetail,
 } from '../services/admin-data.service'
-import { findItemById } from '@/data/verification'
+import { findItemById, getFlowSections } from '@/data/verification'
 import { aiVisionItemsForAprItem, aiVisionItemTitle } from '@/data/verification/ai-vision-items'
+import {
+  ENGINE_IDLE_ITEM_IDS,
+  ENGINE_REV_ITEM_IDS,
+  ENGINE_SESSION_ITEM_IDS,
+  ENGINE_SESSION_PHASES,
+  ENGINE_STARTUP_ITEM_IDS,
+} from '@/data/verification/engine-session'
+import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
 import { storageService } from '@/services/firebase/storage.service'
 import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
 import type { Vehicle } from '@/types/vehicle'
 import type { VerificationAnswer, VerificationEvidence } from '@/types/verification-evidence'
+import ImuStabilityChart from '../components/ImuStabilityChart.vue'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -34,6 +43,123 @@ const evidenceUrls = ref<Record<string, string>>({})
 
 function evidenceFor(itemId: string): VerificationEvidence[] {
   return evidenceByItem.value[itemId] ?? []
+}
+
+/** Gemini's free-text engine-type impression lives on the shared 23s audio
+ * Evidence doc's own `metadata.engineType` (see engine-sensor-session
+ * .service.ts's markEngineTypeOnEvidence) — that evidence is filed under
+ * ENG-03, same file ENG-03..06 all share. */
+function engineTypeNoteFromEvidence(): string | undefined {
+  const audioEvidence = evidenceFor(ENGINE_STARTUP_ITEM_IDS[0]).find((e) => e.type === 'audio')
+  const engineType = audioEvidence?.metadata?.engineType as { note?: string } | undefined
+  return engineType?.note
+}
+
+/** The 23s engine-session audio file is one blob shared across ENG-03..06
+ * (see engine-sensor-session.service.ts's own comment on this) — this item's
+ * OWN phase window inside that file, so the admin evidence tile can actually
+ * play back just the seconds Gemini was asked to judge for THIS item instead
+ * of the entire clip. `null` for anything that isn't one of the 4 audio
+ * items. */
+function audioPhaseBoundsSec(itemId: string): { startSec: number; endSec: number } | null {
+  if ((ENGINE_STARTUP_ITEM_IDS as readonly string[]).includes(itemId)) {
+    return {
+      startSec: ENGINE_SESSION_PHASES.startup.startMs / 1000,
+      endSec: ENGINE_SESSION_PHASES.startup.endMs / 1000,
+    }
+  }
+  if (itemId === ENGINE_IDLE_ITEM_IDS[0]) {
+    return {
+      startSec: ENGINE_SESSION_PHASES.idle.startMs / 1000,
+      endSec: ENGINE_SESSION_PHASES.idle.endMs / 1000,
+    }
+  }
+  if (itemId === ENGINE_REV_ITEM_IDS[0]) {
+    return {
+      startSec: ENGINE_SESSION_PHASES.rev.startMs / 1000,
+      endSec: ENGINE_SESSION_PHASES.rev.endMs / 1000,
+    }
+  }
+  return null
+}
+
+/** Media Fragments (`#t=start,end`) gets the initial seek right in every
+ * browser, but not every engine reliably stops playback exactly at `end` on
+ * its own — this keeps it honest for the whole play session instead of
+ * quietly playing into the next item's phase. */
+function clampAudioPlayback(event: Event, bounds: { startSec: number; endSec: number }): void {
+  const audio = event.target as HTMLAudioElement
+  if (audio.currentTime < bounds.startSec || audio.currentTime >= bounds.endSec) {
+    audio.currentTime = bounds.startSec
+    if (event.type === 'timeupdate') audio.pause()
+  }
+}
+
+/** Which Verification.analysisStatus route key (see
+ * analysis-status.service.ts) is responsible for this item's AI verdict —
+ * `null` for anything never meant to have one (Optional self-disclosure
+ * items, plain manual checks), which must never show a false "API failed"
+ * badge just because some unrelated route happens to be in a failed state.
+ * 2026-09: the single 'coreVision' route was split into 4 (one per photo
+ * group — see core-vision-split.service.ts), so both the raw APR-* photo
+ * item ids and the AI-vision sub-item ids they produce need per-group
+ * mapping now instead of one shared 'coreVision' bucket. `APR-modifications`
+ * (an Optional item that also happens to carry `aiCheck: 'appearance'` for
+ * historical reasons) is deliberately absent from both maps below — it was
+ * never actually sent to any Core Vision route. */
+type AnalysisRouteKey =
+  | 'coreVisionSides'
+  | 'coreVisionRear'
+  | 'coreVisionFrontSuspension'
+  | 'coreVisionEngineBottom'
+  | 'dashboardOcr'
+  | 'coldCheck'
+  | 'engineSensorSession'
+
+const CORE_VISION_ROUTE_BY_SLOT_ID: Record<string, AnalysisRouteKey> = {
+  'left-side': 'coreVisionSides',
+  'right-side': 'coreVisionSides',
+  rear: 'coreVisionRear',
+  'front-suspension': 'coreVisionFrontSuspension',
+  'engine-bottom': 'coreVisionEngineBottom',
+  'transmission-chain': 'coreVisionEngineBottom',
+}
+
+const CORE_VISION_ROUTE_BY_AI_ITEM_ID: Record<string, AnalysisRouteKey> = {
+  body_damage: 'coreVisionSides',
+  paint_condition: 'coreVisionSides',
+  body_damage_rear: 'coreVisionRear',
+  paint_condition_rear: 'coreVisionRear',
+  body_alignment_visual: 'coreVisionRear',
+  front_suspension_condition: 'coreVisionFrontSuspension',
+  engine_bottom_leak_condition: 'coreVisionEngineBottom',
+  engine_bottom_external_condition: 'coreVisionEngineBottom',
+  chain_sprocket_condition: 'coreVisionEngineBottom',
+}
+
+function analysisRouteKeyFor(itemId: string): AnalysisRouteKey | null {
+  if (itemId === 'ENG-02') return 'coldCheck'
+  if (ENGINE_SESSION_ITEM_IDS.includes(itemId)) return 'engineSensorSession'
+  if (CORE_VISION_ROUTE_BY_AI_ITEM_ID[itemId]) return CORE_VISION_ROUTE_BY_AI_ITEM_ID[itemId]
+  const slot = getPhotoSlotByItemId(itemId)
+  if (slot && CORE_VISION_ROUTE_BY_SLOT_ID[slot.id]) return CORE_VISION_ROUTE_BY_SLOT_ID[slot.id]
+  if (slot?.aiCheck === 'odometer') return 'dashboardOcr'
+  return null
+}
+
+/** True only when this item was SUPPOSED to get a real AI verdict, still
+ * doesn't have one, and the route it depends on is currently sitting in
+ * 'failed' — never for 'processing' (still working) or no route at all
+ * (Optional/manual items, which never call any AI route to begin with). */
+function apiFailed(answer: VerificationAnswer): boolean {
+  const routeKey = analysisRouteKeyFor(answer.itemId)
+  if (!routeKey || answer.aiResult) return false
+  return verification.value?.analysisStatus?.[routeKey]?.status === 'failed'
+}
+
+function apiFailureReason(answer: VerificationAnswer): string | undefined {
+  const routeKey = analysisRouteKeyFor(answer.itemId)
+  return routeKey ? verification.value?.analysisStatus?.[routeKey]?.error : undefined
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -97,33 +223,76 @@ interface AnswerGroup {
   aiSubAnswers: VerificationAnswer[]
 }
 
-const groupedAnswers = computed<AnswerGroup[]>(() => {
+interface AnswerSection {
+  id: string
+  title: string
+  groups: AnswerGroup[]
+  /** Gemini's free-text engine-type impression (engine-audio-v2.ts's ENGINE
+   *  TYPE DESCRIPTION section) — lives on the shared 23s audio Evidence
+   *  doc's `metadata.engineType`, not on any one ENG-03..08 answer, so it's
+   *  surfaced once on the section that holds those items rather than
+   *  repeated on every one of their answer-cards. */
+  engineTypeNote?: string
+}
+
+/**
+ * Grouped AND ordered by the same section/item order the seller/buyer flow
+ * itself uses (`getFlowSections` — the exact data VerificationStepsView.vue
+ * and InspectionReportBody.vue build their own screens from), instead of a
+ * flat list sorted alphabetically by itemId. Admin previously had no way to
+ * tell which checklist phase (核心照片／燈光電系／冷車＋引擎檢查／其他主動揭露)
+ * an item actually belonged to short of memorizing every id prefix — this
+ * makes the admin detail view read in the same order a seller/buyer actually
+ * experienced it.
+ */
+const answerSections = computed<AnswerSection[]>(() => {
+  if (!verification.value) return []
+  const flowKind = verification.value.type === 'buyer' ? 'buyer' : 'seller'
   const byId = new Map(answers.value.map((a) => [a.itemId, a]))
-  const checklistAnswers = answers.value.filter((a) => isChecklistItem(a.itemId))
   const consumedAiIds = new Set<string>()
 
-  const groups = checklistAnswers
-    .map((answer) => {
-      const aiSubAnswers = aiVisionItemsForAprItem(answer.itemId)
-        .map((meta) => byId.get(meta.id))
+  const sections = getFlowSections(flowKind)
+    .map((section) => {
+      const groups = section.items
+        .map((item) => byId.get(item.id))
         .filter((a): a is VerificationAnswer => !!a)
-      for (const a of aiSubAnswers) consumedAiIds.add(a.itemId)
-      return { answer, aiSubAnswers }
+        .map((answer) => {
+          const aiSubAnswers = aiVisionItemsForAprItem(answer.itemId)
+            .map((meta) => byId.get(meta.id))
+            .filter((a): a is VerificationAnswer => !!a)
+          for (const a of aiSubAnswers) consumedAiIds.add(a.itemId)
+          return { answer, aiSubAnswers }
+        })
+      const engineTypeNote = groups.some((g) => ENGINE_SESSION_ITEM_IDS.includes(g.answer.itemId))
+        ? engineTypeNoteFromEvidence()
+        : undefined
+      return { id: section.id, title: section.title, groups, engineTypeNote }
     })
-    .sort((a, b) => a.answer.itemId.localeCompare(b.answer.itemId))
+    .filter((section) => section.groups.length > 0)
 
   // Any AI-vision answer whose APR-* item hasn't been answered yet (or whose
   // mapping is somehow missing) still needs to be visible somewhere, not
-  // silently dropped — shown as its own group with no parent APR answer.
+  // silently dropped — collected into a trailing catch-all section instead
+  // of one belonging to no real checklist phase.
   const orphanAiAnswers = answers.value.filter(
     (a) => !isChecklistItem(a.itemId) && !consumedAiIds.has(a.itemId),
   )
-  for (const orphan of orphanAiAnswers) {
-    groups.push({ answer: orphan, aiSubAnswers: [] })
+  if (orphanAiAnswers.length > 0) {
+    sections.push({
+      id: 'orphan-ai-answers',
+      title: '其他 AI 判定（找不到對應檢測項目）',
+      groups: orphanAiAnswers.map((answer) => ({ answer, aiSubAnswers: [] })),
+      engineTypeNote: undefined,
+    })
   }
 
-  return groups
+  return sections
 })
+
+const expandedSectionId = ref<string | null>(null)
+function toggleSection(sectionId: string): void {
+  expandedSectionId.value = expandedSectionId.value === sectionId ? null : sectionId
+}
 const aiAnsweredCount = computed(() => answers.value.filter((a) => a.aiResult).length)
 
 // 車況評分不再顯示給使用者看（見 VerificationReportView.vue / InspectionReportBody.vue
@@ -285,159 +454,233 @@ onMounted(async () => {
           }}</pre>
         </div>
 
-        <div v-if="verification.coldStateContext" class="admin-usec">
-          <h3>冷車狀態確認 <span class="admin-ref app">ENG-02 · coldStateContext</span></h3>
-          <dl class="admin-kv">
-            <div>
-              <dt>冷車資料有效</dt>
-              <dd>
-                <span
-                  class="admin-pill"
-                  :class="(verification.coldStateContext as any).coldStateValid ? 'ok' : 'attn'"
-                >
-                  {{ (verification.coldStateContext as any).coldStateValid ? '有效' : '無效' }}
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt>判定結果</dt>
-              <dd>{{ (verification.coldStateContext as any).coldEngineTouchCheck }}</dd>
-            </div>
-          </dl>
-          <pre class="admin-json">{{ JSON.stringify(verification.coldStateContext, null, 2) }}</pre>
-        </div>
-
         <div class="admin-usec">
           <h3>各項目結果與 AI 回應 <span class="admin-ref app">collection: answers</span></h3>
           <p class="admin-page-intro" style="padding: 0 0 8px; font-size: 12px">
             後煞車狀況、後避震狀況等 AI 影像判定項目已併入其對應的 APR 檢測項目下方，不再單獨列出。
           </p>
-          <div v-if="groupedAnswers.length === 0" class="admin-slot">尚無任何項目回答</div>
-          <div v-else class="answer-list">
-            <div v-for="group in groupedAnswers" :key="group.answer.itemId" class="answer-card">
-              <div class="answer-head">
-                <span class="mono answer-id">{{ group.answer.itemId }}</span>
-                <span class="answer-title">{{ itemTitle(group.answer.itemId) }}</span>
-                <span class="admin-pill" :class="RESULT_TONE[group.answer.result] ?? 'mute'">
-                  {{ RESULT_LABEL[group.answer.result] ?? group.answer.result }}
-                </span>
-              </div>
-              <p v-if="group.answer.note" class="answer-note">
-                使用者備註：{{ group.answer.note }}
-              </p>
-
-              <div v-if="evidenceFor(group.answer.itemId).length > 0" class="evidence-strip">
-                <div
-                  v-for="item in evidenceFor(group.answer.itemId)"
-                  :key="item.id"
-                  class="evidence-tile"
+          <div v-if="answerSections.length === 0" class="admin-slot">尚無任何項目回答</div>
+          <div v-else class="answer-section-list">
+            <div v-for="section in answerSections" :key="section.id" class="answer-section-card">
+              <button class="answer-section-header" @click="toggleSection(section.id)">
+                <span class="answer-section-title">{{ section.title }}</span>
+                <span class="admin-pill mute">{{ section.groups.length }} 項</span>
+                <svg
+                  class="answer-section-chevron"
+                  :class="{ open: expandedSectionId === section.id }"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                  <video
-                    v-if="item.type === 'video' && evidenceUrls[item.id]"
-                    :src="evidenceUrls[item.id]"
-                    controls
-                    playsinline
-                    class="evidence-media"
-                  />
-                  <img
-                    v-else-if="item.type === 'photo' && evidenceUrls[item.id]"
-                    :src="evidenceUrls[item.id]"
-                    alt=""
-                    class="evidence-media"
-                  />
-                  <span v-else class="evidence-unresolved">
-                    {{ evidenceUrls[item.id] === undefined ? '無法載入證據檔案' : item.type }}
-                  </span>
-                </div>
-              </div>
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
 
-              <div v-if="group.answer.aiResult" class="ai-block">
-                <dl class="admin-kv">
-                  <div>
-                    <dt>模型</dt>
-                    <dd class="mono">
-                      {{ group.answer.aiResult.model }} ({{ group.answer.aiResult.modelVersion }})
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>信心值</dt>
-                    <dd>{{ group.answer.aiResult.confidence ?? '—' }}</dd>
-                  </div>
-                  <div>
-                    <dt>標籤</dt>
-                    <dd>{{ group.answer.aiResult.label }}</dd>
-                  </div>
-                  <div v-if="group.answer.aiResult.details.note">
-                    <dt>AI 說明</dt>
-                    <dd>{{ group.answer.aiResult.details.note }}</dd>
-                  </div>
-                  <div v-if="(group.answer.aiResult.details.findings ?? []).length > 0">
-                    <dt>觀察項目</dt>
-                    <dd>{{ (group.answer.aiResult.details.findings ?? []).join('、') }}</dd>
-                  </div>
-                  <div v-if="group.answer.aiResult.details.attempts.length > 1">
-                    <dt>重試次數</dt>
-                    <dd>
-                      {{ group.answer.aiResult.details.finalAttempt }} /
-                      {{ group.answer.aiResult.details.attempts.length }}
-                    </dd>
-                  </div>
-                </dl>
-                <details class="ai-raw">
-                  <summary>完整 AI 回應（JSON）</summary>
-                  <pre class="admin-json">{{ JSON.stringify(group.answer.aiResult, null, 2) }}</pre>
-                </details>
-              </div>
-              <p v-else class="answer-manual">人工判定項目，無 AI 回應。</p>
+              <Transition name="expand">
+                <div v-if="expandedSectionId === section.id" class="answer-list">
+                  <p v-if="section.engineTypeNote" class="engine-type-note">
+                    <strong>引擎類型（AI 判讀）：</strong>{{ section.engineTypeNote }}
+                  </p>
+                  <div
+                    v-for="group in section.groups"
+                    :key="group.answer.itemId"
+                    class="answer-card"
+                  >
+                    <div class="answer-head">
+                      <span class="mono answer-id">{{ group.answer.itemId }}</span>
+                      <span class="answer-title">{{ itemTitle(group.answer.itemId) }}</span>
+                      <span
+                        v-if="apiFailed(group.answer)"
+                        class="admin-fail-badge"
+                        :title="apiFailureReason(group.answer) ?? 'AI 分析失敗'"
+                        >!</span
+                      >
+                      <span
+                        v-else
+                        class="admin-pill"
+                        :class="RESULT_TONE[group.answer.result] ?? 'mute'"
+                      >
+                        {{ RESULT_LABEL[group.answer.result] ?? group.answer.result }}
+                      </span>
+                    </div>
+                    <p v-if="group.answer.note" class="answer-note">
+                      使用者備註：{{ group.answer.note }}
+                    </p>
+                    <p
+                      v-if="apiFailed(group.answer) && apiFailureReason(group.answer)"
+                      class="answer-fail-reason"
+                    >
+                      API 失敗原因：{{ apiFailureReason(group.answer) }}
+                    </p>
 
-              <div v-if="group.aiSubAnswers.length > 0" class="ai-sub-list">
-                <div v-for="sub in group.aiSubAnswers" :key="sub.itemId" class="ai-sub-item">
-                  <div class="answer-head">
-                    <span class="mono answer-id">{{ sub.itemId }}</span>
-                    <span class="answer-title">{{ itemTitle(sub.itemId) }}</span>
-                    <span class="admin-pill" :class="RESULT_TONE[sub.result] ?? 'mute'">
-                      {{ RESULT_LABEL[sub.result] ?? sub.result }}
-                    </span>
-                  </div>
-                  <div v-if="sub.aiResult" class="ai-block">
-                    <dl class="admin-kv">
-                      <div>
-                        <dt>模型</dt>
-                        <dd class="mono">
-                          {{ sub.aiResult.model }} ({{ sub.aiResult.modelVersion }})
-                        </dd>
+                    <div v-if="evidenceFor(group.answer.itemId).length > 0" class="evidence-strip">
+                      <div
+                        v-for="item in evidenceFor(group.answer.itemId)"
+                        :key="item.id"
+                        class="evidence-tile"
+                        :class="{
+                          'evidence-tile-wide': item.type === 'audio' || item.type === 'imu',
+                        }"
+                      >
+                        <video
+                          v-if="item.type === 'video' && evidenceUrls[item.id]"
+                          :src="evidenceUrls[item.id]"
+                          controls
+                          playsinline
+                          class="evidence-media"
+                        />
+                        <img
+                          v-else-if="item.type === 'photo' && evidenceUrls[item.id]"
+                          :src="evidenceUrls[item.id]"
+                          alt=""
+                          class="evidence-media"
+                        />
+                        <audio
+                          v-else-if="
+                            item.type === 'audio' &&
+                            evidenceUrls[item.id] &&
+                            audioPhaseBoundsSec(group.answer.itemId)
+                          "
+                          :src="`${evidenceUrls[item.id]}#t=${audioPhaseBoundsSec(group.answer.itemId)!.startSec},${audioPhaseBoundsSec(group.answer.itemId)!.endSec}`"
+                          controls
+                          class="evidence-audio"
+                          @loadedmetadata="
+                            clampAudioPlayback($event, audioPhaseBoundsSec(group.answer.itemId)!)
+                          "
+                          @play="
+                            clampAudioPlayback($event, audioPhaseBoundsSec(group.answer.itemId)!)
+                          "
+                          @timeupdate="
+                            clampAudioPlayback($event, audioPhaseBoundsSec(group.answer.itemId)!)
+                          "
+                        />
+                        <audio
+                          v-else-if="item.type === 'audio' && evidenceUrls[item.id]"
+                          :src="evidenceUrls[item.id]"
+                          controls
+                          class="evidence-audio"
+                        />
+                        <ImuStabilityChart
+                          v-else-if="item.type === 'imu' && evidenceUrls[item.id]"
+                          :evidence-url="evidenceUrls[item.id]"
+                          :item-id="group.answer.itemId"
+                          :result-tone="RESULT_TONE[group.answer.result] ?? 'mute'"
+                        />
+                        <span v-else class="evidence-unresolved">
+                          {{ evidenceUrls[item.id] === undefined ? '無法載入證據檔案' : item.type }}
+                        </span>
                       </div>
-                      <div>
-                        <dt>信心值</dt>
-                        <dd>{{ sub.aiResult.confidence ?? '—' }}</dd>
+                    </div>
+
+                    <div v-if="group.answer.aiResult" class="ai-block">
+                      <dl class="admin-kv">
+                        <div>
+                          <dt>模型</dt>
+                          <dd class="mono">
+                            {{ group.answer.aiResult.model }} ({{
+                              group.answer.aiResult.modelVersion
+                            }})
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>信心值</dt>
+                          <dd>{{ group.answer.aiResult.confidence ?? '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>標籤</dt>
+                          <dd>{{ group.answer.aiResult.label }}</dd>
+                        </div>
+                        <div v-if="group.answer.aiResult.details.note">
+                          <dt>AI 說明</dt>
+                          <dd>{{ group.answer.aiResult.details.note }}</dd>
+                        </div>
+                        <div v-if="(group.answer.aiResult.details.findings ?? []).length > 0">
+                          <dt>觀察項目</dt>
+                          <dd>{{ (group.answer.aiResult.details.findings ?? []).join('、') }}</dd>
+                        </div>
+                        <div v-if="group.answer.aiResult.details.attempts.length > 1">
+                          <dt>重試次數</dt>
+                          <dd>
+                            {{ group.answer.aiResult.details.finalAttempt }} /
+                            {{ group.answer.aiResult.details.attempts.length }}
+                          </dd>
+                        </div>
+                      </dl>
+                      <details class="ai-raw">
+                        <summary>完整 AI 回應（JSON）</summary>
+                        <pre class="admin-json">{{
+                          JSON.stringify(group.answer.aiResult, null, 2)
+                        }}</pre>
+                      </details>
+                    </div>
+                    <p v-else class="answer-manual">人工判定項目，無 AI 回應。</p>
+
+                    <div v-if="group.aiSubAnswers.length > 0" class="ai-sub-list">
+                      <div v-for="sub in group.aiSubAnswers" :key="sub.itemId" class="ai-sub-item">
+                        <div class="answer-head">
+                          <span class="mono answer-id">{{ sub.itemId }}</span>
+                          <span class="answer-title">{{ itemTitle(sub.itemId) }}</span>
+                          <span
+                            v-if="apiFailed(sub)"
+                            class="admin-fail-badge"
+                            :title="apiFailureReason(sub) ?? 'AI 分析失敗'"
+                            >!</span
+                          >
+                          <span
+                            v-else
+                            class="admin-pill"
+                            :class="RESULT_TONE[sub.result] ?? 'mute'"
+                          >
+                            {{ RESULT_LABEL[sub.result] ?? sub.result }}
+                          </span>
+                        </div>
+                        <div v-if="sub.aiResult" class="ai-block">
+                          <dl class="admin-kv">
+                            <div>
+                              <dt>模型</dt>
+                              <dd class="mono">
+                                {{ sub.aiResult.model }} ({{ sub.aiResult.modelVersion }})
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>信心值</dt>
+                              <dd>{{ sub.aiResult.confidence ?? '—' }}</dd>
+                            </div>
+                            <div>
+                              <dt>標籤</dt>
+                              <dd>{{ sub.aiResult.label }}</dd>
+                            </div>
+                            <div v-if="sub.aiResult.details.note">
+                              <dt>AI 說明</dt>
+                              <dd>{{ sub.aiResult.details.note }}</dd>
+                            </div>
+                            <div v-if="(sub.aiResult.details.findings ?? []).length > 0">
+                              <dt>觀察項目</dt>
+                              <dd>{{ (sub.aiResult.details.findings ?? []).join('、') }}</dd>
+                            </div>
+                            <div v-if="sub.aiResult.details.attempts.length > 1">
+                              <dt>重試次數</dt>
+                              <dd>
+                                {{ sub.aiResult.details.finalAttempt }} /
+                                {{ sub.aiResult.details.attempts.length }}
+                              </dd>
+                            </div>
+                          </dl>
+                          <details class="ai-raw">
+                            <summary>完整 AI 回應（JSON）</summary>
+                            <pre class="admin-json">{{
+                              JSON.stringify(sub.aiResult, null, 2)
+                            }}</pre>
+                          </details>
+                        </div>
                       </div>
-                      <div>
-                        <dt>標籤</dt>
-                        <dd>{{ sub.aiResult.label }}</dd>
-                      </div>
-                      <div v-if="sub.aiResult.details.note">
-                        <dt>AI 說明</dt>
-                        <dd>{{ sub.aiResult.details.note }}</dd>
-                      </div>
-                      <div v-if="(sub.aiResult.details.findings ?? []).length > 0">
-                        <dt>觀察項目</dt>
-                        <dd>{{ (sub.aiResult.details.findings ?? []).join('、') }}</dd>
-                      </div>
-                      <div v-if="sub.aiResult.details.attempts.length > 1">
-                        <dt>重試次數</dt>
-                        <dd>
-                          {{ sub.aiResult.details.finalAttempt }} /
-                          {{ sub.aiResult.details.attempts.length }}
-                        </dd>
-                      </div>
-                    </dl>
-                    <details class="ai-raw">
-                      <summary>完整 AI 回應（JSON）</summary>
-                      <pre class="admin-json">{{ JSON.stringify(sub.aiResult, null, 2) }}</pre>
-                    </details>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Transition>
             </div>
           </div>
         </div>
@@ -482,10 +725,71 @@ onMounted(async () => {
   white-space: pre;
 }
 
+.answer-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.answer-section-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.answer-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.answer-section-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.answer-section-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.answer-section-chevron.open {
+  transform: rotate(180deg);
+}
+
 .answer-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.expand-enter-active,
+.expand-leave-active {
+  transition:
+    max-height 0.18s ease,
+    opacity 0.18s ease;
+  overflow: hidden;
+  max-height: 4000px;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 .answer-card {
@@ -519,11 +823,41 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+.engine-type-note {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--action-soft);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
 .answer-manual {
   margin: 0;
   font-size: 12.5px;
   color: var(--muted);
   font-style: italic;
+}
+
+.admin-fail-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--risk);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: help;
+}
+
+.answer-fail-reason {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--risk);
 }
 
 .evidence-strip {
@@ -537,6 +871,10 @@ onMounted(async () => {
   flex: 0 0 auto;
 }
 
+.evidence-tile-wide {
+  width: 260px;
+}
+
 .evidence-media {
   width: 140px;
   max-height: 180px;
@@ -545,6 +883,11 @@ onMounted(async () => {
   background: #000;
   display: block;
   object-fit: contain;
+}
+
+.evidence-audio {
+  width: 260px;
+  display: block;
 }
 
 .evidence-unresolved {

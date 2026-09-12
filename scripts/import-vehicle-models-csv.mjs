@@ -129,7 +129,10 @@ function parseDisplacements(raw) {
 }
 
 function parseCsv(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((line) => line.trim() !== '')
+  const lines = text
+    .replace(/^﻿/, '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
   const [, ...rows] = lines // drop header row — column order is documented above, not re-derived
   return rows.map((line) => {
     const [brand, series, trimName, displacement, , , bodyType, hasChainRaw] = line.split(',')
@@ -186,7 +189,9 @@ async function main() {
     query(modelsCollection, where('importSource', '==', CSV_IMPORT_SOURCE)),
   )
   if (staleSnapshot.size > 0) {
-    console.log(`[import-vehicle-models-csv] Removing ${staleSnapshot.size} docs from a prior run...`)
+    console.log(
+      `[import-vehicle-models-csv] Removing ${staleSnapshot.size} docs from a prior run...`,
+    )
     await Promise.all(staleSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref)))
   }
 

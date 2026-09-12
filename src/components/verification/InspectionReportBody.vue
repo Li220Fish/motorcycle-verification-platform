@@ -17,9 +17,11 @@ export interface ReportItem {
    *  every Group A/B/C/Audio spec's UI Contract: "AI 判定說明" vs "使用者
    *  補充" must never be merged into one field. */
   aiNote?: string | null
-  /** Set once a Group A/B/C `unsure` item is still on its first of 2
-   *  allowed attempts — governs whether the retry CTA renders at all. */
-  canRetry?: boolean
+  /** OCR reading for this item's photo (currently only 儀表板里程 —
+   *  functions/src/ocr/ocr.service.ts's analyzeDashboardOcr writes this onto
+   *  the Evidence doc directly, not onto an Answer, so it's passed
+   *  separately from aiNote rather than folded into it). */
+  ocrText?: string | null
   photos?: string[]
   /** Nests this item under a sub-header when set (e.g. the Engine Audio+IMU
    *  session grouping: ENG-03/04 under "啟動檢測", etc. — spec §44: "Capture
@@ -166,6 +168,7 @@ function closeImage(): void {
                   <p v-if="item.required === false" class="item-optional-note">
                     此為使用者自行揭露資訊，非 AI 核心判定。
                   </p>
+                  <p v-if="item.ocrText" class="item-ocr-note">OCR 判讀里程：{{ item.ocrText }}</p>
                   <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
                   <p v-if="item.note" class="item-note">使用者補充：{{ item.note }}</p>
                   <div v-if="item.photos && item.photos.length > 0" class="item-photos">
@@ -330,6 +333,13 @@ function closeImage(): void {
   font-size: 12px;
   color: var(--color-text-disabled);
   font-style: italic;
+}
+
+.item-ocr-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
 .item-ai-note {

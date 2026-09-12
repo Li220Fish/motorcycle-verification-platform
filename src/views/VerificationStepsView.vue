@@ -70,7 +70,9 @@ const basicHealthCheckOpen = ref(false)
 // transmission. The ONLY previously-mandatory place that ever set it was
 // EngineInspectionFlow.vue's own picker, deep in Phase 3 (冷車＋引擎檢查) —
 // well AFTER Phase 1's core photos (including APR-transmission-chain) are
-// captured and analyzeCoreVisionV2 has already fired fire-and-forget.
+// captured and the engine-bottom Core Vision group has already fired
+// fire-and-forget (analyzeCoreVisionEngineBottom — see core-vision-split
+// .service.ts).
 // Confirmed live: transmission is still unknown at that point for nearly
 // every real usage order, so the backend's "unknown -> assume no chain"
 // default (opposite of the client's "unknown -> assume chain, keep it
@@ -425,7 +427,10 @@ function handleCloseBasicHealthCheck(): void {
 }
 
 const ANALYSIS_ROUTE_KEYS = [
-  'coreVision',
+  'coreVisionSides',
+  'coreVisionRear',
+  'coreVisionFrontSuspension',
+  'coreVisionEngineBottom',
   'dashboardOcr',
   'coldCheck',
   'engineSensorSession',

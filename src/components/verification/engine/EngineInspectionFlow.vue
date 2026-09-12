@@ -148,7 +148,7 @@ async function saveAudioEvidence(itemId: string, remoteUrl: string | undefined):
 /** Uploads the FULL 0-23s sample array once, then a duplicate `imu`-typed
  * Evidence per item id pointing at that same file (mirrors saveAudioEvidence
  * duplicating one audio blob across 4 items) — the Trusted Backend slices
- * idle (8-15s) / rev (15-23s) segments out of this one array using the
+ * idle (5-14s) / rev (14-23s) segments out of this one array using the
  * embedded `phases` boundaries, never re-deriving timing itself (spec §27). */
 async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
   const hasSamples = samples.length > 0
@@ -165,8 +165,17 @@ async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
       placement: vehicleType.value === 'scooter' ? 'scooter_floorboard' : 'manual_front_seat',
       orientation: 'screen_up_top_toward_front',
       targetSampleRateHz: 100,
+      // `sample.timestamp` is an absolute Date.now() epoch value
+      // (motion-capture.service.ts) — `phases` above is relative to this
+      // session's own t=0 (0/8000/15000/23000ms), so tMs must be converted
+      // to that same relative frame or every sample falls outside every
+      // phase's [startMs,endMs) window. That mismatch (absolute vs relative)
+      // was a real, 100%-reproducing bug: engine-sensor-session.service.ts's
+      // sliceSamples() always received zero idle/rev samples, so ENG-07/
+      // ENG-08 always classified "感測資料量不足" regardless of how good the
+      // actual recording was (found live 2026-09).
       samples: samples.map((sample) => ({
-        tMs: sample.timestamp,
+        tMs: sample.timestamp - recordingStartedAt,
         ax: sample.x,
         ay: sample.y,
         az: sample.z,

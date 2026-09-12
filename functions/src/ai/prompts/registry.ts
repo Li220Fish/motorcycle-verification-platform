@@ -1,19 +1,12 @@
 import { GLOBAL_INSPECTION_PROMPT } from './global-inspection-v2'
-import { CORE_VISION_V2_PROMPT } from './core-vision-v2'
+import { CORE_VISION_SIDES_V1_PROMPT } from './core-vision-sides-v1'
+import { CORE_VISION_REAR_V1_PROMPT } from './core-vision-rear-v1'
+import { CORE_VISION_FRONT_SUSPENSION_V1_PROMPT } from './core-vision-front-suspension-v1'
+import { CORE_VISION_ENGINE_BOTTOM_V1_PROMPT } from './core-vision-engine-bottom-v1'
 import { DASHBOARD_OCR_V2_PROMPT } from './dashboard-ocr-v2'
 import { COLD_ENGINE_TOUCH_PROMPT } from './cold-engine-touch-v3'
 import { ENGINE_AUDIO_V2_PROMPT } from './audio/engine-audio-v2'
-import { RETRY_BASE_PROMPT } from './retry-base-v1'
 import { REGISTRATION_OCR_PROMPT } from './registration-ocr-v1'
-import {
-  BODY_DAMAGE_RETRY_PROMPT,
-  PAINT_CONDITION_RETRY_PROMPT,
-  BODY_ALIGNMENT_RETRY_PROMPT,
-  FRONT_SUSPENSION_RETRY_PROMPT,
-  ENGINE_BOTTOM_LEAK_RETRY_PROMPT,
-  ENGINE_BOTTOM_EXTERNAL_RETRY_PROMPT,
-  CHAIN_SPROCKET_RETRY_PROMPT,
-} from './retry/core-vision-v2-retry'
 
 export interface AiPromptDefinition {
   key: string
@@ -36,11 +29,30 @@ export const AI_PROMPT_REGISTRY: AiPromptDefinition[] = [
     defaultText: GLOBAL_INSPECTION_PROMPT,
   },
   {
-    key: 'core-vision-v2',
-    label: '核心影像判定（外觀／前避震／引擎底部／鏈條齒盤）',
-    defaultText: CORE_VISION_V2_PROMPT,
+    key: 'core-vision-sides-v1',
+    label: '核心影像判定（左右側外觀）',
+    defaultText: CORE_VISION_SIDES_V1_PROMPT,
   },
   {
+    key: 'core-vision-rear-v1',
+    label: '核心影像判定（車尾外觀／對稱性）',
+    defaultText: CORE_VISION_REAR_V1_PROMPT,
+  },
+  {
+    key: 'core-vision-front-suspension-v1',
+    label: '核心影像判定（前避震）',
+    defaultText: CORE_VISION_FRONT_SUSPENSION_V1_PROMPT,
+  },
+  {
+    key: 'core-vision-engine-bottom-v1',
+    label: '核心影像判定（引擎底部／鏈條齒盤）',
+    defaultText: CORE_VISION_ENGINE_BOTTOM_V1_PROMPT,
+  },
+  {
+    // 2026-09：前台賣家/買家報告已經會顯示這個結果了（見
+    // VerificationReportView.vue 的 latestOcrResult）。後台
+    // VerifyDetailSection.vue 的 evidence-tile 還沒接，詳見
+    // ocr.service.ts 的同一則備註。
     key: 'dashboard-ocr-v2',
     label: '儀表板里程 OCR',
     defaultText: DASHBOARD_OCR_V2_PROMPT,
@@ -56,46 +68,9 @@ export const AI_PROMPT_REGISTRY: AiPromptDefinition[] = [
     defaultText: ENGINE_AUDIO_V2_PROMPT,
   },
   {
-    key: 'retry-base-v1',
-    label: '核心影像重試共用前綴',
-    defaultText: RETRY_BASE_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-body_damage',
-    label: '重試：外觀損傷',
-    defaultText: BODY_DAMAGE_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-paint_condition',
-    label: '重試：烤漆狀況',
-    defaultText: PAINT_CONDITION_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-body_alignment_visual',
-    label: '重試：外觀對正',
-    defaultText: BODY_ALIGNMENT_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-front_suspension_condition',
-    label: '重試：前避震狀況',
-    defaultText: FRONT_SUSPENSION_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-engine_bottom_leak_condition',
-    label: '重試：引擎底部漏油',
-    defaultText: ENGINE_BOTTOM_LEAK_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-engine_bottom_external_condition',
-    label: '重試：引擎底部外觀',
-    defaultText: ENGINE_BOTTOM_EXTERNAL_RETRY_PROMPT,
-  },
-  {
-    key: 'core-vision-v2-retry-chain_sprocket_condition',
-    label: '重試：鏈條齒盤',
-    defaultText: CHAIN_SPROCKET_RETRY_PROMPT,
-  },
-  {
+    // 已完整串接、不是半成品：VehicleRegistrationCard.vue 上傳行照照片後直接
+    // 呼叫這支，結果（引擎/車身號碼或「未通過」訊息）當場顯示在畫面上，跟上面
+    // 的儀表板 OCR 不同。
     key: 'registration-ocr-v1',
     label: '行照 OCR',
     defaultText: REGISTRATION_OCR_PROMPT,

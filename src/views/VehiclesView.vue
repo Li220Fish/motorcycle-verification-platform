@@ -386,15 +386,24 @@ onMounted(() => {
 
 .vehicle-item {
   position: relative;
-  /* Scrolling stays normal until a long-press actually picks the card up —
-     only the active drag needs to own vertical touch gestures. */
-  touch-action: pan-y;
+  /* Must be 'none' from the very start of the touch, not switched on only
+     once the long-press timer fires (via .dragging below, as this used to
+     read: `touch-action: pan-y`) — the browser decides whether a touch
+     gesture belongs to native scrolling right at pointerdown and does not
+     reconsider mid-gesture, so any tremor during the 450ms hold could
+     already let it claim the touch for panning before JS ever set
+     touch-action to 'none'; once claimed, the browser fires pointercancel
+     and silently aborts the drag. That's the "長按後有時候不能拖曳"
+     (sometimes can't drag after long-pressing) bug — statically 'none'
+     here trades away swipe-scrolling by touching directly on a card (still
+     works from the gaps between cards, or the header) for the drag gesture
+     actually firing every time. */
+  touch-action: none;
   user-select: none;
 }
 
 .vehicle-item.dragging {
   z-index: 5;
-  touch-action: none;
   transition: none;
   box-shadow: var(--shadow-card);
 }

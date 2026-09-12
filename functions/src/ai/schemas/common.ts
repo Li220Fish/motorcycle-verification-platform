@@ -21,6 +21,9 @@ export interface GeminiItemResult {
 
 export interface GeminiResponseEnvelope {
   results: GeminiItemResult[]
+  /** Engine Audio only (see ai/schemas/schema-builder.ts's
+   *  buildEngineAudioSchema) — absent from every other route's response. */
+  engineTypeNote?: string
 }
 
 export interface PromptVersion {

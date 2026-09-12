@@ -396,6 +396,22 @@ export interface VehicleModelFeatures {
   security: { immobilizer: boolean; antiTheftAlarm: boolean }
 }
 
+/** Which Core Vision route (functions/src/services/core-vision-split
+ * .service.ts) an issue applies to — 1:1 with which APR-* photo(s) that
+ * route actually reads, so an issue only ever nudges the ONE Gemini call
+ * that could actually see it. 'general' has no specific photo view to
+ * check it against, so it's reference-only and never injected into any
+ * Core Vision prompt (see resolveKnownIssuesForPart, functions/src/services
+ * /vehicle-context.service.ts). */
+export type VehicleModelKnownIssuePart =
+  'sides' | 'rear' | 'front_suspension' | 'engine_bottom' | 'general'
+
+export interface VehicleModelKnownIssue {
+  id: string
+  part: VehicleModelKnownIssuePart
+  description: string
+}
+
 export interface AdminVehicleModel {
   id: string
   brand: string
@@ -413,6 +429,12 @@ export interface AdminVehicleModel {
   /** Alternate/colloquial names for this model (e.g. 山葉100、老山葉). Reference
    * data only for now — nothing in the app reads it yet. */
   synonyms: string[]
+  /** 車型專屬通病 — read server-side by resolveKnownIssuesForPart
+   * (functions/src/services/vehicle-context.service.ts) once a verified
+   * vehicle links here via Vehicle.modelId, then injected into that part's
+   * Core Vision prompt as an explicit "reference only, not confirmed"
+   * hint. */
+  knownIssues: VehicleModelKnownIssue[]
   coverImageUrl: string | null
   photos: string[]
   specs: VehicleModelSpecs
@@ -493,6 +515,7 @@ export async function listVehicleModels(): Promise<AdminVehicleModel[]> {
       transmission: data.transmission ?? null,
       hasChain: data.hasChain ?? false,
       synonyms: data.synonyms ?? [],
+      knownIssues: data.knownIssues ?? [],
       coverImageUrl: data.coverImageUrl ?? null,
       photos: data.photos ?? [],
       specs: { ...EMPTY_SPECS, ...data.specs },
@@ -515,6 +538,7 @@ export interface CreateVehicleModelInput {
   transmission: string | null
   hasChain: boolean
   synonyms: string[]
+  knownIssues: VehicleModelKnownIssue[]
   specs: {
     maxPowerHp: number | null
     maxTorqueKgm: number | null
@@ -561,6 +585,7 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     transmission: input.transmission,
     hasChain: input.hasChain,
     synonyms: input.synonyms,
+    knownIssues: input.knownIssues,
     coverImageUrl: null,
     photos: [],
     specs,
@@ -607,6 +632,7 @@ export async function updateVehicleModel(
     transmission: input.transmission,
     hasChain: input.hasChain,
     synonyms: input.synonyms,
+    knownIssues: input.knownIssues,
     specs,
   })
 }

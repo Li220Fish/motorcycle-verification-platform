@@ -1,15 +1,17 @@
-export type VehicleRegistrationVerificationStatus = 'unverified' | 'passed' | 'attention'
+export type VehicleRegistrationVerificationStatus = 'unverified' | 'passed'
 
 /** 行照 (registration certificate) OCR verification result — Trusted-Backend-
  * only (written by verifyVehicleRegistrationDocument via Admin SDK, blocked
  * for the client in firestore.rules). Gates VehicleDetailView's "開始新的驗證"
- * button: only status === 'passed' unlocks it. */
+ * button: only status === 'passed' unlocks it.
+ *
+ * 2026-09 簡化：使用者只上傳照片、不再輸入任何文字，因此一律 `passed`——
+ * Gemini 仍會真的 OCR 讀取引擎號碼（`ocrEngineNumber`）供顯示，但辨識結果
+ * 不影響是否通過。車身號碼不再由這支流程判斷（見
+ * functions/src/services/vehicle-registration.service.ts）。 */
 export interface VehicleRegistrationVerification {
   status: VehicleRegistrationVerificationStatus
-  method: 'ocr' | 'test-bypass' | null
-  inputNumber: string | null
   ocrEngineNumber: string | null
-  ocrChassisNumber: string | null
   confidence: number | null
   note: string | null
   verifiedAt: number | null
@@ -19,8 +21,10 @@ export interface Vehicle {
   id: string
 
   currentOwnerId: string
-  /** Links to a vehicleModels/{id} reference doc — no model-picker UI wires
-   * this yet, reserved for when one exists. */
+  /** Links to a vehicleModels/{id} reference doc — set from
+   * VehicleModelSelect.vue's `modelPicked` event (see VehiclesView.vue's
+   * handleModelPicked), null for a manually-typed brand/model with no
+   * catalog match. */
   modelId?: string | null
 
   brand: string

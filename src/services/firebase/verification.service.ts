@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -20,6 +21,7 @@ import type { Verification, VerificationDraft, VerificationStatus } from '@/type
 import type { VerificationAnswer, VerificationEvidence } from '@/types/verification-evidence'
 
 import { db } from './firebase'
+import { storageService } from './storage.service'
 
 const COLLECTION = 'verifications'
 
@@ -247,6 +249,23 @@ async function listEvidence(verificationId: string): Promise<VerificationEvidenc
   })
 }
 
+/** Deletes one evidence doc AND its uploaded file (if the background upload
+ * had already finished) — a superseded retake, or an explicit user delete,
+ * must actually disappear everywhere (Storage, Firestore), not just from the
+ * current session's in-memory list. Re-reads the doc first rather than
+ * trusting a caller-supplied `remoteUrl`, since the local store's copy of an
+ * evidence item commonly never learns its `remoteUrl` at all within the same
+ * session (updateEvidenceRemoteUrl below writes straight to Firestore, not
+ * back into any client-side cache) — only the Firestore doc itself is ever
+ * guaranteed current. */
+async function deleteEvidence(verificationId: string, evidenceId: string): Promise<void> {
+  const ref = doc(db, COLLECTION, verificationId, 'evidence', evidenceId)
+  const snap = await getDoc(ref)
+  const remoteUrl = snap.exists() ? (snap.data() as EvidenceDoc).remoteUrl : undefined
+  if (remoteUrl) await storageService.deleteFileAtUrl(remoteUrl)
+  await deleteDoc(ref)
+}
+
 /** Patches just `remoteUrl` on an already-saved evidence doc once its
  * background Storage upload finishes — a narrower write than saveEvidence()
  * (which is a full setDoc and would otherwise reset createdAt to "now" via
@@ -274,5 +293,6 @@ export const verificationService = {
   listAnswers,
   saveEvidence,
   listEvidence,
+  deleteEvidence,
   updateEvidenceRemoteUrl,
 }

@@ -15,7 +15,14 @@ import { getFirestore } from 'firebase-admin/firestore'
  * re-throws — this never swallows the original error, it just also leaves a
  * Firestore trace the client's realtime subscription can react to.
  */
-export type AnalysisRouteKey = 'coreVision' | 'dashboardOcr' | 'coldCheck' | 'engineSensorSession'
+export type AnalysisRouteKey =
+  | 'coreVisionSides'
+  | 'coreVisionRear'
+  | 'coreVisionFrontSuspension'
+  | 'coreVisionEngineBottom'
+  | 'dashboardOcr'
+  | 'coldCheck'
+  | 'engineSensorSession'
 
 async function writeStatus(
   verificationId: string,

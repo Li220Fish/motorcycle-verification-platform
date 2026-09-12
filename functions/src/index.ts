@@ -4,10 +4,17 @@ initializeApp()
 
 // Verification v2 — supersedes analyzeInspectionGroupA/B/C (deleted along
 // with group-a/b/c-inspection.service.ts and their prompt/retry files).
+// retryCoreVisionV2Item (a 9th route here) was removed 2026-09 — no UI ever
+// called it, and the low-light photos it existed to work around are now
+// prevented at capture time (forced torch) instead. The single consolidated
+// analyzeCoreVisionV2 route was itself split 2026-09 into 4 independent
+// routes (one per photo group) — see analyze-core-vision-split.ts.
 export {
-  analyzeCoreVisionV2Fn as analyzeCoreVisionV2,
-  retryCoreVisionV2ItemFn as retryCoreVisionV2Item,
-} from './functions/analyze-core-vision-v2'
+  analyzeCoreVisionSidesFn as analyzeCoreVisionSides,
+  analyzeCoreVisionRearFn as analyzeCoreVisionRear,
+  analyzeCoreVisionFrontSuspensionFn as analyzeCoreVisionFrontSuspension,
+  analyzeCoreVisionEngineBottomFn as analyzeCoreVisionEngineBottom,
+} from './functions/analyze-core-vision-split'
 export { analyzeOcrDashboard } from './functions/analyze-ocr'
 // Verification v2 — supersedes the sessionType-dispatched
 // analyzeEngineSensorSession (3 separate startup/idle/rev calls).

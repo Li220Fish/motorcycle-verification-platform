@@ -8,6 +8,8 @@ import {
   setVehicleModelCoverImage,
   updateVehicleModel,
   type AdminVehicleModel,
+  type VehicleModelKnownIssue,
+  type VehicleModelKnownIssuePart,
 } from '../services/admin-data.service'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
@@ -24,10 +26,7 @@ const filteredModels = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return models.value
   return models.value.filter((m) =>
-    [m.brand, m.series, m.trimName ?? '', m.bodyType ?? '']
-      .join(' ')
-      .toLowerCase()
-      .includes(q),
+    [m.brand, m.series, m.trimName ?? '', m.bodyType ?? ''].join(' ').toLowerCase().includes(q),
   )
 })
 
@@ -36,9 +35,7 @@ const filteredModels = computed(() => {
 // the same text field, rather than needing a separate "other" escape hatch.
 // 車系 is scoped to the currently-selected brand so it doesn't mix in every
 // other brand's series names.
-const brandOptions = computed(() =>
-  Array.from(new Set(models.value.map((m) => m.brand))).sort(),
-)
+const brandOptions = computed(() => Array.from(new Set(models.value.map((m) => m.brand))).sort())
 const seriesOptions = computed(() =>
   Array.from(
     new Set(models.value.filter((m) => m.brand === draft.brand).map((m) => m.series)),
@@ -49,9 +46,32 @@ const bodyTypeOptions = computed(() =>
 )
 
 const CURRENT_YEAR = new Date().getFullYear()
-const yearOptions = Array.from({ length: CURRENT_YEAR + 1 - 1990 + 1 }, (_, i) => CURRENT_YEAR + 1 - i)
+const yearOptions = Array.from(
+  { length: CURRENT_YEAR + 1 - 1990 + 1 },
+  (_, i) => CURRENT_YEAR + 1 - i,
+)
 
 const TRANSMISSION_OPTIONS = ['CVT', '鏈條', '皮帶', '軸傳動']
+
+// 對應 functions/src/services/core-vision-split.service.ts 的 4 支 Core
+// Vision 路由（'general' 不對應任何一支，僅供人工參考，不會被送進任何
+// Gemini 呼叫 — 見 vehicle-context.service.ts 的 resolveKnownIssuesForPart）。
+const KNOWN_ISSUE_PART_OPTIONS: { value: VehicleModelKnownIssuePart; label: string }[] = [
+  { value: 'sides', label: '左右側外觀' },
+  { value: 'rear', label: '車尾' },
+  { value: 'front_suspension', label: '前避震' },
+  { value: 'engine_bottom', label: '引擎底部／傳動' },
+  { value: 'general', label: '其他（不對應照片，僅供參考）' },
+]
+const KNOWN_ISSUE_PART_LABEL: Record<VehicleModelKnownIssuePart, string> = Object.fromEntries(
+  KNOWN_ISSUE_PART_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<VehicleModelKnownIssuePart, string>
+
+let knownIssueSeq = 0
+function newKnownIssueId(): string {
+  knownIssueSeq += 1
+  return `draft-${Date.now()}-${knownIssueSeq}`
+}
 
 const draft = reactive({
   brand: '',
@@ -64,6 +84,7 @@ const draft = reactive({
   transmission: '',
   hasChain: false,
   synonymsText: '',
+  knownIssues: [] as VehicleModelKnownIssue[],
   maxPowerHp: '',
   maxTorqueKgm: '',
   fuelTankCapacityL: '',
@@ -118,6 +139,13 @@ function parseSynonyms(text: string): string[] {
     .filter((s) => s.length > 0)
 }
 
+function addKnownIssue(): void {
+  draft.knownIssues.push({ id: newKnownIssueId(), part: 'sides', description: '' })
+}
+function removeKnownIssue(id: string): void {
+  draft.knownIssues = draft.knownIssues.filter((issue) => issue.id !== id)
+}
+
 function resetDraft(): void {
   draft.brand = ''
   draft.series = ''
@@ -129,6 +157,7 @@ function resetDraft(): void {
   draft.transmission = ''
   draft.hasChain = false
   draft.synonymsText = ''
+  draft.knownIssues = []
   draft.maxPowerHp = ''
   draft.maxTorqueKgm = ''
   draft.fuelTankCapacityL = ''
@@ -170,13 +199,19 @@ function openEditForm(model: AdminVehicleModel): void {
   draft.displacementCc = model.displacementCc != null ? String(model.displacementCc) : ''
   draft.transmission = model.transmission ?? ''
   draft.hasChain = model.hasChain
-  draft.maxPowerHp = model.specs.engine.maxPowerHp != null ? String(model.specs.engine.maxPowerHp) : ''
+  // Deep-copy so editing/removing a row in the form doesn't mutate the
+  // list still shown in the table behind it until Save is actually pressed.
+  draft.knownIssues = model.knownIssues.map((issue) => ({ ...issue }))
+  draft.maxPowerHp =
+    model.specs.engine.maxPowerHp != null ? String(model.specs.engine.maxPowerHp) : ''
   draft.maxTorqueKgm =
     model.specs.engine.maxTorqueKgm != null ? String(model.specs.engine.maxTorqueKgm) : ''
   draft.fuelTankCapacityL =
     model.specs.engine.fuelTankCapacityL != null ? String(model.specs.engine.fuelTankCapacityL) : ''
-  draft.motorPowerW = model.specs.electric.motorPowerW != null ? String(model.specs.electric.motorPowerW) : ''
-  draft.weightKg = model.specs.dimensions.weightKg != null ? String(model.specs.dimensions.weightKg) : ''
+  draft.motorPowerW =
+    model.specs.electric.motorPowerW != null ? String(model.specs.electric.motorPowerW) : ''
+  draft.weightKg =
+    model.specs.dimensions.weightKg != null ? String(model.specs.dimensions.weightKg) : ''
   draft.seatHeightMm =
     model.specs.dimensions.seatHeightMm != null ? String(model.specs.dimensions.seatHeightMm) : ''
   draft.officialAverageKmPerL =
@@ -235,6 +270,9 @@ async function handleSubmit(): Promise<void> {
       transmission: String(draft.transmission ?? '').trim() || null,
       hasChain: draft.hasChain,
       synonyms: parseSynonyms(draft.synonymsText),
+      knownIssues: draft.knownIssues
+        .map((issue) => ({ ...issue, description: issue.description.trim() }))
+        .filter((issue) => issue.description.length > 0),
       specs: {
         maxPowerHp: numberOrNull(draft.maxPowerHp),
         maxTorqueKgm: numberOrNull(draft.maxTorqueKgm),
@@ -282,9 +320,13 @@ onMounted(async () => {
     <p class="admin-page-intro">
       車輛選單資訊（<code>vehicleModels</code>）——「我的車輛」新增車輛時的廠牌／車系／排氣量／名稱四層選單，
       以及刊登表單的鏈條傳動判斷，都是直接讀取這份主檔（見
-      <code>src/components/common/VehicleModelSelect.vue</code>）。在這裡新增、修改或刪除的車款，會立即反映在
-      App 的選單裡。convenience/display/lighting/storage/security
-      等配備旗標與 fuelReports/reviews 統計目前無填寫介面，欄位保留預設值。
+      <code>src/components/common/VehicleModelSelect.vue</code
+      >）。在這裡新增、修改或刪除的車款，會立即反映在 App
+      的選單裡。convenience/display/lighting/storage/security 等配備旗標與 fuelReports/reviews
+      統計目前無填寫介面，欄位保留預設值。「車型專屬通病」會在驗車時（若該車輛有連結到這裡的車款）依對應部位自動加進
+      Core Vision 影像判定的提示中，僅供 AI
+      提高警覺、不會直接判定異常——只有使用者新增車輛時實際選到這裡的車款（寫入
+      <code>Vehicle.modelId</code>）才會生效，手動輸入廠牌車系文字不會連結到任何通病資料。
     </p>
 
     <div class="admin-panel">
@@ -372,7 +414,9 @@ onMounted(async () => {
           </label>
         </div>
         <div class="admin-form-row" style="margin-top: 10px">
-          <label class="admin-check"><input v-model="draft.hasChain" type="checkbox" /> 鏈條傳動</label>
+          <label class="admin-check"
+            ><input v-model="draft.hasChain" type="checkbox" /> 鏈條傳動</label
+          >
         </div>
         <div class="admin-form-row" style="margin-top: 10px">
           <label class="admin-field admin-field-wide">
@@ -393,6 +437,40 @@ onMounted(async () => {
             <img :src="photoPreviewUrl ?? existingCoverImageUrl!" alt="" />
           </div>
         </div>
+
+        <p class="admin-form-subhead">車型專屬通病（選填）</p>
+        <p class="admin-field-hint">
+          驗車時若車輛有選到這個車款，會依「對應部位」把描述文字加進對應的 AI 影像判定提示（僅供 AI
+          提高警覺、仍須依實際照片判斷，不會直接判定異常）。「其他」不會送進任何 AI
+          判定，僅供人工參考。
+        </p>
+        <div
+          v-for="issue in draft.knownIssues"
+          :key="issue.id"
+          class="admin-form-row"
+          style="margin-top: 8px; align-items: center"
+        >
+          <label class="admin-field" style="flex: 0 0 180px">
+            <select v-model="issue.part">
+              <option v-for="opt in KNOWN_ISSUE_PART_OPTIONS" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+          <label class="admin-field admin-field-wide">
+            <input
+              v-model="issue.description"
+              type="text"
+              placeholder="例如：前整流罩螺絲孔位容易因日曬而龜裂"
+            />
+          </label>
+          <button type="button" class="admin-btn sm danger" @click="removeKnownIssue(issue.id)">
+            移除
+          </button>
+        </div>
+        <button type="button" class="admin-btn sm" style="margin-top: 8px" @click="addKnownIssue">
+          + 新增通病
+        </button>
 
         <p class="admin-form-subhead">規格（選填）</p>
         <div class="admin-form-row">
@@ -450,12 +528,13 @@ onMounted(async () => {
               <th>動力</th>
               <th class="num">排氣量</th>
               <th class="num">馬力</th>
+              <th class="num">通病</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!loading && filteredModels.length === 0">
-              <td class="admin-empty-cell" colspan="6">尚無資料</td>
+              <td class="admin-empty-cell" colspan="7">尚無資料</td>
             </tr>
             <tr v-for="m in filteredModels" :key="m.id">
               <td class="strong">
@@ -466,6 +545,16 @@ onMounted(async () => {
               <td class="dim">{{ m.powerType === 'electric' ? '電動' : '燃油' }}</td>
               <td class="num dim">{{ m.displacementCc ?? '—' }}</td>
               <td class="num dim">{{ m.specs.engine.maxPowerHp ?? '—' }}</td>
+              <td
+                class="num dim"
+                :title="
+                  m.knownIssues
+                    .map((i) => `[${KNOWN_ISSUE_PART_LABEL[i.part]}] ${i.description}`)
+                    .join('\n')
+                "
+              >
+                {{ m.knownIssues.length > 0 ? m.knownIssues.length : '—' }}
+              </td>
               <td class="admin-row-actions">
                 <button class="admin-btn sm" @click="openEditForm(m)">編輯</button>
                 <button class="admin-btn sm danger" @click="handleDelete(m.id)">刪除</button>

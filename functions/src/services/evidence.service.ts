@@ -95,61 +95,6 @@ export async function resolveImageEvidenceForViews(
   return resolved
 }
 
-/**
- * Retry: `newEvidenceId` is the explicit retake the client points at (never
- * a client-chosen view/prompt/model); everything else needed as unchanged
- * comparison context is the most recent existing evidence for the item's
- * OTHER declared views (see item-evidence-map.ts). Rejects a newEvidenceId
- * that doesn't belong to this verification or whose view isn't one of the
- * item's own views — the exact cross-verification-evidence guard the
- * response validator also checks on the way out.
- */
-export async function resolveRetryImageEvidence(
-  verificationId: string,
-  newEvidenceId: string,
-  itemEvidenceViews: readonly string[],
-): Promise<ResolvedImageEvidence[]> {
-  const db = getFirestore()
-  const newSnap = await db
-    .collection('verifications')
-    .doc(verificationId)
-    .collection('evidence')
-    .doc(newEvidenceId)
-    .get()
-  if (!newSnap.exists) {
-    throw new Error(
-      `newEvidenceId ${newEvidenceId} does not belong to verification ${verificationId}`,
-    )
-  }
-  const newData = newSnap.data() as Omit<RawEvidenceRow, 'id'>
-  const newView = viewForItemId(newData.itemId)
-  if (!newView || !itemEvidenceViews.includes(newView) || !newData.remoteUrl) {
-    throw new Error(`newEvidenceId ${newEvidenceId} is not valid retry evidence for this item`)
-  }
-
-  const otherViews = itemEvidenceViews.filter((view) => view !== newView)
-  const byView =
-    otherViews.length > 0 ? await fetchLatestEvidenceByView(verificationId, otherViews) : new Map()
-
-  const resolved: ResolvedImageEvidence[] = []
-  const newBuffer = await downloadObject(newData.remoteUrl)
-  const newAnalysis = await toAnalysisJpeg(newBuffer)
-  resolved.push({
-    evidenceId: newSnap.id,
-    itemId: newData.itemId,
-    view: newView,
-    ...newAnalysis,
-  })
-  for (const view of otherViews) {
-    const row = byView.get(view)
-    if (!row) continue
-    const buffer = await downloadObject(row.remoteUrl!)
-    const analysis = await toAnalysisJpeg(buffer)
-    resolved.push({ evidenceId: row.id, itemId: row.itemId, view, ...analysis })
-  }
-  return resolved
-}
-
 export async function resolveAudioEvidence(
   verificationId: string,
   itemId: string,
@@ -227,7 +172,8 @@ export async function resolveVideoEvidence(
 /** Retry variant of resolveVideoEvidence — fetches ONE specific evidence doc
  *  by id (the client's `newEvidenceId`) rather than "whatever is latest",
  *  and rejects it outright if it doesn't actually belong to this
- *  verification (same cross-verification guard as resolveRetryImageEvidence). */
+ *  verification. Still used by cold-touch's own retry (that one IS wired to
+ *  a real "重新送出 AI 判定" button — see ColdTouchCapture.vue). */
 export async function resolveVideoEvidenceById(
   verificationId: string,
   evidenceId: string,
@@ -274,6 +220,25 @@ export async function resolveImuEvidence(
   const buffer = await downloadObject(latest.remoteUrl!)
   const json = JSON.parse(buffer.toString('utf-8'))
   return { evidenceId: latest.id, json }
+}
+
+/** Writes Gemini's free-text engine-type impression (engine-sensor-session
+ *  .service.ts's ENGINE TYPE DESCRIPTION result) onto the source audio
+ *  Evidence doc's own `metadata.engineType` — not an Answer/aiResult, same
+ *  reasoning as dashboard OCR's `metadata.ocr` (ocr.service.ts): this is a
+ *  descriptive impression for a human reviewer, not a checklist item with a
+ *  pass/fail verdict. */
+export async function markEngineTypeOnEvidence(
+  verificationId: string,
+  evidenceId: string,
+  note: string,
+): Promise<void> {
+  await getFirestore()
+    .collection('verifications')
+    .doc(verificationId)
+    .collection('evidence')
+    .doc(evidenceId)
+    .set({ metadata: { engineType: { note, analyzedAt: Date.now() } } }, { merge: true })
 }
 
 export { itemIdForView }

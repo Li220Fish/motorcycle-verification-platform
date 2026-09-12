@@ -5,7 +5,6 @@ import { verifyVehicleRegistration } from '../services/vehicle-registration.serv
 
 interface RequestBody {
   vehicleId?: string
-  registrationNumberInput?: string
   documentUrl?: string
 }
 
@@ -16,14 +15,13 @@ export const verifyVehicleRegistrationDocument = onCall(
     if (!data.vehicleId) {
       throw new HttpsError('invalid-argument', 'vehicleId is required')
     }
-    if (!data.registrationNumberInput) {
-      throw new HttpsError('invalid-argument', 'registrationNumberInput is required')
+    if (!data.documentUrl) {
+      throw new HttpsError('invalid-argument', 'documentUrl is required')
     }
     await assertOwnsVehicle(data.vehicleId, request.auth?.uid)
     return verifyVehicleRegistration({
       vehicleId: data.vehicleId,
       apiKey: process.env.GEMINI_API_KEY as string,
-      registrationNumberInput: data.registrationNumberInput,
       documentUrl: data.documentUrl,
     })
   },

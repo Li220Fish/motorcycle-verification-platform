@@ -24,6 +24,63 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
+/** Matches ffmpeg's own progress log lines (`...time=01:23:45.67 ...`,
+ *  written to stderr throughout a run) — used to recover the real duration
+ *  by decoding, when the container's own header has none. */
+const FFMPEG_TIME_LOG_RE = /time=(\d+):(\d+):(\d+(?:\.\d+)?)/g
+
+function lastLoggedTimeMs(ffmpegOutput: string): number {
+  let lastMs = 0
+  for (const match of ffmpegOutput.matchAll(FFMPEG_TIME_LOG_RE)) {
+    const [, hours, minutes, seconds] = match
+    lastMs = (Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)) * 1000
+  }
+  return Math.round(lastMs)
+}
+
+/** Chrome's MediaRecorder (video-recorder.service.ts — every video capture
+ *  in this app, including Step 39's cold-touch clip) streams WebM output as
+ *  it records and never seeks back to patch a final Segment `Duration` into
+ *  the container header once recording stops — a long-standing Chromium
+ *  muxer limitation, not a corrupt or unusual recording. `ffprobe
+ *  -show_entries format=duration` reads exactly that missing header field
+ *  and reports "N/A" for a perfectly good, fully-playable file, which
+ *  previously surfaced as "Could not determine video duration" and failed
+ *  the whole analysis outright (reproduced live 2026-09 on a real cold-touch
+ *  check). Falls back to actually decoding the stream end-to-end
+ *  (`ffmpeg -f null -`, discarding the decoded output) and reading the real
+ *  elapsed time off ffmpeg's own progress log — this doesn't depend on the
+ *  container's header at all, so it works regardless of what the muxer did
+ *  or didn't write. `-max_muxing_queue_size` is required, not optional —
+ *  verified against a real stuck cold-touch recording (2026-09): its
+ *  audio/video packet interleaving was uneven enough that ffmpeg's default
+ *  queue size hit "Too many packets buffered for output stream" and aborted
+ *  entirely before this flag was added, a second failure mode hiding behind
+ *  the first. */
+async function probeDurationByDecoding(inputPath: string): Promise<number> {
+  let output = ''
+  try {
+    const { stderr } = await execFileAsync(FFMPEG_PATH, [
+      '-i',
+      inputPath,
+      '-max_muxing_queue_size',
+      '9999',
+      '-f',
+      'null',
+      '-',
+    ])
+    output = stderr
+  } catch (error) {
+    // A non-zero exit still normally means real frames were decoded up to
+    // some point — execFile's promisified error carries stdout/stderr from
+    // the process same as a successful resolve, so still worth reading.
+    output = (error as { stderr?: string }).stderr ?? ''
+  }
+  const ms = lastLoggedTimeMs(output)
+  if (ms <= 0) throw new Error('Could not determine video duration')
+  return ms
+}
+
 export async function probeDurationMs(videoBuffer: Buffer): Promise<number> {
   return withTempDir(async (dir) => {
     const inputPath = path.join(dir, 'input.bin')
@@ -38,8 +95,8 @@ export async function probeDurationMs(videoBuffer: Buffer): Promise<number> {
       inputPath,
     ])
     const seconds = Number.parseFloat(stdout.trim())
-    if (!Number.isFinite(seconds)) throw new Error('Could not determine video duration')
-    return Math.round(seconds * 1000)
+    if (Number.isFinite(seconds)) return Math.round(seconds * 1000)
+    return probeDurationByDecoding(inputPath)
   })
 }
 

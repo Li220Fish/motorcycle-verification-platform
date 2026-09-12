@@ -8,7 +8,13 @@ import { hashPromptText, resolvePromptText } from '../services/prompt-config.ser
 
 /** OCR output is written onto the source Evidence doc's own `metadata.ocr`
  *  — it isn't an Inspection Item / Answer, since the dashboard mileage
- *  reading isn't part of the Required/Optional Answer registry. */
+ *  reading isn't part of the Required/Optional Answer registry.
+ *
+ *  2026-09：前台賣家/買家報告（VerificationReportView.vue 的
+ *  `latestOcrResult` + InspectionReportBody.vue 的「OCR 判讀里程」那一行）
+ *  現在會讀取並顯示這個結果了。後台 VerifyDetailSection.vue 的
+ *  evidence-tile 目前還沒接，如果之後要接也是讀同一個
+ *  `evidence.metadata.ocr` 欄位。 */
 async function persistOcrResult(
   verificationId: string,
   evidenceId: string,

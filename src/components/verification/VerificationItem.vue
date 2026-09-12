@@ -100,7 +100,7 @@ function handleNoteBlur(): void {
 const evidenceList = computed(() => verificationStore.evidenceByItem[props.item.id] ?? [])
 
 function handleRemoveEvidence(evidenceId: string): void {
-  verificationStore.removeEvidenceLocally(props.item.id, evidenceId)
+  void verificationStore.removeEvidence(props.item.id, evidenceId)
 }
 
 // Photo evidence is data-driven via item.evidence rather than a single

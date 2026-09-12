@@ -32,7 +32,10 @@ const emit = defineEmits<{
 // "分析已確認正常" to the user (see verification.store.ts's
 // REQUIRED_ANALYSIS_KEYS comment for why the gate alone isn't enough).
 const ANALYSIS_LABELS: Record<string, string> = {
-  coreVision: '核心影像判定',
+  coreVisionSides: '外觀影像判定（左右側）',
+  coreVisionRear: '外觀影像判定（車尾／對稱性）',
+  coreVisionFrontSuspension: '前避震影像判定',
+  coreVisionEngineBottom: '引擎底部／鏈條影像判定',
   dashboardOcr: '儀表板里程 OCR',
   coldCheck: '冷車觸感檢查',
   engineSensorSession: '引擎音訊／震動判定',

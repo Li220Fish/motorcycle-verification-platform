@@ -152,7 +152,11 @@ async function handleDelete(group: DisplayGroup): Promise<void> {
     <AppHeader title="通知" back>
       <template #right>
         <div class="header-actions">
-          <button v-if="notificationStore.unreadCount > 0" class="text-btn" @click="handleMarkAllRead">
+          <button
+            v-if="notificationStore.unreadCount > 0"
+            class="text-btn"
+            @click="handleMarkAllRead"
+          >
             全部已讀
           </button>
           <button v-if="groups.length > 0" class="text-btn danger" @click="handleClearAll">

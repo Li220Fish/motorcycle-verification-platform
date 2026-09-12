@@ -31,26 +31,29 @@ async function callGroupAnalyze(
   return response.data.results
 }
 
-async function callGroupRetry(
-  name: string,
-  params: { verificationId: string; itemId: string; newEvidenceId: string },
-): Promise<GeminiItemResultDto> {
-  const call = httpsCallable<typeof params, { result: GeminiItemResultDto }>(functions, name)
-  const response = await call(params)
-  return response.data.result
-}
+/** Verification v2 — supersedes Group A/B/C (analyzeInspectionGroupA/B/C),
+ * then itself split 2026-09 into 4 independent routes, one per photo group,
+ * so each fires as soon as its own photo(s) exist and each item's prompt
+ * criteria can be tuned independently. See
+ * functions/src/services/core-vision-split.service.ts. No retry route on
+ * any of these — the capture flow now forces the torch on for every core
+ * photo (CorePhotoCaptureFlow.vue), which was the actual cause of the
+ * low-light "insufficient_visibility" results a retry existed to work
+ * around; no UI ever called retryCoreVisionV2Item either (InspectionReportBody
+ * .vue's `canRetry` field was declared but never set), so it and its 8
+ * dedicated retry prompts were removed outright rather than kept unreachable
+ * (2026-09). */
+export const analyzeCoreVisionSides = (verificationId: string) =>
+  callGroupAnalyze('analyzeCoreVisionSides', verificationId)
 
-/** Verification v2 — supersedes Group A/B/C (analyzeInspectionGroupA/B/C):
- * one consolidated route over the reduced Core Vision evidence set
- * (vehicle_left/right/rear, front_suspension, engine_bottom, conditionally
- * chain_sprocket). See functions/src/services/core-vision-v2.service.ts. */
-export const analyzeCoreVisionV2 = (verificationId: string) =>
-  callGroupAnalyze('analyzeCoreVisionV2', verificationId)
-export const retryCoreVisionV2Item = (params: {
-  verificationId: string
-  itemId: string
-  newEvidenceId: string
-}) => callGroupRetry('retryCoreVisionV2Item', params)
+export const analyzeCoreVisionRear = (verificationId: string) =>
+  callGroupAnalyze('analyzeCoreVisionRear', verificationId)
+
+export const analyzeCoreVisionFrontSuspension = (verificationId: string) =>
+  callGroupAnalyze('analyzeCoreVisionFrontSuspension', verificationId)
+
+export const analyzeCoreVisionEngineBottom = (verificationId: string) =>
+  callGroupAnalyze('analyzeCoreVisionEngineBottom', verificationId)
 
 export interface OcrResultDto {
   text: string | null
@@ -108,22 +111,19 @@ export async function retryColdEngineTouchCheck(params: {
 }
 
 export interface VehicleRegistrationVerificationDto {
-  status: 'unverified' | 'passed' | 'attention'
-  method: 'ocr' | 'test-bypass' | null
-  inputNumber: string | null
+  status: 'unverified' | 'passed'
   ocrEngineNumber: string | null
-  ocrChassisNumber: string | null
   confidence: number | null
   note: string | null
   verifiedAt: number | null
 }
 
-/** 行照號碼 typed as "test" (case-insensitive) skips OCR entirely — a
- * deliberate QA/demo bypass, see functions/src/services/vehicle-registration.service.ts. */
+/** 行照驗證 — 使用者只需上傳行照照片，不用輸入任何文字。Gemini 仍會真的
+ * OCR 讀取引擎號碼供顯示，但通過與否不取決於 OCR 結果——上傳照片即算
+ * 通過，見 functions/src/services/vehicle-registration.service.ts。 */
 export async function verifyVehicleRegistrationDocument(params: {
   vehicleId: string
-  registrationNumberInput: string
-  documentUrl?: string
+  documentUrl: string
 }): Promise<VehicleRegistrationVerificationDto> {
   const call = httpsCallable<typeof params, VehicleRegistrationVerificationDto>(
     functions,

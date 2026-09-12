@@ -59,12 +59,17 @@ export const ENGINE_SESSION_ITEM_IDS: string[] = [
 
 /**
  * Fixed 23.0-second timeline (spec §24/§27) — system truth, never
- * user-adjustable: 0.0-8.0s Startup, 8.0-15.0s Idle, 15.0-23.0s Rev, then
+ * user-adjustable: 0.0-5.0s Startup, 5.0-14.0s Idle, 14.0-23.0s Rev, then
  * auto-stop. Written verbatim as this session's `metadata.phases` on the
  * captured IMU evidence (see EngineInspectionFlow.vue) so the Trusted
  * Backend slices Audio/IMU samples by this SAME boundary rather than
  * re-deriving timing itself (spec §27: "這是 system truth. Gemini / IMU
- * Analyzer 不重新判斷時間區段").
+ * Analyzer 不重新判斷時間區段"). 2026-09: narrowed from 0-8/8-15/15-23 to
+ * 0-5/5-14/14-23 — kept in sync with the phase boundaries stated in
+ * functions/src/ai/prompts/audio/engine-audio-v2.ts's own fixed timeline
+ * (that prompt text is descriptive only; THIS constant is what actually
+ * slices the recording/IMU samples on both the client and
+ * engine-sensor-session.service.ts).
  */
 export const ENGINE_SESSION_DURATION_MS = 23000
 
@@ -77,9 +82,9 @@ export const ENGINE_SESSION_PHASES: {
   idle: EngineSessionPhaseBounds
   rev: EngineSessionPhaseBounds
 } = {
-  startup: { startMs: 0, endMs: 8000 },
-  idle: { startMs: 8000, endMs: 15000 },
-  rev: { startMs: 15000, endMs: 23000 },
+  startup: { startMs: 0, endMs: 5000 },
+  idle: { startMs: 5000, endMs: 14000 },
+  rev: { startMs: 14000, endMs: 23000 },
 }
 
 /** The 3 fixed on-screen instructions for the single 23s session (spec §25). */
@@ -89,8 +94,8 @@ export interface EngineSessionInstructionStep {
 }
 export const ENGINE_SESSION_INSTRUCTION_SEQUENCE: EngineSessionInstructionStep[] = [
   { atSeconds: 0, label: '請現在發動引擎' },
-  { atSeconds: 8, label: '請保持怠速' },
-  { atSeconds: 15, label: '請依提示拉動油門' },
+  { atSeconds: 5, label: '請保持怠速' },
+  { atSeconds: 14, label: '請依提示拉動油門' },
 ]
 
 export function engineSessionInstructionAt(elapsedSeconds: number): string {

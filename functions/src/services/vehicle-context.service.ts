@@ -1,5 +1,5 @@
 import { getFirestore } from 'firebase-admin/firestore'
-import { VehicleContext } from './types'
+import { VehicleContext, VehicleModelKnownIssue, VehicleModelKnownIssuePart } from './types'
 
 /**
  * Same free-text heuristic as the client's inferTransmissionType (src/data/
@@ -25,4 +25,32 @@ export async function resolveVehicleContext(vehicleId: string): Promise<VehicleC
   const hasExposedChainSprocket = transmission === 'manual'
 
   return { transmission, hasExposedChainSprocket }
+}
+
+/**
+ * 車輛選單資訊（vehicleModels/{id}）通病清單 — only the entries tagged for
+ * the ONE Core Vision part actually being analyzed, so a call over
+ * left/right side photos never receives an engine-bottom-only issue (and
+ * vice versa). Returns `[]` whenever the vehicle has no linked catalog
+ * model (`vehicles/{id}.modelId` unset — e.g. a manually-typed brand/model
+ * with no catalog match) or that model has no issues tagged for this part.
+ * `general`-tagged issues are intentionally never returned by this
+ * function at all — see the `VehicleModelKnownIssuePart` doc comment.
+ */
+export async function resolveKnownIssuesForPart(
+  vehicleId: string,
+  part: Exclude<VehicleModelKnownIssuePart, 'general'>,
+): Promise<string[]> {
+  const vehicleSnap = await getFirestore().collection('vehicles').doc(vehicleId).get()
+  const modelId = (vehicleSnap.data()?.modelId as string | null | undefined) ?? null
+  if (!modelId) return []
+
+  const modelSnap = await getFirestore().collection('vehicleModels').doc(modelId).get()
+  if (!modelSnap.exists) return []
+
+  const knownIssues = (modelSnap.data()?.knownIssues ?? []) as VehicleModelKnownIssue[]
+  return knownIssues
+    .filter((issue) => issue.part === part)
+    .map((issue) => issue.description)
+    .filter((description) => description.trim().length > 0)
 }

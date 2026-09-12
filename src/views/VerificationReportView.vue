@@ -29,7 +29,11 @@ import { aiVisionItemsForAprItem } from '@/data/verification/ai-vision-items'
 import { storageService } from '@/services/firebase/storage.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
-import type { AnswerResultValue, VerificationAnswer } from '@/types/verification-evidence'
+import type {
+  AnswerResultValue,
+  VerificationAnswer,
+  VerificationEvidence,
+} from '@/types/verification-evidence'
 
 // Group A/B/C AI-vision items (functions/src/ai/prompts/groups/*.ts) have no
 // checklist itemId of their own — each one analyzes one or more of the 20
@@ -74,6 +78,29 @@ function effectiveItemResult(itemId: string): VerificationAnswer | undefined {
         ? { ...worst.aiResult!, details: { ...worst.aiResult!.details, note: notes.join('\n') } }
         : undefined,
   }
+}
+
+/** Dashboard OCR (functions/src/ocr/ocr.service.ts's analyzeDashboardOcr)
+ *  writes straight onto the source Evidence doc's own `metadata.ocr` — it
+ *  isn't an Answer/aiResult like the Group A/B/C vision items, since the
+ *  odometer reading isn't part of the Required/Optional Answer registry.
+ *  Reads it back out for display here, from whichever photo for this item
+ *  is most recent (a retake could leave more than one evidence doc). */
+interface DashboardOcrResult {
+  text: string | null
+  confidence: number | null
+  note: string | null
+}
+function latestOcrResult(itemId: string): DashboardOcrResult | null {
+  const photos = (verificationStore.evidenceByItem[itemId] ?? []).filter(
+    (evidence) => evidence.type === 'photo',
+  )
+  const latest = photos.reduce<VerificationEvidence | null>(
+    (latestSoFar, evidence) =>
+      !latestSoFar || evidence.createdAt > latestSoFar.createdAt ? evidence : latestSoFar,
+    null,
+  )
+  return (latest?.metadata?.ocr as DashboardOcrResult | undefined) ?? null
 }
 
 const props = defineProps<{ id: string }>()
@@ -187,13 +214,15 @@ const sections = computed<ReportSection[]>(() =>
               .join('、')
           : undefined
         const note = [disclosureLabel, answer?.note].filter(Boolean).join('｜') || undefined
+        const ocr = latestOcrResult(item.id)
         return {
           id: item.id,
           title: item.title,
           badgeLabel: answer ? RESULT_LABEL[answer.result] : '未檢查',
           badgeTone: answer ? RESULT_TONE[answer.result] : 'neutral',
           note,
-          aiNote: answer?.aiResult?.details.note,
+          aiNote: answer?.aiResult?.details.note ?? ocr?.note ?? undefined,
+          ocrText: ocr?.text ?? undefined,
           photos,
           groupLabel: ENGINE_ITEM_GROUP_LABEL[item.id],
           required: item.required,

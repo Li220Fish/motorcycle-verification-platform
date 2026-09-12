@@ -220,12 +220,6 @@ async function capturePhoto(): Promise<void> {
   // shots and would just look like a redundant double-flash here.
   if (!usingFrontCamera) flashShutter()
 
-  // Retaking an already-captured item replaces it in place — only ever one
-  // photo per core item slot, never accumulating duplicates behind it.
-  for (const existing of verificationStore.evidenceByItem[targetItemId] ?? []) {
-    verificationStore.removeEvidenceLocally(targetItemId, existing.id)
-  }
-
   const evidenceId = crypto.randomUUID()
   const evidence: VerificationEvidence = {
     id: evidenceId,
@@ -238,6 +232,11 @@ async function capturePhoto(): Promise<void> {
     captureTimestamp: Date.now(),
   }
   await verificationStore.addEvidence(evidence)
+  // Retaking an already-captured item replaces it in place — only ever one
+  // photo per core item slot, never accumulating duplicates behind it. Runs
+  // AFTER the new evidence is safely recorded (never before), so a retake
+  // never leaves the item with zero evidence even for a moment.
+  void verificationStore.discardOtherEvidence(targetItemId, evidenceId)
   void uploadQueueStore.enqueue({
     localId: evidenceId,
     verificationId: props.verificationId,
