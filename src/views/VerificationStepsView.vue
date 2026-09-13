@@ -530,6 +530,7 @@ onMounted(() => {
   <BasicHealthCheck13
     v-else-if="basicHealthCheckOpen"
     :has-chain="vehicleStore.currentVehicle?.hasChain"
+    :model-id="vehicleStore.currentVehicle?.modelId"
     @back="handleCloseBasicHealthCheck"
   />
   <EngineCompleteChoice

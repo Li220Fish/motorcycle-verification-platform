@@ -1,6 +1,7 @@
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 
 import { db } from './firebase'
+import type { HealthCheckAnchor } from '@/data/verification/basic-health-check-items'
 
 const COLLECTION = 'vehicleModels'
 
@@ -39,4 +40,24 @@ async function listAll(): Promise<VehicleModelOption[]> {
   })
 }
 
-export const vehicleModelService = { listAll }
+/** Just enough of a vehicleModels/{id} doc for BasicHealthCheck13.vue to
+ *  render its per-model photo + marker layer — see admin/sections/
+ *  HealthCheckSection.vue for how these get admin-edited. */
+export interface VehicleModelHealthCheckData {
+  coverImageUrl: string | null
+  hasChain: boolean
+  healthCheckAnchors: Record<string, HealthCheckAnchor> | null
+}
+
+async function getHealthCheckData(modelId: string): Promise<VehicleModelHealthCheckData | null> {
+  const snapshot = await getDoc(doc(db, COLLECTION, modelId))
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  return {
+    coverImageUrl: data.coverImageUrl ?? null,
+    hasChain: !!data.hasChain,
+    healthCheckAnchors: data.healthCheckAnchors ?? null,
+  }
+}
+
+export const vehicleModelService = { listAll, getHealthCheckData }

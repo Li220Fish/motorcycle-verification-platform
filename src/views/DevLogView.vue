@@ -780,7 +780,7 @@ function exportCsv() {
 }
 
 const DEVLOG_PROMPT =
-  '那你把我在此專案中迄今新開發的內容的以.md方式列出，內容需包含使用者、時間戳記、主題、分類（前台、後台、系統、檢定辨識）、摘要、prompt、產出的source code（可收合）、 結果，並量化開發的時間。'
+  '請只根據「我自己」最近在這個專案新完成的工作（用 git log 找我自己最新的幾筆 commit，並比對本機 Claude Code 的對話紀錄找出對應的原始 prompt），依照下面這個範本格式各產出一份 .md 檔（不要把整個專案既有的歷史紀錄整份重新列出來，只寫我這幾筆新的）：\n\n# {簡短標題}\n\n- 使用者：{我的名字}\n- 時間：{commit 時間，格式 YYYY-MM-DD HH:mm}\n- 分類：{前台／後台／系統／檢定辨識／開發管理 擇一}\n- 類型：{開發/創作／討論／測試/實驗／維護 擇一}\n\n## Prompt\n{我當時輸入的原始 prompt，逐字}\n\n## 摘要\n{一兩句話說明做了什麼}\n\n## 產出程式碼\n（可貼程式碼片段，不方便貼就留空刪掉這區塊）\n\n## 結果\n{結果或狀態}\n\n## 時數\n{從 prompt 到 commit 的實際間隔小時數，例如 0.5，抓不到就留空刪掉這區塊}\n\n如果我最近有好幾筆 commit，請針對每一筆各自存成一個獨立的 .md 檔案（檔名可以用 commit 訊息簡稱），不要合併成一份檔案，也不要合併成一份總結摘要——上傳功能一次只認得一份檔案對應一筆紀錄。'
 const copyPromptStatus = ref('')
 let copyPromptStatusTimer: ReturnType<typeof setTimeout> | null = null
 

@@ -46,7 +46,13 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'probe', label: 'Probe 裝置' },
     ],
   },
-  { title: '資料維護', items: [{ key: 'models', label: '車輛選單資訊' }] },
+  {
+    title: '資料維護',
+    items: [
+      { key: 'models', label: '車輛選單資訊' },
+      { key: 'healthcheck', label: '健檢標記' },
+    ],
+  },
   { title: '系統設定', items: [{ key: 'prompts', label: 'AI Prompt 設定' }] },
 ]
 
@@ -66,6 +72,7 @@ const TITLES: Record<string, [string, string]> = {
   notifications: ['系統通知', 'collection: systemAnnouncements（廣播給所有使用者）'],
   probe: ['Probe 裝置', 'collection: voltageSessions（目前無寫入來源）'],
   models: ['車輛選單資訊', 'collection: vehicleModels'],
+  healthcheck: ['健檢標記', 'collection: vehicleModels（healthCheckAnchors 欄位）'],
   prompts: ['AI Prompt 設定', 'collection: aiPrompts（新建，覆寫 functions 端預設值）'],
 }
 
@@ -89,6 +96,7 @@ const SECTION_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {
   notifications: () => import('./sections/NotificationsSection.vue'),
   probe: () => import('./sections/ProbeSection.vue'),
   models: () => import('./sections/ModelsSection.vue'),
+  healthcheck: () => import('./sections/HealthCheckSection.vue'),
   prompts: () => import('./sections/PromptsSection.vue'),
 }
 
