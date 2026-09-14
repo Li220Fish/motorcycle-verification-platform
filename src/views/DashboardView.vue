@@ -21,7 +21,7 @@ const displayName = computed(
   <div class="home">
     <header class="home-header">
       <button class="greeting" @click="router.push('/settings')">
-        <Avatar :name="displayName" :size="40" />
+        <Avatar :name="displayName" :photo-url="authStore.user?.photoUrl" :size="40" />
         <span class="greeting-text">
           <span class="greeting-title">你好，{{ displayName }}！</span>
           <span class="greeting-subtitle">查驗車況，買賣都安心</span>

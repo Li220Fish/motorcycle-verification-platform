@@ -83,63 +83,14 @@ const prep: VerificationItem[] = [
 // --- 車身外觀 (20, all mandatory-photo items) ---
 const appearance: VerificationItem[] = buildPhotoSlotItems('APR')
 
-// --- 電系狀況 (13) ---
+// --- 電系狀況 (4) ---
+// ELEC-01..09 (the 9 individual "does it light up" checks — 日行燈/大燈近遠燈/
+// 尾燈/煞車燈/左右前後方向燈) were removed from here: 基本13項健檢's own tap
+// markers (大燈/尾燈/方向燈 on the reference photo) now cover this ground —
+// see basic-health-check-items.ts. Deliberately not renumbering ELEC-10..13
+// to keep their ids stable (see this file's top comment on why ids are
+// never renamed) even though 01..09 no longer exist.
 const electric: VerificationItem[] = [
-  item({
-    id: 'ELEC-01',
-    title: '日行燈狀況',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-02',
-    title: '大燈狀況（近燈）',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-03',
-    title: '大燈狀況（遠燈）',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-04',
-    title: '尾燈狀況',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-05',
-    title: '煞車燈狀況',
-    description: '是否可正常開啟。',
-    severity: 'critical',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-06',
-    title: '左前方向燈',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-07',
-    title: '右前方向燈',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-08',
-    title: '左後方向燈',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
-  item({
-    id: 'ELEC-09',
-    title: '右後方向燈',
-    description: '是否可正常開啟。',
-    helpText: '人工操作確認。',
-  }),
   item({
     id: 'ELEC-10',
     title: '電系是否有改裝',
@@ -272,11 +223,14 @@ const engine: VerificationItem[] = [
 ]
 
 /**
- * The 9 "does it light up" checks (ELEC-01..09) collapsed into a single
- * quick-check screen by ElectricalLightsCheck.vue. Order matters: it's what
- * that component slices into 前方(3) / 後方(2) / 方向燈(4).
+ * Used to be the 9 "does it light up" checks (ELEC-01..09), collapsed into a
+ * single quick-check screen by ElectricalLightsCheck.vue — removed from the
+ * flow (see the `electric` array's comment above). Kept as an empty export,
+ * rather than deleted, so VerificationStepsView.vue's electrical-quick-check
+ * jump logic (still referencing this constant) simply never matches
+ * anything instead of needing a matching edit there too.
  */
-export const SELLER_ELECTRIC_LIGHT_ITEM_IDS = electric.slice(0, 9).map((it) => it.id)
+export const SELLER_ELECTRIC_LIGHT_ITEM_IDS: string[] = []
 
 // Verification v2's 5-Phase user-facing regrouping (spec §8) — pure
 // presentation/ordering, no item id is invented or renamed here. Steps 1/2/4
@@ -304,18 +258,13 @@ export const SELLER_VERIFICATION_SECTIONS: VerificationSection[] = [
     order: 0,
     items: corePhotos,
   },
-  {
-    id: 'seller-phase2-electric',
-    title: '燈光電系',
-    shortDescription: '逐一確認燈具作動狀況。',
-    order: 1,
-    items: electric.slice(0, 9),
-  },
+  // 燈光電系 (原 seller-phase2-electric) 已移除 — 底下 9 項燈具檢查併入
+  // 基本13項健檢，不再是獨立分類，見 BasicHealthCheck13.vue。
   {
     id: 'seller-phase3-engine',
     title: '冷車＋引擎檢查',
     shortDescription: '冷車狀態確認、單次 23 秒發動＋怠速＋油門檢測，需依序完成。',
-    order: 2,
+    order: 1,
     items: coldAndEngineSensorItems,
     lockedOrder: true,
   },
@@ -323,7 +272,7 @@ export const SELLER_VERIFICATION_SECTIONS: VerificationSection[] = [
     id: 'seller-phase4-disclosure',
     title: '其他主動揭露',
     shortDescription: '車主自行提供的補充資訊，非 AI 核心判定，可全部略過。',
-    order: 3,
-    items: [...prep, ...optionalPhotos, ...electric.slice(9), ...engineDisclosure],
+    order: 2,
+    items: [...prep, ...optionalPhotos, ...electric, ...engineDisclosure],
   },
 ]

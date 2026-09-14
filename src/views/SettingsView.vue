@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import Avatar from '@/components/common/Avatar.vue'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
@@ -55,9 +56,11 @@ async function handleLogout(): Promise<void> {
 
     <div class="content">
       <div class="user-card">
-        <div class="avatar">
-          {{ (authStore.user?.displayName || authStore.user?.email || '?')[0] }}
-        </div>
+        <Avatar
+          :name="authStore.user?.displayName || authStore.user?.email || '?'"
+          :photo-url="authStore.user?.photoUrl"
+          :size="52"
+        />
         <div>
           <p class="name">{{ authStore.user?.displayName || '未命名使用者' }}</p>
           <p class="email">{{ authStore.user?.email }}</p>
@@ -114,21 +117,6 @@ async function handleLogout(): Promise<void> {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-}
-
-.avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
-  text-transform: uppercase;
-  flex-shrink: 0;
 }
 
 .name {

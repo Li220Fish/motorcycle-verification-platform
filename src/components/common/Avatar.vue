@@ -1,5 +1,8 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ name: string; size?: number }>(), { size: 40 })
+withDefaults(defineProps<{ name: string; photoUrl?: string | null; size?: number }>(), {
+  photoUrl: null,
+  size: 40,
+})
 
 function initials(name: string): string {
   return (name.trim()[0] ?? '?').toUpperCase()
@@ -7,7 +10,15 @@ function initials(name: string): string {
 </script>
 
 <template>
+  <img
+    v-if="photoUrl"
+    :src="photoUrl"
+    class="avatar avatar-img"
+    :style="{ width: `${size}px`, height: `${size}px` }"
+    alt=""
+  />
   <span
+    v-else
     class="avatar"
     :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.34)}px` }"
   >
@@ -26,5 +37,9 @@ function initials(name: string): string {
   align-items: center;
   justify-content: center;
   text-transform: uppercase;
+}
+
+.avatar-img {
+  object-fit: cover;
 }
 </style>

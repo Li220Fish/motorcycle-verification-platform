@@ -110,6 +110,12 @@ async function uploadVehicleModelPhoto(modelId: string, file: Blob): Promise<str
   return uploadFileAtPath(`vehicleModels/${modelId}/${timestampedName('cover.jpg')}`, file)
 }
 
+/** User's own profile avatar — public URL (shown to other users in chat/
+ *  discussion), write restricted to the owning uid (storage.rules). */
+async function uploadAvatar(uid: string, file: Blob): Promise<string> {
+  return uploadFileAtPath(`users/${uid}/avatar/${timestampedName('avatar.jpg')}`, file)
+}
+
 export const storageService = {
   uploadFileAtPath,
   uploadPrivateFile,
@@ -121,4 +127,5 @@ export const storageService = {
   uploadVehiclePhoto,
   uploadVehicleRegistrationDocument,
   uploadVehicleModelPhoto,
+  uploadAvatar,
 }
