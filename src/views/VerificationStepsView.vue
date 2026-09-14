@@ -15,6 +15,7 @@ import VerificationCategoryNav from '@/components/verification/VerificationCateg
 import VerificationHub from '@/components/verification/VerificationHub.vue'
 import VerificationItem from '@/components/verification/VerificationItem.vue'
 import VerificationLayout from '@/components/verification/VerificationLayout.vue'
+import VerificationTour from '@/components/verification/VerificationTour.vue'
 import { getAppearanceGroup } from '@/data/verification/appearance-groups'
 // getAppearanceGroupId is only consumed by the Capture Map auto-reopen logic
 // in handleNext, which is commented out below — its import is dropped here
@@ -28,6 +29,7 @@ import {
 } from '@/data/verification/engine-session'
 import { SELLER_ELECTRIC_LIGHT_ITEM_IDS } from '@/data/verification/seller-verification'
 import { localDraftService } from '@/services/verification/local-draft.service'
+import { tourService } from '@/services/verification/tour.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 
@@ -470,6 +472,18 @@ async function handleComplete(): Promise<void> {
 // might write moments later (see the save-watcher's !hubOpen guard below).
 const initialLastItemId = localDraftService.loadLastPosition(props.id)
 
+// Usage tour (VerificationTour.vue) — only for a genuinely fresh, never-
+// visited verification (same condition that would show the Hub below), and
+// only once ever per device (tourService). Left null until flowLoaded
+// resolves so there's no flash-then-hide for users who ARE resuming.
+const isFreshVerification = ref<boolean | null>(null)
+const tourSeen = ref(tourService.hasSeenTour())
+const showTour = computed(() => !tourSeen.value && isFreshVerification.value === true)
+function dismissTour(): void {
+  tourService.markTourSeen()
+  tourSeen.value = true
+}
+
 // Resume exactly where the user left off, not "first unanswered item" —
 // those are different concepts. A real prior position also bypasses the
 // Guided Hub entirely (reload/relaunch mid-verification shouldn't force an
@@ -482,6 +496,7 @@ watch(
     const lastIndex = initialLastItemId
       ? verificationStore.flatItems.findIndex((flat) => flat.item.id === initialLastItemId)
       : -1
+    isFreshVerification.value = lastIndex === -1
     if (lastIndex !== -1) {
       currentIndex.value = lastIndex
       hubOpen.value = false
@@ -505,7 +520,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <VehicleTypeGate v-if="needsVehicleTypeGate" @pick="handlePickVehicleType" />
+  <VerificationTour v-if="showTour" @done="dismissTour" />
+  <VehicleTypeGate v-else-if="needsVehicleTypeGate" @pick="handlePickVehicleType" />
   <VerificationHub
     v-else-if="hubOpen"
     :sections="verificationStore.sections"
