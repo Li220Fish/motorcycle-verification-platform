@@ -127,10 +127,11 @@ interface NoteItem {
 const NOTE_ITEMS: NoteItem[] = [
   {
     key: 'othermod',
-    label: '其他改裝品說明（選填）',
+    label: '其他改裝品說明',
     placeholder: '請說明其他改裝項目，例如：更換排氣管、外殼貼膜……',
   },
 ]
+const NOTE_BY_KEY = new Map(NOTE_ITEMS.map((n) => [n.key, n]))
 
 /** undefined = 尚未確認；'pass' = 打勾（正常）；'fail' = 打叉（異常）。 */
 type CheckResult = 'pass' | 'fail' | undefined
@@ -153,8 +154,6 @@ const doneCount = computed(() => ITEMS.value.filter((it) => state[it.key] !== un
 const progressPercent = computed(() =>
   ITEMS.value.length > 0 ? (doneCount.value / ITEMS.value.length) * 100 : 0,
 )
-
-const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key] !== undefined))
 
 const allRequiredDone = computed(
   () =>
@@ -311,27 +310,36 @@ const pickerAnchor = computed<[number, number]>(() => {
         </div>
 
         <div class="result-list">
-          <div
-            v-for="it in pageItems"
-            :key="it.key"
-            class="result-row"
-            :class="{ pass: state[it.key] === 'pass', fail: state[it.key] === 'fail' }"
-            @pointerdown="handlePointerDown(it.key)"
-            @pointerup="handlePointerUpOrLeave"
-            @pointerleave="handlePointerUpOrLeave"
-            @pointercancel="handlePointerUpOrLeave"
-            @contextmenu.prevent
-            @click="handleClick(it.key)"
-          >
-            <span class="result-label"
-              >{{ it.label }}<span v-if="it.required" class="req-mark">＊</span></span
+          <template v-for="it in pageItems" :key="it.key">
+            <div
+              class="result-row"
+              :class="{ pass: state[it.key] === 'pass', fail: state[it.key] === 'fail' }"
+              @pointerdown="handlePointerDown(it.key)"
+              @pointerup="handlePointerUpOrLeave"
+              @pointerleave="handlePointerUpOrLeave"
+              @pointercancel="handlePointerUpOrLeave"
+              @contextmenu.prevent
+              @click="handleClick(it.key)"
             >
-            <span class="result-status">
-              <template v-if="state[it.key] === 'pass'"><Check :size="13" />正常</template>
-              <template v-else-if="state[it.key] === 'fail'"><X :size="13" />異常</template>
-              <template v-else>待確認</template>
-            </span>
-          </div>
+              <span class="result-label"
+                >{{ it.label }}<span v-if="it.required" class="req-mark">＊</span></span
+              >
+              <span class="result-status">
+                <template v-if="state[it.key] === 'pass'"><Check :size="13" />正常</template>
+                <template v-else-if="state[it.key] === 'fail'"><X :size="13" />異常</template>
+                <template v-else>待確認</template>
+              </span>
+            </div>
+            <Transition name="note-pop">
+              <div v-if="NOTE_BY_KEY.has(it.key) && state[it.key] !== undefined" class="note-card">
+                <label>{{ NOTE_BY_KEY.get(it.key)!.label }}</label>
+                <textarea
+                  v-model="notes[it.key]"
+                  :placeholder="NOTE_BY_KEY.get(it.key)!.placeholder"
+                />
+              </div>
+            </Transition>
+          </template>
         </div>
       </div>
 
@@ -344,13 +352,6 @@ const pickerAnchor = computed<[number, number]>(() => {
         </div>
         <div class="progress-track">
           <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
-        </div>
-      </div>
-
-      <div v-if="activeNotes.length > 0" class="notes-wrap">
-        <div v-for="n in activeNotes" :key="n.key" class="note-card">
-          <label>{{ n.label }}</label>
-          <textarea v-model="notes[n.key]" :placeholder="n.placeholder" />
         </div>
       </div>
     </div>
@@ -669,17 +670,13 @@ const pickerAnchor = computed<[number, number]>(() => {
   transition: width 0.2s ease;
 }
 
-.notes-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
 .note-card {
-  background: var(--color-surface);
+  background: var(--color-primary-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  margin: 4px 0 8px;
+  transform-origin: top center;
 }
 
 .note-card label {
@@ -701,6 +698,25 @@ const pickerAnchor = computed<[number, number]>(() => {
   background: var(--color-background);
   resize: vertical;
   box-sizing: border-box;
+}
+
+/* "彈出" pop-in feel, matching the reaction-picker's own animation style —
+   note appears right under its item's row the instant it's checked. */
+.note-pop-enter-active {
+  animation: note-pop-in 0.16s ease-out;
+}
+.note-pop-leave-active {
+  animation: note-pop-in 0.12s ease-in reverse;
+}
+@keyframes note-pop-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.85) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
 }
 
 .bottom-bar {
