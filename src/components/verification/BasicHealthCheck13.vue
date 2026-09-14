@@ -9,7 +9,7 @@
  * drives — that wiring is a separate follow-up once this UI is confirmed.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Check } from 'lucide-vue-next'
+import { Check, X } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
@@ -126,19 +126,17 @@ interface NoteItem {
 
 const NOTE_ITEMS: NoteItem[] = [
   {
-    key: 'electrical',
-    label: '電系改裝說明（選填）',
-    placeholder: '請說明電系改裝內容，例如：加裝行車紀錄器、更換 LED 大燈組……',
-  },
-  {
     key: 'othermod',
     label: '其他改裝品說明（選填）',
     placeholder: '請說明其他改裝項目，例如：更換排氣管、外殼貼膜……',
   },
 ]
 
-const state = reactive<Record<string, boolean>>(
-  Object.fromEntries(ALL_ITEM_KEYS.map((key) => [key, false])),
+/** undefined = 尚未確認；'pass' = 打勾（正常）；'fail' = 打叉（異常）。 */
+type CheckResult = 'pass' | 'fail' | undefined
+
+const state = reactive<Record<string, CheckResult>>(
+  Object.fromEntries(ALL_ITEM_KEYS.map((key) => [key, undefined])),
 )
 const notes = reactive<Record<string, string>>(
   Object.fromEntries(NOTE_ITEMS.map((n) => [n.key, ''])),
@@ -151,43 +149,82 @@ const finished = ref(false)
 const pageItems = computed(() => ITEMS.value.filter((it) => it.page === currentPage.value))
 const isMirrored = computed(() => currentPage.value === 2)
 
-const pageRequiredMet = computed(() =>
-  ITEMS.value
-    .filter((it) => it.page === currentPage.value && it.required)
-    .every((it) => state[it.key]),
-)
-
-const doneCount = computed(() => ITEMS.value.filter((it) => state[it.key]).length)
+const doneCount = computed(() => ITEMS.value.filter((it) => state[it.key] !== undefined).length)
 const progressPercent = computed(() =>
   ITEMS.value.length > 0 ? (doneCount.value / ITEMS.value.length) * 100 : 0,
 )
 
-const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key]))
+const activeNotes = computed(() => NOTE_ITEMS.filter((n) => state[n.key] !== undefined))
 
 const allRequiredDone = computed(
   () =>
-    ITEMS.value.length > 0 && ITEMS.value.filter((it) => it.required).every((it) => state[it.key]),
+    ITEMS.value.length > 0 &&
+    ITEMS.value.filter((it) => it.required).every((it) => state[it.key] !== undefined),
 )
-
-function toggle(key: string): void {
-  state[key] = !state[key]
-}
 
 function goPage(delta: number): void {
   const next = currentPage.value + delta
   if (next < 1 || next > PAGE_COUNT) return
-  if (delta > 0 && !pageRequiredMet.value) return
   currentPage.value = next as 1 | 2
 }
 
 function finish(): void {
   finished.value = true
 }
+
+// ---------- long-press to choose 打勾／打叉（像 FB 長按讚可以選表情符號）----------
+const LONG_PRESS_MS = 450
+let longPressTimer: ReturnType<typeof setTimeout> | undefined
+let longPressTriggered = false
+/** Which item's 打勾/打叉 picker is currently open (anchored over its marker
+ *  on the photo), or null when closed. */
+const pickerKey = ref<string | null>(null)
+
+function clearLongPressTimer(): void {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = undefined
+  }
+}
+function handlePointerDown(key: string): void {
+  longPressTriggered = false
+  clearLongPressTimer()
+  longPressTimer = setTimeout(() => {
+    longPressTriggered = true
+    pickerKey.value = key
+    navigator.vibrate?.(15)
+  }, LONG_PRESS_MS)
+}
+function handlePointerUpOrLeave(): void {
+  clearLongPressTimer()
+}
+/** Quick tap (short press, no picker shown): first tap marks 打勾／正常
+ *  directly — the common case, same idea as FB's default "讚". Tapping
+ *  again clears it back to unanswered. Long-press (handlePointerDown above)
+ *  is the only way to explicitly pick 打叉／異常. */
+function handleClick(key: string): void {
+  if (longPressTriggered) {
+    longPressTriggered = false
+    return
+  }
+  state[key] = state[key] === undefined ? 'pass' : undefined
+}
+function pick(key: string, value: 'pass' | 'fail'): void {
+  state[key] = value
+  pickerKey.value = null
+}
+function closePicker(): void {
+  pickerKey.value = null
+}
+const pickerAnchor = computed<[number, number]>(() => {
+  const found = pageItems.value.find((it) => it.key === pickerKey.value)
+  return found ? found.anchor : [50, 50]
+})
 </script>
 
 <template>
   <div>
-    <AppHeader title="基本13項健檢" :back="!previewMode" custom-back @back="emit('back')" />
+    <AppHeader title="基本12項健檢" :back="!previewMode" custom-back @back="emit('back')" />
 
     <div v-if="loadingModel" class="content">
       <p class="intro">載入中...</p>
@@ -202,7 +239,7 @@ function finish(): void {
 
     <div v-else class="content">
       <p class="intro">
-        點擊車輛照片上的項目標籤，即可標示已檢查／未檢查，並確認左右兩側外觀角度。
+        點擊車輛照片上的項目標籤快速標示打勾（正常），長按則可選擇打勾或打叉（異常）。
       </p>
 
       <div class="bike-card">
@@ -216,30 +253,86 @@ function finish(): void {
             class="chip"
             :class="[
               it.anchor[0] < 50 ? 'side-left' : 'side-right',
-              { required: it.required && !state[it.key], checked: state[it.key] },
+              {
+                required: it.required && state[it.key] === undefined,
+                pass: state[it.key] === 'pass',
+                fail: state[it.key] === 'fail',
+              },
             ]"
             :style="{ left: it.anchor[0] + '%', top: it.anchor[1] + '%' }"
-            @click="toggle(it.key)"
+            @pointerdown="handlePointerDown(it.key)"
+            @pointerup="handlePointerUpOrLeave"
+            @pointerleave="handlePointerUpOrLeave"
+            @pointercancel="handlePointerUpOrLeave"
+            @contextmenu.prevent
+            @click="handleClick(it.key)"
           >
-            <span class="dot"><Check v-if="state[it.key]" :size="11" /></span>
+            <span class="dot">
+              <Check v-if="state[it.key] === 'pass'" :size="11" />
+              <X v-else-if="state[it.key] === 'fail'" :size="11" />
+            </span>
             <span class="label">{{ it.label }}</span>
           </button>
+
+          <div
+            v-if="pickerKey"
+            class="picker-backdrop"
+            @click="closePicker"
+            @touchstart.prevent="closePicker"
+          />
+          <div
+            v-if="pickerKey"
+            class="reaction-picker"
+            :style="{ left: pickerAnchor[0] + '%', top: pickerAnchor[1] + '%' }"
+          >
+            <button
+              class="reaction-btn pass"
+              aria-label="打勾（正常）"
+              @click="pick(pickerKey, 'pass')"
+            >
+              <Check :size="18" />
+            </button>
+            <button
+              class="reaction-btn fail"
+              aria-label="打叉（異常）"
+              @click="pick(pickerKey, 'fail')"
+            >
+              <X :size="18" />
+            </button>
+          </div>
         </div>
 
         <div class="page-nav">
           <button :disabled="currentPage === 1" aria-label="上一頁" @click="goPage(-1)">‹</button>
           <span class="count">{{ currentPage }} / {{ PAGE_COUNT }}</span>
-          <button
-            :disabled="currentPage === PAGE_COUNT || !pageRequiredMet"
-            aria-label="下一頁"
-            @click="goPage(1)"
-          >
+          <button :disabled="currentPage === PAGE_COUNT" aria-label="下一頁" @click="goPage(1)">
             ›
           </button>
         </div>
-        <p v-if="currentPage < PAGE_COUNT && !pageRequiredMet" class="required-hint">
-          請先完成本頁標示的必填項目，才能前往下一頁
-        </p>
+
+        <div class="result-list">
+          <div
+            v-for="it in pageItems"
+            :key="it.key"
+            class="result-row"
+            :class="{ pass: state[it.key] === 'pass', fail: state[it.key] === 'fail' }"
+            @pointerdown="handlePointerDown(it.key)"
+            @pointerup="handlePointerUpOrLeave"
+            @pointerleave="handlePointerUpOrLeave"
+            @pointercancel="handlePointerUpOrLeave"
+            @contextmenu.prevent
+            @click="handleClick(it.key)"
+          >
+            <span class="result-label"
+              >{{ it.label }}<span v-if="it.required" class="req-mark">＊</span></span
+            >
+            <span class="result-status">
+              <template v-if="state[it.key] === 'pass'"><Check :size="13" />正常</template>
+              <template v-else-if="state[it.key] === 'fail'"><X :size="13" />異常</template>
+              <template v-else>待確認</template>
+            </span>
+          </div>
+        </div>
       </div>
 
       <div class="progress-card">
@@ -264,10 +357,10 @@ function finish(): void {
 
     <div v-if="!previewMode && !loadingModel && !notAnnotated" class="bottom-bar">
       <PrimaryButton v-if="!finished" block :disabled="!allRequiredDone" @click="finish">
-        完成基本13項健檢
+        完成基本12項健檢
       </PrimaryButton>
       <template v-else>
-        <p class="done-message">已完成基本13項健檢 ✓</p>
+        <p class="done-message">已完成基本12項健檢 ✓</p>
         <PrimaryButton block @click="emit('back')">回到驗車進度</PrimaryButton>
       </template>
     </div>
@@ -381,10 +474,120 @@ function finish(): void {
   border-color: var(--color-warning);
 }
 
-.chip.checked .dot {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+.chip.pass .dot {
+  background: var(--color-success);
+  border-color: var(--color-success);
   color: #fff;
+}
+
+.chip.fail .dot {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #fff;
+}
+
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: transparent;
+}
+
+.reaction-picker {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 30px));
+  display: flex;
+  gap: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 6px 20px rgba(20, 24, 31, 0.35);
+  z-index: 4;
+  animation: reaction-pop 0.12s ease-out;
+}
+
+@keyframes reaction-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 30px)) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 30px)) scale(1);
+  }
+}
+
+.reaction-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: transform 0.1s ease;
+}
+
+.reaction-btn:active {
+  transform: scale(1.15);
+}
+
+.reaction-btn.pass {
+  background: var(--color-success);
+}
+
+.reaction-btn.fail {
+  background: var(--color-danger);
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.result-row:last-child {
+  border-bottom: none;
+}
+
+.result-label {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.req-mark {
+  color: var(--color-warning);
+  margin-left: 2px;
+}
+
+.result-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-disabled);
+}
+
+.result-row.pass .result-status {
+  color: var(--color-success);
+}
+
+.result-row.fail .result-status {
+  color: var(--color-danger);
 }
 
 .label {
@@ -425,14 +628,6 @@ function finish(): void {
   color: var(--color-text-secondary);
   min-width: 34px;
   text-align: center;
-}
-
-.required-hint {
-  text-align: center;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--color-warning);
-  margin: 0;
 }
 
 .progress-card {

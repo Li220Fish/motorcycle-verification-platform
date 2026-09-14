@@ -20,7 +20,6 @@ export interface BasicHealthCheckItemDef {
 export const BASIC_HEALTH_CHECK_BASE_ITEMS: BasicHealthCheckItemDef[] = [
   { key: 'headlight', label: '大燈', required: true },
   { key: 'turnsignal', label: '方向燈', required: true },
-  { key: 'electrical', label: '電系是否有改裝', required: false },
   { key: 'taillight', label: '尾燈', required: true },
   { key: 'seat', label: '坐墊外觀', required: true },
   { key: 'othermod', label: '其他改裝品', required: false },

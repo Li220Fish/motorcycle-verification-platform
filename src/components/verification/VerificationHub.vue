@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Check, Circle, ClipboardCheck, ChevronRight, Loader2, Lock } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { Check, Circle, ClipboardCheck, Loader2, Lock } from 'lucide-vue-next'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import type { MissingRequiredItem, SectionProgress } from '@/stores/verification.store'
@@ -61,6 +62,18 @@ function handleSelect(section: VerificationSection): void {
   emit('selectSection', section.id)
 }
 
+// 基本13項健檢 isn't wired into verification.store.ts's flat item/section
+// system (see BasicHealthCheck13.vue's own header comment) — it can't be a
+// real VerificationSection. It used to render as its own highlighted row
+// above the grid; now it sits inside the grid where 燈光電系 used to be
+// (index 1), so splice it in at render time instead.
+type GridItem = { type: 'section'; section: VerificationSection } | { type: 'basic-check' }
+const gridItems = computed<GridItem[]>(() => {
+  const items: GridItem[] = props.sections.map((section) => ({ type: 'section', section }))
+  items.splice(1, 0, { type: 'basic-check' })
+  return items
+})
+
 // A single plain-language line instead of an itemized breakdown — users
 // don't need "分類—項目" jump links here, just enough to know why 完成驗證
 // isn't available yet and where to go (回到上方分類).
@@ -96,46 +109,57 @@ const canSubmit = () =>
     <h2>驗車進度</h2>
     <p class="hint">選擇一個車輛部位開始拍攝</p>
 
-    <button class="basic-check-row" @click="emit('openBasicHealthCheck')">
-      <div class="basic-check-icon">
-        <ClipboardCheck :size="20" color="var(--color-primary)" />
-      </div>
-      <div class="basic-check-info">
-        <span class="basic-check-title">基本13項健檢</span>
-        <span class="basic-check-desc">點擊車輛照片上的項目，快速標示已檢查外觀部位</span>
-      </div>
-      <ChevronRight :size="18" color="var(--color-text-disabled)" />
-    </button>
-
     <div class="section-grid">
-      <button
-        v-for="section in sections"
-        :key="section.id"
-        class="section-card"
-        :class="statusFor(section.id)"
-        :disabled="loading"
-        @click="handleSelect(section)"
+      <template
+        v-for="gi in gridItems"
+        :key="gi.type === 'basic-check' ? 'basic-check' : gi.section.id"
       >
-        <div class="card-top">
-          <span class="card-title">{{ section.title }}</span>
-          <Lock v-if="section.lockedOrder" :size="14" class="lock-icon" />
-        </div>
-        <p class="card-desc">{{ section.shortDescription }}</p>
-        <div class="card-status">
-          <Check v-if="statusFor(section.id) === 'done'" :size="14" class="status-icon done" />
-          <Circle
-            v-else
-            :size="10"
-            :class="['status-icon', statusFor(section.id) === 'in_progress' ? 'active' : 'idle']"
-          />
-          <span class="status-label">{{ statusLabel(statusFor(section.id)) }}</span>
-          <span class="status-count">
-            {{ progressFor(section.id)?.done ?? 0 }}/{{
-              progressFor(section.id)?.total ?? section.items.length
-            }}
-          </span>
-        </div>
-      </button>
+        <button
+          v-if="gi.type === 'basic-check'"
+          class="section-card basic-check-card"
+          @click="emit('openBasicHealthCheck')"
+        >
+          <div class="card-top">
+            <span class="card-title">基本12項健檢</span>
+          </div>
+          <p class="card-desc">點擊車輛照片上的項目，快速標示已檢查外觀部位</p>
+          <div class="card-status">
+            <ClipboardCheck :size="13" class="status-icon idle" />
+            <span class="status-label">點擊開始</span>
+          </div>
+        </button>
+
+        <button
+          v-else
+          class="section-card"
+          :class="statusFor(gi.section.id)"
+          :disabled="loading"
+          @click="handleSelect(gi.section)"
+        >
+          <div class="card-top">
+            <span class="card-title">{{ gi.section.title }}</span>
+            <Lock v-if="gi.section.lockedOrder" :size="14" class="lock-icon" />
+          </div>
+          <p class="card-desc">{{ gi.section.shortDescription }}</p>
+          <div class="card-status">
+            <Check v-if="statusFor(gi.section.id) === 'done'" :size="14" class="status-icon done" />
+            <Circle
+              v-else
+              :size="10"
+              :class="[
+                'status-icon',
+                statusFor(gi.section.id) === 'in_progress' ? 'active' : 'idle',
+              ]"
+            />
+            <span class="status-label">{{ statusLabel(statusFor(gi.section.id)) }}</span>
+            <span class="status-count">
+              {{ progressFor(gi.section.id)?.done ?? 0 }}/{{
+                progressFor(gi.section.id)?.total ?? gi.section.items.length
+              }}
+            </span>
+          </div>
+        </button>
+      </template>
     </div>
 
     <p
@@ -184,45 +208,9 @@ const canSubmit = () =>
   margin: 0 0 var(--space-sm);
 }
 
-.basic-check-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-primary);
+.basic-check-card {
+  border-color: var(--color-primary);
   background: var(--color-primary-bg);
-  text-align: left;
-}
-
-.basic-check-icon {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.basic-check-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.basic-check-title {
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.basic-check-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 
 .section-grid {

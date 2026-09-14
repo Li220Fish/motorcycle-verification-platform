@@ -195,7 +195,7 @@ reload().then(() => {
 <template>
   <div>
     <p class="admin-page-intro">
-      為每個車款標註「基本13項健檢」（<code>vehicleModels.healthCheckAnchors</code>）在其專屬範例圖片上的標記位置，取代原本所有車款共用同一組座標的寫死方式。若該車款「鏈條傳動」為是，會多出第14項「鏈條」。
+      為每個車款標註「基本12項健檢」（<code>vehicleModels.healthCheckAnchors</code>）在其專屬範例圖片上的標記位置，取代原本所有車款共用同一組座標的寫死方式。若該車款「鏈條傳動」為是，會多出第13項「鏈條」。
     </p>
 
     <div v-if="selectedModel" class="annotate-wrap">
