@@ -18,6 +18,17 @@ rules_version = '2';
 // in Storage are not. See docs/firestore-v1-implementation-report.md.
 service firebase.storage {
   match /b/{bucket}/o {
+    // Mirrors firestore.rules' isAdmin() (same hardcoded uid, same reasoning:
+    // an allowlist doc would need a write path of its own, which would just
+    // move the privilege-escalation hole rather than close it). request.auth
+    // is populated directly by Storage's own auth context — unlike the
+    // firestore.get() cross-service reads flagged as unreliable elsewhere in
+    // this file, this needs no cross-service call at all.
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+    }
+
+
     match /verifications/{verificationId}/evidence/{allPaths=**} {
       allow read, write: if request.auth != null;
     }
@@ -56,10 +67,19 @@ service firebase.storage {
       allow read, write: if request.auth != null;
     }
 
-    // Reserved — no upload UI writes here yet.
+    // Own profile avatar — public URL (shown in chat/discussion to other
+    // users), write scoped by uid same as conversations/ above.
+    match /users/{uid}/avatar/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Admin-authored reference catalog — mirrors firestore.rules'
+    // vehicleModels rule (read: any signed-in user, write: admin only).
+    // Written by scripts/apply-model-image.mjs.
     match /vehicleModels/{modelId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     match /vehicleNews/{newsId}/{allPaths=**} {

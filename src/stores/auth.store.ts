@@ -11,6 +11,7 @@ function toAppUser(firebaseUser: FirebaseUser): User {
     id: firebaseUser.uid,
     email: firebaseUser.email ?? '',
     displayName: firebaseUser.displayName,
+    photoUrl: firebaseUser.photoURL,
     createdAt: Date.parse(firebaseUser.metadata.creationTime ?? '') || Date.now(),
     updatedAt: Date.now(),
   }
@@ -83,6 +84,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateAvatarUrl(photoUrl: string): Promise<void> {
+    await authService.updatePhotoURL(photoUrl)
+    if (user.value) {
+      user.value = { ...user.value, photoUrl, updatedAt: Date.now() }
+      void userProfileService.touchUserProfile(
+        user.value.id,
+        user.value.email,
+        user.value.displayName,
+        photoUrl,
+      )
+    }
+  }
+
   /** Does NOT update `user.value.email` — the address only actually changes
    * once the user clicks the verification link Firebase sends them, at which
    * point the next auth state refresh (e.g. next login) picks it up. */
@@ -104,6 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     updateDisplayName,
+    updateAvatarUrl,
     updateEmail,
     sendPasswordReset,
   }

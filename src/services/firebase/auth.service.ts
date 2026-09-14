@@ -47,6 +47,11 @@ export async function updateDisplayName(displayName: string): Promise<void> {
   await updateProfile(auth.currentUser, { displayName })
 }
 
+export async function updatePhotoURL(photoURL: string | null): Promise<void> {
+  if (!auth.currentUser) throw new Error('Not authenticated')
+  await updateProfile(auth.currentUser, { photoURL })
+}
+
 /**
  * Changing the Auth email is security-sensitive and Firebase requires a
  * recent sign-in for it — re-authenticate with the current password first,

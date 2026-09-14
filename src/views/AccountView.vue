@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Camera } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import Avatar from '@/components/common/Avatar.vue'
+import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { imageCompressionService } from '@/services/media/image-compression.service'
+import { storageService } from '@/services/firebase/storage.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
@@ -12,6 +16,56 @@ const displayName = ref(authStore.user?.displayName ?? '')
 const saving = ref(false)
 const saveMessage = ref('')
 const saveIsError = ref(false)
+
+// 大頭貼上傳 — pick → crop (1:1, PhotoLightbox's local-file mode) → compress
+// small (avatars are always shown tiny, no need for MAX_LONG_EDGE's 1600px)
+// → upload → point Auth + the Firestore mirror doc at the new URL → delete
+// the previous file. Same shape as VehiclePhotoGallery.vue's own crop-
+// confirm flow, just with a single fixed Storage path per user instead of a
+// growing gallery array.
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+const pendingAvatarFile = ref<File | null>(null)
+const avatarUploading = ref(false)
+const avatarMessage = ref('')
+const avatarIsError = ref(false)
+const AVATAR_MAX_EDGE = 512
+
+function pickAvatarFile(): void {
+  avatarFileInput.value?.click()
+}
+
+function handleAvatarFileChange(event: Event): void {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) pendingAvatarFile.value = file
+  ;(event.target as HTMLInputElement).value = ''
+}
+
+async function handleAvatarCropConfirmed(blob: Blob): Promise<void> {
+  const uid = authStore.user?.id
+  if (!uid) return
+  avatarUploading.value = true
+  avatarMessage.value = ''
+  const previousUrl = authStore.user?.photoUrl ?? null
+  try {
+    const { blob: compressed } = await imageCompressionService.compressImage(blob, {
+      maxLongEdge: AVATAR_MAX_EDGE,
+    })
+    const url = await storageService.uploadAvatar(uid, compressed)
+    await authStore.updateAvatarUrl(url)
+    if (previousUrl) void storageService.deleteFileAtUrl(previousUrl)
+    avatarIsError.value = false
+    avatarMessage.value = '已更新大頭貼'
+    pendingAvatarFile.value = null
+  } catch {
+    avatarIsError.value = true
+    avatarMessage.value = '大頭貼上傳失敗，請稍後再試'
+  } finally {
+    avatarUploading.value = false
+    setTimeout(() => {
+      avatarMessage.value = ''
+    }, 2500)
+  }
+}
 
 const newEmail = ref(authStore.user?.email ?? '')
 const currentPassword = ref('')
@@ -112,8 +166,34 @@ async function handleSendReset(): Promise<void> {
 
     <div class="content">
       <div class="avatar-row">
-        <Avatar :name="displayName || authStore.user?.email || '?'" :size="64" />
+        <button class="avatar-edit-btn" aria-label="更換大頭貼" @click="pickAvatarFile">
+          <Avatar
+            :name="displayName || authStore.user?.email || '?'"
+            :photo-url="authStore.user?.photoUrl"
+            :size="64"
+          />
+          <span class="avatar-edit-badge"><Camera :size="13" /></span>
+        </button>
+        <input
+          ref="avatarFileInput"
+          type="file"
+          accept="image/*"
+          hidden
+          @change="handleAvatarFileChange"
+        />
       </div>
+      <p v-if="avatarMessage" class="feedback" :class="{ error: avatarIsError }">
+        {{ avatarMessage }}
+      </p>
+
+      <PhotoLightbox
+        v-if="pendingAvatarFile"
+        :local-file="pendingAvatarFile"
+        :aspect-ratio="1"
+        :uploading="avatarUploading"
+        @close="pendingAvatarFile = null"
+        @crop-confirmed="handleAvatarCropConfirmed"
+      />
 
       <label class="field">
         <span>顯示名稱</span>
@@ -172,6 +252,29 @@ async function handleSendReset(): Promise<void> {
   display: flex;
   justify-content: center;
   padding: var(--space-sm) 0;
+}
+
+.avatar-edit-btn {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.avatar-edit-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  border: 2px solid var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .field {
