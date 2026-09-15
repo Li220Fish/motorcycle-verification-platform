@@ -236,15 +236,22 @@ const countdownNow = ref(Date.now())
 let countdownTicker: ReturnType<typeof setInterval> | null = null
 let unsubscribeCountdowns: (() => void) | null = null
 
+// Countdown value color escalates as a deadline approaches — #FEE16C once
+// 15 days or fewer remain, #E93C35 (also covers "已到期") once 7 or fewer do.
+const URGENCY_WARN_MS = 15 * 86400000
+const URGENCY_CRITICAL_MS = 7 * 86400000
+
 function remainingFor(targetIso: string) {
   const diff = new Date(targetIso).getTime() - countdownNow.value
-  if (diff <= 0) return { expired: true, days: 0, hours: 0, mins: 0, secs: 0 }
+  const urgency = diff <= URGENCY_CRITICAL_MS ? 'critical' : diff <= URGENCY_WARN_MS ? 'warn' : ''
+  if (diff <= 0) return { expired: true, days: 0, hours: 0, mins: 0, secs: 0, urgency }
   return {
     expired: false,
     days: Math.floor(diff / 86400000),
     hours: Math.floor((diff % 86400000) / 3600000),
     mins: Math.floor((diff % 3600000) / 60000),
     secs: Math.floor((diff % 60000) / 1000),
+    urgency,
   }
 }
 // One computed instead of calling remainingFor() 3x per row in the template.
@@ -873,37 +880,60 @@ onUnmounted(() => {
         <span class="tagline">RIDE 騎吧・團隊開發時間軸</span>
       </div>
 
-      <div class="countdown-list">
-        <div v-for="entry in countdowns" :key="entry.id" class="countdown">
+      <div class="countdown-row">
+        <div v-for="entry in countdowns" :key="entry.id" class="countdown-card">
           <template v-if="countdownFormTarget !== entry.id">
-            <div class="countdown-main">
-              <span class="countdown-purpose">{{ entry.data.purpose }}</span>
-              <span class="countdown-value num">
-                <template v-if="countdownRemainings.get(entry.id)?.expired">已到期</template>
-                <template v-else
-                  >{{ countdownRemainings.get(entry.id)?.days }}<span class="u">天</span
-                  >{{ pad2(countdownRemainings.get(entry.id)?.hours ?? 0) }}<span class="u">:</span
-                  >{{ pad2(countdownRemainings.get(entry.id)?.mins ?? 0) }}<span class="u">:</span
-                  >{{ pad2(countdownRemainings.get(entry.id)?.secs ?? 0) }}</template
-                >
-              </span>
-            </div>
-            <div class="countdown-actions">
+            <div class="countdown-card-tools">
               <button
-                class="countdown-edit-btn"
+                class="countdown-tool-btn"
                 type="button"
+                aria-label="編輯"
                 @click="openEditCountdownForm(entry)"
               >
-                編輯
+                <svg viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M11.5 2.5 13.5 4.5 5.5 12.5 3 13l.5-2.5Z"
+                    stroke="currentColor"
+                    stroke-width="1.3"
+                    stroke-linejoin="round"
+                  />
+                </svg>
               </button>
               <button
-                class="countdown-edit-btn danger"
+                class="countdown-tool-btn danger"
                 type="button"
+                aria-label="刪除"
                 @click="removeCountdown(entry.id)"
               >
-                刪除
+                <svg viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M3.5 5h9M6.5 5V3.5h3V5M7 7.5v4M9 7.5v4M4.5 5l.5 8h6l.5-8"
+                    stroke="currentColor"
+                    stroke-width="1.3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
               </button>
             </div>
+            <span class="countdown-purpose">{{ entry.data.purpose }}</span>
+            <span
+              class="countdown-value num"
+              :class="
+                countdownRemainings.get(entry.id)?.urgency
+                  ? `cd-${countdownRemainings.get(entry.id)?.urgency}`
+                  : ''
+              "
+            >
+              <template v-if="countdownRemainings.get(entry.id)?.expired">已到期</template>
+              <template v-else
+                >{{ countdownRemainings.get(entry.id)?.days }} <span class="u">天</span>
+                {{ pad2(countdownRemainings.get(entry.id)?.hours ?? 0) }}<span class="u">時</span>
+                {{ pad2(countdownRemainings.get(entry.id)?.mins ?? 0) }}<span class="u">分</span>
+                {{ pad2(countdownRemainings.get(entry.id)?.secs ?? 0)
+                }}<span class="u">秒</span></template
+              >
+            </span>
           </template>
           <form v-else class="countdown-form" @submit.prevent="saveCountdownForm">
             <input
@@ -913,14 +943,16 @@ onUnmounted(() => {
               required
             />
             <input v-model="countdownForm.targetLocal" type="datetime-local" required />
-            <button type="submit">儲存</button>
-            <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            <div class="countdown-form-actions">
+              <button type="submit">儲存</button>
+              <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            </div>
             <span v-if="countdownError" class="countdown-sync-note err">{{ countdownError }}</span>
             <span v-else class="countdown-sync-note">會同步給所有開啟此頁面的協作者</span>
           </form>
         </div>
 
-        <div v-if="countdownFormTarget === 'new'" class="countdown">
+        <div v-if="countdownFormTarget === 'new'" class="countdown-card">
           <form class="countdown-form" @submit.prevent="saveCountdownForm">
             <input
               v-model="countdownForm.purpose"
@@ -929,14 +961,29 @@ onUnmounted(() => {
               required
             />
             <input v-model="countdownForm.targetLocal" type="datetime-local" required />
-            <button type="submit">儲存</button>
-            <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            <div class="countdown-form-actions">
+              <button type="submit">儲存</button>
+              <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            </div>
             <span v-if="countdownError" class="countdown-sync-note err">{{ countdownError }}</span>
             <span v-else class="countdown-sync-note">會同步給所有開啟此頁面的協作者</span>
           </form>
         </div>
-        <button v-else class="countdown-add-btn" type="button" @click="openAddCountdownForm">
-          ＋ 新增倒數計時
+        <button
+          v-else
+          class="countdown-add-btn"
+          type="button"
+          aria-label="新增倒數計時"
+          @click="openAddCountdownForm"
+        >
+          <svg viewBox="0 0 20 20" fill="none">
+            <path
+              d="M10 4v12M4 10h12"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
         </button>
       </div>
 
@@ -1473,94 +1520,119 @@ onUnmounted(() => {
   font-size: 12.5px;
 }
 
-.countdown-list {
+.countdown-row {
   margin-top: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-}
-.countdown {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: stretch;
+  gap: 10px;
   flex-wrap: wrap;
+}
+.countdown-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 7px 14px;
+  border-radius: var(--radius-lg);
+  padding: 10px 16px 12px;
   box-shadow: var(--shadow-card);
+  min-width: 210px;
 }
-.countdown-actions {
+.countdown-card-tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   display: flex;
-  gap: 6px;
-  margin-left: auto;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-.countdown-add-btn {
-  border: 1px dashed var(--color-border);
-  background: transparent;
+.countdown-card:hover .countdown-card-tools,
+.countdown-card:focus-within .countdown-card-tools {
+  opacity: 1;
+}
+.countdown-tool-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
   color: var(--color-text-secondary);
-  border-radius: var(--radius-md);
-  padding: 6px 14px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-family: inherit;
 }
-.countdown-add-btn:hover {
+.countdown-tool-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.countdown-tool-btn:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
-.countdown-main {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
+.countdown-tool-btn.danger:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 .countdown-purpose {
-  font-weight: 600;
-  font-size: 12.5px;
+  font-weight: 700;
+  font-size: 13px;
+  padding-right: 40px;
 }
 .countdown-value {
   font-weight: 700;
-  font-size: 21px;
+  font-size: 19px;
   color: var(--color-primary);
+  white-space: nowrap;
+}
+.countdown-value.cd-warn {
+  color: #fee16c;
+}
+.countdown-value.cd-critical {
+  color: #e93c35;
 }
 .countdown-value .u {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary);
   font-weight: 500;
-  margin: 0 2px 0 1px;
+  margin-right: 3px;
 }
 .countdown-empty {
   color: var(--color-text-disabled);
   font-size: 12px;
   font-style: italic;
 }
-.countdown-edit-btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+.countdown-add-btn {
+  width: 44px;
+  height: 44px;
+  align-self: center;
+  border: 1px dashed var(--color-border);
+  background: transparent;
   color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-size: 12px;
+  border-radius: 999px;
   cursor: pointer;
-  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
-.countdown-edit-btn:hover {
+.countdown-add-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.countdown-add-btn:hover {
   border-color: var(--color-primary);
+  border-style: solid;
   color: var(--color-primary);
-}
-.countdown-edit-btn.danger:hover {
-  border-color: var(--color-danger);
-  color: var(--color-danger);
 }
 .countdown-form {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
+  min-width: 220px;
 }
 .countdown-form input[type='text'],
 .countdown-form input[type='datetime-local'] {
@@ -1571,9 +1643,12 @@ onUnmounted(() => {
   padding: 6px 10px;
   font-size: 12.5px;
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
 }
-.countdown-form input[type='text'] {
-  flex: 1 1 200px;
+.countdown-form-actions {
+  display: flex;
+  gap: 6px;
 }
 .countdown-form button {
   border: 1px solid var(--color-primary);
@@ -1585,6 +1660,7 @@ onUnmounted(() => {
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
+  flex: 1;
 }
 .countdown-form button.ghost {
   background: transparent;
