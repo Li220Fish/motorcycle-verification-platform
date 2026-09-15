@@ -227,17 +227,17 @@ const allEntries = computed<DevLogEntry[]>(() => {
   return Array.from(map.values()).map((e) => applyOverride(e, overrides.value[e.id]))
 })
 
-// ---------- countdown (Firestore) ----------
-const countdown = ref<CountdownState | null>(null)
-const countdownEditing = ref(false)
+// ---------- countdowns (Firestore, any number at once) ----------
+const countdowns = ref<Array<{ id: string; data: CountdownState }>>([])
+// null = not editing; 'new' = the add-timer form; an id = editing that timer.
+const countdownFormTarget = ref<string | 'new' | null>(null)
 const countdownForm = reactive({ purpose: '', targetLocal: '' })
 const countdownNow = ref(Date.now())
 let countdownTicker: ReturnType<typeof setInterval> | null = null
-let unsubscribeCountdown: (() => void) | null = null
+let unsubscribeCountdowns: (() => void) | null = null
 
-const countdownRemaining = computed(() => {
-  if (!countdown.value) return null
-  const diff = new Date(countdown.value.targetIso).getTime() - countdownNow.value
+function remainingFor(targetIso: string) {
+  const diff = new Date(targetIso).getTime() - countdownNow.value
   if (diff <= 0) return { expired: true, days: 0, hours: 0, mins: 0, secs: 0 }
   return {
     expired: false,
@@ -246,7 +246,11 @@ const countdownRemaining = computed(() => {
     mins: Math.floor((diff % 3600000) / 60000),
     secs: Math.floor((diff % 60000) / 1000),
   }
-})
+}
+// One computed instead of calling remainingFor() 3x per row in the template.
+const countdownRemainings = computed(
+  () => new Map(countdowns.value.map((c) => [c.id, remainingFor(c.data.targetIso)])),
+)
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -256,25 +260,44 @@ function toLocalInputValue(iso: string): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-function openCountdownForm() {
-  countdownForm.purpose = countdown.value?.purpose || ''
-  countdownForm.targetLocal = countdown.value ? toLocalInputValue(countdown.value.targetIso) : ''
-  countdownEditing.value = true
+function openAddCountdownForm() {
+  countdownForm.purpose = ''
+  countdownForm.targetLocal = ''
+  countdownFormTarget.value = 'new'
+}
+function openEditCountdownForm(entry: { id: string; data: CountdownState }) {
+  countdownForm.purpose = entry.data.purpose
+  countdownForm.targetLocal = toLocalInputValue(entry.data.targetIso)
+  countdownFormTarget.value = entry.id
 }
 async function saveCountdownForm() {
-  if (!countdownForm.purpose.trim() || !countdownForm.targetLocal) return
+  if (!countdownForm.purpose.trim() || !countdownForm.targetLocal || !countdownFormTarget.value)
+    return
+  const editingId = countdownFormTarget.value === 'new' ? undefined : countdownFormTarget.value
+  const existing = editingId ? countdowns.value.find((c) => c.id === editingId) : undefined
+  const nowIso = new Date().toISOString()
   const next: CountdownState = {
     purpose: countdownForm.purpose.trim(),
     targetIso: new Date(countdownForm.targetLocal).toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: existing?.data.createdAt ?? nowIso,
+    updatedAt: nowIso,
   }
   try {
-    await devlogService.saveCountdown(next)
+    await devlogService.saveCountdown(next, editingId)
   } catch (e) {
     countdownError.value = e instanceof Error ? e.message : '儲存失敗'
     return
   }
-  countdownEditing.value = false
+  countdownError.value = ''
+  countdownFormTarget.value = null
+}
+async function removeCountdown(id: string) {
+  if (!window.confirm('確定要刪除這個倒數計時？')) return
+  try {
+    await devlogService.deleteCountdown(id)
+  } catch (e) {
+    countdownError.value = e instanceof Error ? e.message : '刪除失敗'
+  }
 }
 const countdownError = ref('')
 
@@ -806,8 +829,8 @@ onMounted(() => {
   unsubscribeSubmissions = devlogService.subscribeSubmissions((docs) => {
     submissions.value = docs.map((d) => normalizeSubmission(d.id, d.data))
   })
-  unsubscribeCountdown = devlogService.subscribeCountdown((state) => {
-    countdown.value = state
+  unsubscribeCountdowns = devlogService.subscribeCountdowns((list) => {
+    countdowns.value = list
   })
   unsubscribeOverrides = devlogService.subscribeOverrides((map) => {
     overrides.value = map
@@ -833,7 +856,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   unsubscribeSubmissions?.()
-  unsubscribeCountdown?.()
+  unsubscribeCountdowns?.()
   unsubscribeOverrides?.()
   unsubscribeDeletions?.()
   if (countdownTicker) clearInterval(countdownTicker)
@@ -850,45 +873,71 @@ onUnmounted(() => {
         <span class="tagline">RIDE 騎吧・團隊開發時間軸</span>
       </div>
 
-      <div class="countdown">
-        <template v-if="!countdownEditing">
-          <template v-if="countdown && countdownRemaining">
+      <div class="countdown-list">
+        <div v-for="entry in countdowns" :key="entry.id" class="countdown">
+          <template v-if="countdownFormTarget !== entry.id">
             <div class="countdown-main">
-              <span class="countdown-purpose">{{ countdown.purpose }}</span>
+              <span class="countdown-purpose">{{ entry.data.purpose }}</span>
               <span class="countdown-value num">
-                <template v-if="countdownRemaining.expired">已到期</template>
+                <template v-if="countdownRemainings.get(entry.id)?.expired">已到期</template>
                 <template v-else
-                  >{{ countdownRemaining.days }}<span class="u">天</span
-                  >{{ pad2(countdownRemaining.hours) }}<span class="u">:</span
-                  >{{ pad2(countdownRemaining.mins) }}<span class="u">:</span
-                  >{{ pad2(countdownRemaining.secs) }}</template
+                  >{{ countdownRemainings.get(entry.id)?.days }}<span class="u">天</span
+                  >{{ pad2(countdownRemainings.get(entry.id)?.hours ?? 0) }}<span class="u">:</span
+                  >{{ pad2(countdownRemainings.get(entry.id)?.mins ?? 0) }}<span class="u">:</span
+                  >{{ pad2(countdownRemainings.get(entry.id)?.secs ?? 0) }}</template
                 >
               </span>
             </div>
-            <button class="countdown-edit-btn" type="button" @click="openCountdownForm">
-              編輯
-            </button>
+            <div class="countdown-actions">
+              <button
+                class="countdown-edit-btn"
+                type="button"
+                @click="openEditCountdownForm(entry)"
+              >
+                編輯
+              </button>
+              <button
+                class="countdown-edit-btn danger"
+                type="button"
+                @click="removeCountdown(entry.id)"
+              >
+                刪除
+              </button>
+            </div>
           </template>
-          <template v-else>
-            <div class="countdown-empty">尚未設定倒數計時目標</div>
-            <button class="countdown-edit-btn" type="button" @click="openCountdownForm">
-              設定倒數計時
-            </button>
-          </template>
-        </template>
-        <form v-else class="countdown-form" @submit.prevent="saveCountdownForm">
-          <input
-            v-model="countdownForm.purpose"
-            type="text"
-            placeholder="倒數計時目的（例如：Demo 簡報）"
-            required
-          />
-          <input v-model="countdownForm.targetLocal" type="datetime-local" required />
-          <button type="submit">儲存</button>
-          <button type="button" class="ghost" @click="countdownEditing = false">取消</button>
-          <span v-if="countdownError" class="countdown-sync-note err">{{ countdownError }}</span>
-          <span v-else class="countdown-sync-note">會同步給所有開啟此頁面的協作者</span>
-        </form>
+          <form v-else class="countdown-form" @submit.prevent="saveCountdownForm">
+            <input
+              v-model="countdownForm.purpose"
+              type="text"
+              placeholder="倒數計時目的（例如：Demo 簡報）"
+              required
+            />
+            <input v-model="countdownForm.targetLocal" type="datetime-local" required />
+            <button type="submit">儲存</button>
+            <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            <span v-if="countdownError" class="countdown-sync-note err">{{ countdownError }}</span>
+            <span v-else class="countdown-sync-note">會同步給所有開啟此頁面的協作者</span>
+          </form>
+        </div>
+
+        <div v-if="countdownFormTarget === 'new'" class="countdown">
+          <form class="countdown-form" @submit.prevent="saveCountdownForm">
+            <input
+              v-model="countdownForm.purpose"
+              type="text"
+              placeholder="倒數計時目的（例如：Demo 簡報）"
+              required
+            />
+            <input v-model="countdownForm.targetLocal" type="datetime-local" required />
+            <button type="submit">儲存</button>
+            <button type="button" class="ghost" @click="countdownFormTarget = null">取消</button>
+            <span v-if="countdownError" class="countdown-sync-note err">{{ countdownError }}</span>
+            <span v-else class="countdown-sync-note">會同步給所有開啟此頁面的協作者</span>
+          </form>
+        </div>
+        <button v-else class="countdown-add-btn" type="button" @click="openAddCountdownForm">
+          ＋ 新增倒數計時
+        </button>
       </div>
 
       <div class="dash-toggle">
@@ -1424,8 +1473,15 @@ onUnmounted(() => {
   font-size: 12.5px;
 }
 
-.countdown {
+.countdown-list {
   margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.countdown {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1435,6 +1491,25 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   padding: 7px 14px;
   box-shadow: var(--shadow-card);
+}
+.countdown-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.countdown-add-btn {
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.countdown-add-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 .countdown-main {
   display: flex;
@@ -1471,11 +1546,14 @@ onUnmounted(() => {
   font-size: 12px;
   cursor: pointer;
   font-family: inherit;
-  margin-left: auto;
 }
 .countdown-edit-btn:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+.countdown-edit-btn.danger:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 .countdown-form {
   display: flex;
