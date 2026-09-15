@@ -1538,6 +1538,14 @@ onUnmounted(() => {
   padding: 10px 16px 12px;
   box-shadow: var(--shadow-card);
   min-width: 210px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.countdown-card:hover {
+  transform: scale(1.04);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  z-index: 1;
 }
 .countdown-card-tools {
   position: absolute;
@@ -1617,6 +1625,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 0.15s ease;
 }
 .countdown-add-btn svg {
   width: 18px;
@@ -1626,6 +1635,7 @@ onUnmounted(() => {
   border-color: var(--color-primary);
   border-style: solid;
   color: var(--color-primary);
+  transform: scale(1.08);
 }
 .countdown-form {
   display: flex;
@@ -2104,6 +2114,15 @@ main {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.card:hover {
+  transform: scale(1.025);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  position: relative;
+  z-index: 1;
 }
 .card > summary {
   list-style: none;
