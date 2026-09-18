@@ -450,6 +450,9 @@ const pickerAnchor = computed<[number, number]>(() => {
   white-space: nowrap;
   transform: translate(-50%, -50%);
   z-index: 2;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chip.side-left {
