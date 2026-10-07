@@ -72,7 +72,7 @@ async function loadListings(): Promise<void> {
 
 // Only vehicles with a completed 車輛驗證 that aren't already listed can be
 // published — every listing on this platform is backed by a real inspection
-// (see MarketplaceListingView.vue's "已通過 MotoVerify 專業檢驗" framing).
+// (see MarketplaceListingView.vue's "已通過 RiDE 專業檢驗" framing).
 async function loadEligibleVehicles(): Promise<void> {
   loadingEligible.value = true
   try {

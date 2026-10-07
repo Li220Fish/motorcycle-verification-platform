@@ -306,7 +306,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           <p class="description-text">{{ listing.description }}</p>
         </template>
 
-        <!-- Every listing already requires a passing MotoVerify inspection
+        <!-- Every listing already requires a passing RiDE inspection
              before it can go live. Real listings route to their actual
              verification report; the seeded DEMO listings (no backing
              verification) fall back to the fabricated demo report. -->
@@ -315,7 +315,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           <span class="score-badge"><ShieldCheck :size="22" /></span>
           <span class="report-info">
             <span class="report-title">車輛檢驗報告</span>
-            <span class="report-subtitle">已通過 MotoVerify 專業檢驗</span>
+            <span class="report-subtitle">已通過 RiDE 專業檢驗</span>
           </span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>

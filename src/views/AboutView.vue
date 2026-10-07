@@ -30,7 +30,7 @@ function handleRowClick(row: AboutRow): void {
 
 <template>
   <div>
-    <AppHeader title="關於 MotoVerify" back />
+    <AppHeader title="關於 RiDE" back />
 
     <div class="content">
       <div class="brand-card">
@@ -48,7 +48,7 @@ function handleRowClick(row: AboutRow): void {
 
       <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
 
-      <p class="copyright">© {{ new Date().getFullYear() }} MotoVerify. All rights reserved.</p>
+      <p class="copyright">© {{ new Date().getFullYear() }} RiDE. All rights reserved.</p>
     </div>
   </div>
 </template>

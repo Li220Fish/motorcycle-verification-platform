@@ -19,7 +19,7 @@ const policySections: PolicySection[] = [
   {
     key: 'terms',
     title: '服務條款',
-    body: '使用 MotoVerify 即表示您同意遵守平台的驗車流程規範與交易禮儀，並對所刊登的車輛資訊負責。',
+    body: '使用 RiDE 即表示您同意遵守平台的驗車流程規範與交易禮儀，並對所刊登的車輛資訊負責。',
   },
 ]
 const expandedKey = ref<string | null>(null)

@@ -154,7 +154,7 @@ watch(activeKey, loadBadges)
             </svg>
           </div>
           <div>
-            <div class="admin-brand-name">MotoVerify</div>
+            <div class="admin-brand-name">RiDE</div>
             <div class="admin-brand-sub">營運後台</div>
           </div>
         </div>
@@ -186,7 +186,7 @@ watch(activeKey, loadBadges)
             <div class="admin-crumb">{{ crumb }}</div>
           </div>
           <div class="admin-topbar-spacer"></div>
-          <div class="admin-op">當班：<b>MotoVerify 管理員</b>，平台管理員</div>
+          <div class="admin-op">當班：<b>RiDE 管理員</b>，平台管理員</div>
           <button class="admin-logout" @click="handleLogout">登出</button>
         </header>
 

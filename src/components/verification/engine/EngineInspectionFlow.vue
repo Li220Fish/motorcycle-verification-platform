@@ -445,7 +445,7 @@ onBeforeUnmount(() => {
 
     <template v-else-if="phase === 'permission-denied'">
       <h2>需要麥克風權限</h2>
-      <p class="main-copy">引擎檢測需要錄製聲音。請允許 MotoVerify 使用麥克風。</p>
+      <p class="main-copy">引擎檢測需要錄製聲音。請允許 RiDE 使用麥克風。</p>
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <PrimaryButton block @click="phase = 'ready'">允許麥克風</PrimaryButton>
     </template>

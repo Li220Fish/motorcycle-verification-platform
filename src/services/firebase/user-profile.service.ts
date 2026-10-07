@@ -6,7 +6,7 @@ import { db } from './firebase'
  * Firebase Auth has no client-listable "all users" API — only the Admin SDK
  * can enumerate accounts, and this app deliberately has no Admin SDK/service
  * account (see scripts/seed-test-users.mjs's own comment on that). The
- * MotoVerify 營運後台 (/admin) user roster instead reads this Firestore
+ * RiDE 營運後台 (/admin) user roster instead reads this Firestore
  * mirror of each signed-in user's own basic identity, kept current here on
  * every auth state resolution. `users/{uid}` already allows a user to write
  * their own doc (firestore.rules), so this needs no new rule.

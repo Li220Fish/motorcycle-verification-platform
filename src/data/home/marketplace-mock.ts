@@ -4,7 +4,7 @@
  * this content must be visibly labelled DEMO in the UI so it can never be
  * mistaken for a real listing.
  *
- * Every listing requires a passing MotoVerify inspection before it can go
+ * Every listing requires a passing RiDE inspection before it can go
  * live, so "已驗證" is no longer a per-card differentiator (there's no such
  * field) — the verification report itself still shows on the detail page.
  * `sellerType` distinguishes a private seller from a dealer/shop (車行),
@@ -118,7 +118,7 @@ export function resolveAvailableSlots(
 }
 
 // The 3 seeded test accounts (docs/test-accounts.md) — 'individual' listings
-// route 聊聊 to 測試賣家, 'dealer' listings to MotoVerify 車商.
+// route 聊聊 to 測試賣家, 'dealer' listings to RiDE 車商.
 const SELLER_UID = 'C4Rn3b9vpoXn2mRoL8WJUnFOg9k1'
 const DEALER_UID = 'WfRtacVURlSxRIrrtBsVX7E651c2'
 

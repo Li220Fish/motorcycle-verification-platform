@@ -208,7 +208,7 @@ const router = createRouter({
       meta: { requiresAuth: true },
       props: true,
     },
-    // --- MotoVerify 營運後台 (/admin) — see docs/admin-backend.md. Entirely
+    // --- RiDE 營運後台 (/admin) — see docs/admin-backend.md. Entirely
     // separate from the mobile app's views/components/design tokens; only
     // the Firestore `db` handle and a few read-only type contracts are
     // shared (src/admin/services/admin-data.service.ts). Auth is handled in

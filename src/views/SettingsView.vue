@@ -31,7 +31,7 @@ const sections: SettingSection[] = [
   { icon: Settings, label: '調整設置', to: '/settings/preferences' },
   { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
   { icon: Shield, label: '資料與隱私', to: '/settings/privacy' },
-  { icon: Info, label: '關於 MotoVerify', to: '/settings/about' },
+  { icon: Info, label: '關於 RiDE', to: '/settings/about' },
 ]
 
 function handleSectionClick(section: SettingSection): void {

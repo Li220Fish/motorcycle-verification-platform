@@ -42,7 +42,7 @@ async function handleCopyLink(): Promise<void> {
 async function handleShareMore(): Promise<void> {
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'MotoVerify 驗證報告', url: shareLink.value })
+      await navigator.share({ title: 'RiDE 驗證報告', url: shareLink.value })
     } catch {
       // user cancelled the native share sheet — nothing to do
     }

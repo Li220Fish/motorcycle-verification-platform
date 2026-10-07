@@ -30,7 +30,7 @@ async function handleCreate(): Promise<void> {
     await createVehicleNews({
       title: draft.value.title.trim(),
       category: draft.value.category.trim() || '一般',
-      sourceName: draft.value.sourceName.trim() || 'MotoVerify 編輯部',
+      sourceName: draft.value.sourceName.trim() || 'RiDE 編輯部',
       content: draft.value.content.trim(),
     })
     draft.value = { title: '', category: '', sourceName: '', content: '' }
