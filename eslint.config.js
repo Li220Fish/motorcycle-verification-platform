@@ -10,7 +10,7 @@ export default tseslint.config(
     // tsconfig, package.json, and `tsc` build to CommonJS `lib/` — verified
     // clean via its own `npx tsc --noEmit`, not this config) — excluded
     // here the same way `dist/` (the Vite build output) already is.
-    ignores: ['dist/**', 'android/**', 'ios/**', 'node_modules/**', 'functions/**'],
+    ignores: ['dist/**', 'capture-app/.cert/**', 'android/**', 'ios/**', 'node_modules/**', 'functions/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

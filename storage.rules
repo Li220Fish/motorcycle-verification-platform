@@ -82,6 +82,19 @@ service firebase.storage {
       allow write: if isAdmin();
     }
 
+    // 訓練資料集 photos from capture-app/. Scoped by the uploader's uid in
+    // the path (same reasoning as conversations/ above — no cross-service
+    // dataCollectors lookup from Storage rules); the dataCollectors
+    // allowlist is enforced on the trainingCaptures Firestore doc, without
+    // which an orphan file here is never read by anything.
+    match /training/{uid}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
     match /vehicleNews/{newsId}/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if false;

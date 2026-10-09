@@ -37,3 +37,11 @@ playwright-report/
 *.njsproj
 *.sln
 *.sw?
+
+# capture-app/ local HTTPS dev certificate (npm run capture:cert) — phones
+# only grant camera access to secure origins, even on the LAN
+capture-app/.cert/
+
+# capture-app/ios xcodebuild output
+capture-app/ios/build/
+capture-app/ios/RiDECapture.xcodeproj/xcuserdata/
