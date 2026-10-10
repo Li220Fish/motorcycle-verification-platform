@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue'
-import { ChevronDown, X } from 'lucide-vue-next'
+import { ChevronDown, Lock, X } from 'lucide-vue-next'
 
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import VehicleDiagramOverview from '@/components/verification/VehicleDiagramOverview.vue'
@@ -43,6 +43,18 @@ export interface ReportSection {
   statusLabel: string
   statusTone: 'success' | 'warning' | 'neutral' | 'danger' | 'primary'
   items: ReportItem[]
+  /** Engine Audio v3's free-text engine-type impression (spec §3 — one of
+   *  the few things this pass explicitly adds to what an end user sees, the
+   *  rest of the pipeline's detail stays backend/admin-only). Session-level,
+   *  not per-item, so it renders once for the section holding ENG-03..08
+   *  rather than repeated on every one of those item rows. */
+  engineTypeNote?: string
+  /** Playable download URL for the shared 23s startup/idle/rev engine audio
+   *  recording (ENG-03..08's one evidence file) — same session-level
+   *  placement as engineTypeNote, resolved by VerificationReportView.vue via
+   *  storageService.resolveDownloadUrl(). Lets an end user actually listen
+   *  to the engine, not just read the AI's text impression of it. */
+  audioUrl?: string
 }
 
 const props = withDefaults(
@@ -55,8 +67,17 @@ const props = withDefaults(
      *  to roll up, so it simply doesn't pass any and the diagram card hides
      *  itself (see VehicleDiagramOverview.vue's `v-if="markers.length > 0"`). */
     diagramMarkers?: DiagramMarker[]
+    /** SharedReportView.vue's anonymous-visitor mode — the section/item
+     *  result badges and the user's own free-text `note` still render in
+     *  full (the whole point of a shareable report is showing what was
+     *  checked and how it came out), but `photos` and `aiNote`/`ocrText`
+     *  — the two things an anonymous stranger shouldn't get for free —
+     *  are replaced with a "登入後查看詳情" prompt instead. Never true for
+     *  VerificationReportView.vue (owner or any real signed-in account
+     *  always sees full detail, unchanged from before this prop existed). */
+    restricted?: boolean
   }>(),
-  { diagramMarkers: () => [] },
+  { diagramMarkers: () => [], restricted: false },
 )
 
 // Presentational only — the real report (per-verification data) and the
@@ -143,6 +164,20 @@ function closeImage(): void {
 
         <Transition name="expand">
           <div v-if="expandedSectionIds.has(section.id)" class="item-list">
+            <template v-if="restricted && (section.engineTypeNote || section.audioUrl)">
+              <router-link to="/login" class="locked-note">
+                <Lock :size="12" />登入後查看引擎聲音判定與錄音
+              </router-link>
+            </template>
+            <template v-else>
+              <p v-if="section.engineTypeNote" class="engine-type-note">
+                引擎聲型態：{{ section.engineTypeNote }}
+              </p>
+              <div v-if="section.audioUrl" class="engine-audio-player">
+                <span class="engine-audio-label">引擎運轉聲音</span>
+                <audio controls :src="section.audioUrl" />
+              </div>
+            </template>
             <template v-for="(item, itemIndex) in section.items" :key="item.id">
               <p
                 v-if="
@@ -168,10 +203,26 @@ function closeImage(): void {
                   <p v-if="item.required === false" class="item-optional-note">
                     此為使用者自行揭露資訊，非 AI 核心判定。
                   </p>
-                  <p v-if="item.ocrText" class="item-ocr-note">OCR 判讀里程：{{ item.ocrText }}</p>
-                  <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
+                  <template v-if="restricted && (item.ocrText || item.aiNote)">
+                    <router-link to="/login" class="locked-note">
+                      <Lock :size="12" />登入後查看 AI 判定說明
+                    </router-link>
+                  </template>
+                  <template v-else>
+                    <p v-if="item.ocrText" class="item-ocr-note">
+                      OCR 判讀里程：{{ item.ocrText }}
+                    </p>
+                    <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
+                  </template>
                   <p v-if="item.note" class="item-note">使用者補充：{{ item.note }}</p>
-                  <div v-if="item.photos && item.photos.length > 0" class="item-photos">
+                  <router-link
+                    v-if="restricted && item.photos && item.photos.length > 0"
+                    to="/login"
+                    class="locked-photos"
+                  >
+                    <Lock :size="14" />登入後查看詳情（{{ item.photos.length }} 張照片）
+                  </router-link>
+                  <div v-else-if="item.photos && item.photos.length > 0" class="item-photos">
                     <button
                       v-for="(photo, index) in item.photos"
                       :key="index"
@@ -348,6 +399,36 @@ function closeImage(): void {
   color: var(--color-text-primary);
 }
 
+.engine-type-note {
+  margin: 0 0 var(--space-sm);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.engine-audio-player {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 var(--space-sm);
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.engine-audio-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.engine-audio-player audio {
+  width: 100%;
+  height: 36px;
+}
+
 .item-note {
   margin: 2px 0 0;
   font-size: 12px;
@@ -376,6 +457,37 @@ function closeImage(): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* SharedReportView.vue's restricted mode — stands in for item.aiNote/
+ * ocrText/section.engineTypeNote+audioUrl (text-only, inline). */
+.locked-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* Stands in for item.photos — a full-width tappable row rather than
+ * .locked-note's inline text, so it reads as "there's something here" even
+ * though no thumbnails are shown. */
+.locked-photos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
 }
 
 .lightbox-overlay {

@@ -41,14 +41,22 @@ GENERAL RULES
 
 15. The note field must be written in Traditional Chinese (繁體中文，台灣用語習慣) — never Simplified Chinese, never English, never a mix of languages. label stays a short English machine tag as elsewhere in this spec, unaffected by this rule.
 
+UNSURE RULE
+
+If attempt == 1:
+- explain in note why the evidence is insufficient
+- identify problematicEvidenceIds
+- provide one concise retakeInstruction
+
+If attempt == 2:
+- explain in note why the evidence is still insufficient
+- retakeInstruction must be null
+- do not ask for another image
+
 Allowed required inspection results:
 
 normal
 attention
 unsure
 
-For attention and unsure:
-note is required.
-
-For normal:
-note may be null.`
+note is required for every result, including normal — one or two sentences stating what was observed that supports the result (e.g. what specifically looked fine, not just "no issues found").`

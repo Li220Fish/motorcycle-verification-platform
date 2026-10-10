@@ -80,7 +80,7 @@ function selectItem(itemId: string): void {
     </div>
 
     <button
-      v-if="activeSection"
+      v-if="activeSection && !activeSection.hideItemToggle"
       class="item-toggle"
       :class="{ locked: activeSection.lockedOrder }"
       @click="activeSection.lockedOrder ? undefined : (listOpen = !listOpen)"
@@ -92,7 +92,12 @@ function selectItem(itemId: string): void {
     </button>
 
     <Transition name="list-collapse">
-      <div v-if="listOpen && activeSection && !activeSection.lockedOrder" class="item-list">
+      <div
+        v-if="
+          listOpen && activeSection && !activeSection.lockedOrder && !activeSection.hideItemToggle
+        "
+        class="item-list"
+      >
         <button
           v-for="stepItem in activeSection.items"
           :key="stepItem.id"
@@ -116,9 +121,11 @@ function selectItem(itemId: string): void {
   flex-direction: column;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: calc(var(--header-height) + env(safe-area-inset-top));
-  z-index: 5;
+  /* No `position: sticky` / `top` here — VerificationLayout.vue's
+     .sticky-header-group wraps this together with AppHeader as ONE sticky
+     unit, so this just follows the header in normal flow (see that
+     wrapper's doc comment for why a hand-computed top offset here didn't
+     reliably match the header's real height). */
 }
 
 /* Single scrollable row, sized to show exactly 4 tabs at a time — Seller's 4

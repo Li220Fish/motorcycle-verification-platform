@@ -35,7 +35,8 @@ defineEmits<{ close: [] }>()
   width: 100%;
   background: var(--color-surface);
   border-radius: 20px 20px 0 0;
-  padding: var(--space-md) var(--space-lg) calc(var(--space-lg) + env(safe-area-inset-bottom));
+  padding: var(--space-md) var(--space-lg)
+    calc(var(--space-lg) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);

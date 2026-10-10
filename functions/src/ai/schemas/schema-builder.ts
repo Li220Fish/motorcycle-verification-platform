@@ -40,11 +40,12 @@ export function buildResultsSchema(itemIds: readonly string[]): Record<string, u
 }
 
 /** Engine Audio only — same `{results:[...]}` envelope as buildResultsSchema
- *  above, plus one extra top-level field: a free-text (per user decision —
- *  no fixed enum) one-sentence description of what engine type this sounds
- *  like (see engine-audio-v2.ts's ENGINE TYPE DESCRIPTION section). Kept
- *  separate from buildResultsSchema rather than adding an optional param
- *  there, since no other caller (Group A/B/C vision, OCR) needs this field. */
+ *  above, plus two extra top-level fields: a free-text (per user decision —
+ *  no fixed enum) description of what engine type this sounds like, and a
+ *  0.0-1.0 confidence for that description (engine-audio-v3.ts's ENGINE TYPE
+ *  section — backend/admin traceability only, never shown to the end user).
+ *  Kept separate from buildResultsSchema rather than adding optional params
+ *  there, since no other caller (Group A/B/C vision, OCR) needs these. */
 export function buildEngineAudioSchema(itemIds: readonly string[]): Record<string, unknown> {
   const base = buildResultsSchema(itemIds)
   return {
@@ -52,7 +53,8 @@ export function buildEngineAudioSchema(itemIds: readonly string[]): Record<strin
     properties: {
       ...(base.properties as Record<string, unknown>),
       engineTypeNote: { type: 'string' },
+      engineTypeConfidence: { type: 'number' },
     },
-    required: [...(base.required as string[]), 'engineTypeNote'],
+    required: [...(base.required as string[]), 'engineTypeNote', 'engineTypeConfidence'],
   }
 }

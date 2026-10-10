@@ -10,13 +10,15 @@ export interface AudioAnalyzeRequest {
   requestedItemIds: string[]
 }
 
-/** `engineTypeNote` — engine-audio-v2.ts's ENGINE TYPE DESCRIPTION section,
- *  a free-text (no fixed category, per user decision) one-sentence
- *  impression of what engine type this sounds like. Not a per-item verdict,
- *  so it rides alongside `results` rather than as one more entry in it. */
+/** `engineTypeNote` — engine-audio-v3.ts's ENGINE TYPE section, a free-text
+ *  (no fixed category, per user decision) impression of what engine type
+ *  this sounds like, plus `engineTypeConfidence` (0.0-1.0, backend/admin
+ *  traceability only). Neither is a per-item verdict, so both ride
+ *  alongside `results` rather than as entries in it. */
 export interface AudioAnalyzeResult {
   results: GeminiItemResult[]
   engineTypeNote: string
+  engineTypeConfidence: number
 }
 
 /** Not folded into VisionInspectionProvider (Engine Audio/IMU Technical spec
@@ -36,7 +38,11 @@ export class GeminiAudioInspectionProvider implements AudioInspectionProvider {
       requestedItemIds: request.requestedItemIds,
       promptVersion: request.promptVersion,
     })
-    return { results: envelope.results, engineTypeNote: envelope.engineTypeNote ?? '' }
+    return {
+      results: envelope.results,
+      engineTypeNote: envelope.engineTypeNote ?? '',
+      engineTypeConfidence: envelope.engineTypeConfidence ?? 0,
+    }
   }
 }
 
@@ -44,6 +50,7 @@ export class MockAudioInspectionProvider implements AudioInspectionProvider {
   constructor(
     private readonly fixedResults: GeminiItemResult[],
     private readonly engineTypeNote = 'mock_engine_type',
+    private readonly engineTypeConfidence = 0.5,
   ) {}
 
   async analyze(request: AudioAnalyzeRequest): Promise<AudioAnalyzeResult> {
@@ -60,6 +67,6 @@ export class MockAudioInspectionProvider implements AudioInspectionProvider {
           retakeInstruction: null,
         },
     )
-    return { results, engineTypeNote: this.engineTypeNote }
+    return { results, engineTypeNote: this.engineTypeNote, engineTypeConfidence: this.engineTypeConfidence }
   }
 }

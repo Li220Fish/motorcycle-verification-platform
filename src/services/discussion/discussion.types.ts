@@ -15,6 +15,7 @@ export type DiscussionSort = 'hot' | 'new' | 'featured' | 'following'
 
 export interface AuthorSnapshot {
   displayName: string
+  photoUrl?: string | null
 }
 
 export interface DiscussionMedia {

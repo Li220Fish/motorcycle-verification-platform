@@ -28,7 +28,7 @@
  * to keep this view showing a busy state until that finishes.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Check, Crop as CropIcon, Loader2, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import { Check, Crop as CropIcon, Loader2, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 
 /** Either an already-uploaded photo (view-first, crop is opt-in via the
  *  "裁切" button) or a not-yet-uploaded local File (skips straight to crop —
@@ -42,6 +42,48 @@ const emit = defineEmits<{ close: []; cropConfirmed: [Blob] }>()
 type Mode = 'view' | 'loading-crop' | 'crop' | 'error'
 const mode = ref<Mode>(props.localFile ? 'loading-crop' : 'view')
 const errorMessage = ref('')
+
+// 旋轉90度 (view mode only — an already-uploaded photo, same as 裁切): unlike
+// PhotoGalleryLightbox.vue's rotate (a view-only CSS transform, used for
+// verification evidence that's immutable and can never be replaced), this
+// one PERSISTS — the caller owns replacing the photo the exact same way it
+// already does for a crop, so this just draws the rotated result to a
+// canvas and emits it through the same `cropConfirmed` pipeline. Always 90°
+// clockwise per tap; a full 180°/270° turn just means tapping again after
+// the previous rotation lands (mode returns to 'view' showing the new
+// photo, per the caller's own `activePhotoUrl` update on cropConfirmed).
+const rotating = ref(false)
+async function rotateAndConfirm(): Promise<void> {
+  if (props.uploading || rotating.value || !props.imageUrl) return
+  rotating.value = true
+  try {
+    // Same cache-busting reasoning as enterCropMode below.
+    const response = await fetch(props.imageUrl, { cache: 'no-store' })
+    if (!response.ok) throw new Error(`fetch failed: ${response.status}`)
+    const sourceBlob = await response.blob()
+    const rotateBitmap = await createImageBitmap(sourceBlob, { imageOrientation: 'from-image' })
+    const canvas = document.createElement('canvas')
+    canvas.width = rotateBitmap.height
+    canvas.height = rotateBitmap.width
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.translate(canvas.width / 2, canvas.height / 2)
+    ctx.rotate(Math.PI / 2)
+    ctx.drawImage(rotateBitmap, -rotateBitmap.width / 2, -rotateBitmap.height / 2)
+    rotateBitmap.close()
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.92)
+    })
+    if (blob) emit('cropConfirmed', blob)
+  } catch (error) {
+    console.error('[PhotoLightbox] failed to rotate:', error)
+    const detail = error instanceof Error ? error.message : String(error)
+    errorMessage.value = `無法旋轉圖片，請稍後再試。（${detail}）`
+    mode.value = 'error'
+  } finally {
+    rotating.value = false
+  }
+}
 
 let bitmap: ImageBitmap | null = null
 let previewObjectUrl: string | null = null
@@ -261,9 +303,16 @@ async function confirmCrop(): Promise<void> {
 
       <template v-if="mode === 'view'">
         <img :src="imageUrl" class="lightbox-img" alt="" @click.stop />
-        <button class="crop-enter-btn" @click.stop="enterCropMode">
-          <CropIcon :size="16" /> 裁切
-        </button>
+        <div class="view-actions">
+          <button class="crop-enter-btn" :disabled="rotating" @click.stop="rotateAndConfirm">
+            <Loader2 v-if="rotating" :size="16" class="spin" />
+            <RotateCw v-else :size="16" />
+            {{ rotating ? '旋轉中...' : '旋轉90度' }}
+          </button>
+          <button class="crop-enter-btn" :disabled="rotating" @click.stop="enterCropMode">
+            <CropIcon :size="16" /> 裁切
+          </button>
+        </div>
       </template>
 
       <p v-else-if="mode === 'loading-crop'" class="lightbox-status">
@@ -371,6 +420,11 @@ async function confirmCrop(): Promise<void> {
   max-width: 280px;
 }
 
+.view-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
 .crop-enter-btn {
   display: inline-flex;
   align-items: center;
@@ -382,6 +436,10 @@ async function confirmCrop(): Promise<void> {
   color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
+}
+
+.crop-enter-btn:disabled {
+  opacity: 0.6;
 }
 
 .crop-frame {

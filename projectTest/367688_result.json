@@ -1,0 +1,32 @@
+{
+  "plateNumber": {
+    "text": null,
+    "raw_text": "「U』~//Uo",
+    "confidence": 0.0
+  },
+  "engineNumber": {
+    "text": "229BF-102257",
+    "raw_text": "229 BF-102257",
+    "confidence": 0.21
+  },
+  "chassisNumber": {
+    "text": "FBSZ25BFTBI02092",
+    "raw_text": "FBSZ25BF TBI 02092",
+    "confidence": 0.15
+  },
+  "color": {
+    "text": null,
+    "raw_text": "",
+    "confidence": 0.0
+  },
+  "displacement": {
+    "text": "124",
+    "raw_text": "124",
+    "confidence": 0.93
+  },
+  "manufactureDate": {
+    "text": "2026.09",
+    "raw_text": "2026. 09 ~",
+    "confidence": 0.71
+  }
+}

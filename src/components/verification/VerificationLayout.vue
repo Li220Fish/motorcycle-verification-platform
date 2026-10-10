@@ -30,15 +30,17 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
 
 <template>
   <div class="verification-layout">
-    <AppHeader :title="title" back custom-back @back="$emit('back')">
-      <template #right>
-        <button class="icon-button" aria-label="Review" @click="$emit('review')">
-          <ClipboardList :size="20" />
-        </button>
-      </template>
-    </AppHeader>
+    <div class="sticky-header-group">
+      <AppHeader :title="title" back custom-back @back="$emit('back')">
+        <template #right>
+          <button class="icon-button" aria-label="Review" @click="$emit('review')">
+            <ClipboardList :size="20" />
+          </button>
+        </template>
+      </AppHeader>
 
-    <slot name="nav" />
+      <slot name="nav" />
+    </div>
 
     <div class="progress-wrap">
       <VerificationProgress :done="done" :total="total" :percent="percent" />
@@ -71,6 +73,26 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
   min-height: 100dvh;
 }
 
+/* Groups AppHeader + the #nav slot (VerificationCategoryNav.vue) under ONE
+   sticky container instead of each independently computing its own `top`.
+   VerificationCategoryNav.vue used to position itself via `top: calc(var(
+   --header-height) + var(--safe-area-inset-top, env(safe-area-inset-top)))` — that assumes the header's
+   actual rendered height always equals --header-height plus the inset, but
+   AppHeader.vue's real height is content-driven (max(--header-height,
+   content + inset)), so on a device with a real inset (found live: 40px)
+   the two disagreed by the inset amount, leaving a gap between the header
+   and the nav with no sticky element covering it — normally-scrolling
+   content behind both (VerificationLayout's own .progress-wrap) became
+   briefly visible in that gap while scrolling past it. Sticking the group
+   as a unit sidesteps needing to predict the header's height at all: the
+   nav just follows it in normal flow, whatever that height turns out to
+   be. */
+.sticky-header-group {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -100,7 +122,7 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
   flex: 1;
   padding: var(--space-sm) var(--space-md);
   /* Reserve space for the fixed footer below so content never renders behind it. */
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  padding-bottom: calc(84px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 }
 
 .footer {
@@ -108,7 +130,9 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
   flex-direction: column;
   gap: 6px;
   padding: var(--space-sm) var(--space-md);
-  padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--space-sm) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
+  );
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
   /* Fixed (not sticky-in-flex) so it always stays pinned to the real device

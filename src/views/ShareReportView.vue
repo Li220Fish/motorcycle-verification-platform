@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { QrCode } from 'lucide-vue-next'
+import QRCode from 'qrcode'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
@@ -19,13 +19,32 @@ const typeLabel: Record<string, string> = {
 }
 
 const copyState = ref<'idle' | 'copied'>('idle')
-const notice = ref('')
 
-// MOCK: this app has no public, unauthenticated report host yet — every
-// route here requires login (see src/router/index.ts). Real sharing needs a
-// public report page + relaxed Firestore rules for that one document, which
-// is a deliberate follow-up, not something to bolt on during a UI pass.
-const shareLink = computed(() => `https://motoverify.app/report/${props.id}`)
+/**
+ * 2026-10: real public link — `/share/:id` (SharedReportView.vue) needs no
+ * login (anonymous Firebase session, see that view's own doc comment) and
+ * works for anyone the URL reaches. `isPublic` still gates it server-side
+ * (firestore.rules): a verification not yet attached to a published
+ * marketplaceListing simply won't load there, same "尚未公開分享" state
+ * VerificationReportView.vue already handles for a non-owner.
+ *
+ * brand/model/year ride along as query params because SharedReportView.vue
+ * (a stranger, even once signed in anonymously) has no read access to the
+ * vehicles/{id} doc at all — that doc has no isPublic branch, unlike the
+ * verification/answers/evidence it points at — same constraint
+ * VerificationReportView.vue's own vehicleTitle fallback already documents
+ * for a Marketplace listing link.
+ */
+const shareLink = computed(() => {
+  const url = new URL(`/share/${props.id}`, window.location.origin)
+  const vehicle = vehicleStore.currentVehicle
+  if (vehicle) {
+    url.searchParams.set('brand', vehicle.brand)
+    url.searchParams.set('model', vehicle.model)
+    if (vehicle.manufactureYear) url.searchParams.set('year', String(vehicle.manufactureYear))
+  }
+  return url.toString()
+})
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-TW')
@@ -39,24 +58,24 @@ async function handleCopyLink(): Promise<void> {
   }, 2000)
 }
 
-async function handleShareMore(): Promise<void> {
-  if (navigator.share) {
+// Generated client-side (no network call, no third-party QR API ever sees
+// the link) — `qrcode` is a pure-JS encoder, same "stay in-house" instinct
+// as the rest of this app's AI-only-via-Gemini posture. Regenerated
+// whenever shareLink changes (vehicle snapshot arriving after the initial
+// render adds the brand/model/year query params — see shareLink's own
+// comment) rather than computed synchronously, since toDataURL() is async.
+const qrCodeDataUrl = ref('')
+watch(
+  shareLink,
+  async (link) => {
     try {
-      await navigator.share({ title: 'MotoVerify 驗證報告', url: shareLink.value })
+      qrCodeDataUrl.value = await QRCode.toDataURL(link, { width: 240, margin: 1 })
     } catch {
-      // user cancelled the native share sheet — nothing to do
+      qrCodeDataUrl.value = ''
     }
-    return
-  }
-  handleUnavailable('分享')
-}
-
-function handleUnavailable(channel: string): void {
-  notice.value = `${channel}分享尚未啟用`
-  setTimeout(() => {
-    notice.value = ''
-  }, 2000)
-}
+  },
+  { immediate: true },
+)
 
 watch(
   () => verificationStore.currentVerification?.vehicleId,
@@ -95,8 +114,8 @@ onMounted(() => {
           {{ formatDate(verificationStore.currentVerification.createdAt) }}
         </p>
 
-        <div class="qr-placeholder">
-          <QrCode :size="120" color="var(--color-text-primary)" />
+        <div class="qr-code">
+          <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="分享連結 QR Code" />
         </div>
       </div>
 
@@ -107,16 +126,6 @@ onMounted(() => {
           {{ copyState === 'copied' ? '已複製連結' : '複製連結' }}
         </PrimaryButton>
       </div>
-
-      <p class="section-title">分享至</p>
-      <div class="social-row">
-        <button class="social-button" @click="handleUnavailable('LINE')">LINE</button>
-        <button class="social-button" @click="handleUnavailable('Facebook')">Facebook</button>
-        <button class="social-button" @click="handleUnavailable('Messenger')">Messenger</button>
-        <button class="social-button" @click="handleShareMore">更多</button>
-      </div>
-
-      <p v-if="notice" class="notice">{{ notice }}</p>
     </div>
   </div>
 </template>
@@ -164,11 +173,21 @@ onMounted(() => {
   color: var(--color-text-disabled);
 }
 
-.qr-placeholder {
+.qr-code {
   margin-top: var(--space-lg);
-  padding: var(--space-lg);
-  border: 1px dashed var(--color-border);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-code img {
+  width: 100%;
+  height: 100%;
 }
 
 .link-row {
@@ -188,33 +207,5 @@ onMounted(() => {
   color: var(--color-text-primary);
   word-break: break-all;
   margin-bottom: var(--space-sm);
-}
-
-.section-title {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.social-row {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.social-button {
-  flex: 1;
-  min-width: 80px;
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.notice {
-  text-align: center;
-  font-size: 13px;
-  color: var(--color-text-secondary);
 }
 </style>

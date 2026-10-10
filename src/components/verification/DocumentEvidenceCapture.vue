@@ -6,7 +6,8 @@ import { cameraService } from '@/services/media/camera.service'
 import { mockRecognitionService } from '@/services/recognition/mock-recognition.service'
 import type { RecognitionStatus } from '@/services/recognition/recognition.types'
 import { useVerificationStore } from '@/stores/verification.store'
-import { useUploadQueueStore } from '@/stores/upload-queue.store'
+import { storageService } from '@/services/firebase/storage.service'
+import { imageCompressionService } from '@/services/media/image-compression.service'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{
@@ -67,14 +68,34 @@ function handleReset(): void {
   if (fileInput.value) fileInput.value.value = ''
 }
 
+/**
+ * Uploads to Firebase Storage BEFORE writing the evidence doc, and only
+ * writes it (and resets the picker) on success — see
+ * CorePhotoCaptureFlow.vue's capturePhoto() for the full reasoning: a prior
+ * "local-first + background queue" version could permanently orphan an
+ * evidence doc with no remoteUrl and no server-side way to notice. A PDF
+ * source skips image compression entirely — createImageBitmap can't decode
+ * a PDF byte stream, so the old queue (which ran every 'document' entry
+ * through compression regardless of source format) would have failed on
+ * every PDF upload, never just photographed documents.
+ */
 async function handleConfirm(): Promise<void> {
   if (!pending.value) return
   uploading.value = true
+  errorMessage.value = ''
   try {
     const source = pending.value
     const blob =
       source.kind === 'photo' ? await fetch(source.previewUrl).then((r) => r.blob()) : source.file
     const extension = source.kind === 'photo' ? 'jpg' : 'pdf'
+    const uploadBlob =
+      source.kind === 'photo' ? (await imageCompressionService.compressImage(blob)).blob : blob
+    const remoteUrl = await storageService.uploadEvidenceFile(
+      props.verificationId,
+      `${props.itemId}-doc`,
+      uploadBlob,
+      extension,
+    )
     const evidenceId = crypto.randomUUID()
 
     const evidence: VerificationEvidence = {
@@ -83,6 +104,7 @@ async function handleConfirm(): Promise<void> {
       itemId: props.itemId,
       type: 'document',
       localUri: source.kind === 'photo' ? source.previewUrl : undefined,
+      remoteUrl,
       createdAt: Date.now(),
       captureSource: source.kind === 'photo' ? 'camera' : 'file',
       captureTimestamp: Date.now(),
@@ -96,15 +118,9 @@ async function handleConfirm(): Promise<void> {
       },
     }
     await useVerificationStore().addEvidence(evidence)
-    void useUploadQueueStore().enqueue({
-      localId: evidenceId,
-      verificationId: props.verificationId,
-      itemId: `${props.itemId}-doc`,
-      type: 'document',
-      blob,
-      extension,
-    })
     handleReset()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '上傳失敗，請重試'
   } finally {
     uploading.value = false
   }

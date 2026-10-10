@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import ComparisonSummary from '@/components/verification/ComparisonSummary.vue'
 import { findItemById } from '@/data/verification'
 import { comparisonService } from '@/services/verification/comparison.service'
@@ -14,6 +16,7 @@ import type { TransactionDecision } from '@/types/verification'
 const props = defineProps<{ id: string }>()
 
 const verificationStore = useVerificationStore()
+const router = useRouter()
 
 const comparisonItems = ref<ComparisonItem[]>([])
 const attentionItems = ref<string[]>([])
@@ -80,6 +83,14 @@ onMounted(load)
         :decision="verificationStore.currentVerification?.transactionDecision"
         @decide="handleDecide"
       />
+      <PrimaryButton
+        v-if="!loading"
+        block
+        variant="secondary"
+        @click="router.push(`/verification/${props.id}/report`)"
+      >
+        查看完整報告
+      </PrimaryButton>
     </div>
   </div>
 </template>

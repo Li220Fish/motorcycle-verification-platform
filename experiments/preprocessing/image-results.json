@@ -1,0 +1,1302 @@
+{
+  "generatedAt": "2026-10-02T13:35:44.943Z",
+  "pipeline": {
+    "CLIENT_LONG_EDGE": 1600,
+    "CLIENT_QUALITY": 80,
+    "SERVER_LONG_EDGE": 1280,
+    "SERVER_QUALITY": 78
+  },
+  "cnrDetectabilityThreshold": 1,
+  "experiments": {
+    "I1": {
+      "production": {
+        "bytes": 72041,
+        "kb": 70.4,
+        "width": 1280,
+        "height": 960,
+        "sharpnessLapVar": 585.69,
+        "meanLuma": 136.74,
+        "rmsContrast": 16.07,
+        "clippedHighlightPct": 0,
+        "clippedShadowPct": 0.004,
+        "entropyBits": 5.626,
+        "scratchCnr": {
+          "1px": 19.025,
+          "2px": 34.715,
+          "3px": 55.527,
+          "5px": 68.21,
+          "8px": 51.861,
+          "13px": 59.221
+        },
+        "patternContrast": {
+          "period4px": 0.3783,
+          "period8px": 0.4532,
+          "period16px": 0.4157,
+          "period32px": 0.4007
+        },
+        "textContrast": {
+          "stroke3px": 0.0709,
+          "stroke7px": 0.1515,
+          "stroke11px": 0.6344,
+          "stroke15px": 0.0704
+        },
+        "rustContrast": 0.278
+      },
+      "singlePass": {
+        "bytes": 71716,
+        "kb": 70,
+        "width": 1280,
+        "height": 960,
+        "sharpnessLapVar": 597.55,
+        "meanLuma": 136.75,
+        "rmsContrast": 16.07,
+        "clippedHighlightPct": 0,
+        "clippedShadowPct": 0.003,
+        "entropyBits": 5.624,
+        "scratchCnr": {
+          "1px": 17.952,
+          "2px": 42.644,
+          "3px": 57.576,
+          "5px": 62.534,
+          "8px": 46.65,
+          "13px": 56.441
+        },
+        "patternContrast": {
+          "period4px": 0.3933,
+          "period8px": 0.4328,
+          "period16px": 0.4082,
+          "period32px": 0.4007
+        },
+        "textContrast": {
+          "stroke3px": 0.0709,
+          "stroke7px": 0.1515,
+          "stroke11px": 0.6344,
+          "stroke15px": 0.0737
+        },
+        "rustContrast": 0.278
+      },
+      "ssim": 0.98405,
+      "psnrDb": 41.93,
+      "payloadDeltaPct": 0.5
+    },
+    "I2": {
+      "byConfig": {
+        "client1600_server800": {
+          "bytes": 25012,
+          "kb": 24.4,
+          "width": 800,
+          "height": 600,
+          "sharpnessLapVar": 651.76,
+          "meanLuma": 136.86,
+          "rmsContrast": 14.99,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.008,
+          "entropyBits": 5.516,
+          "scratchCnr": {
+            "1px": 0,
+            "2px": 0,
+            "3px": 0,
+            "5px": 53.44,
+            "8px": 49.432,
+            "13px": 29.735
+          },
+          "patternContrast": {
+            "period4px": 0.0672,
+            "period8px": 0.4457,
+            "period16px": 0.403,
+            "period32px": 0.403
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1783,
+            "stroke11px": 0.5354,
+            "stroke15px": 0.0737
+          },
+          "rustContrast": 0.245
+        },
+        "client1600_server1024": {
+          "bytes": 40798,
+          "kb": 39.8,
+          "width": 1024,
+          "height": 768,
+          "sharpnessLapVar": 595.1,
+          "meanLuma": 136.77,
+          "rmsContrast": 15.53,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.004,
+          "entropyBits": 5.585,
+          "scratchCnr": {
+            "1px": 0,
+            "2px": 47.234,
+            "3px": 0,
+            "5px": 51.215,
+            "8px": 75.576,
+            "13px": 62.293
+          },
+          "patternContrast": {
+            "period4px": 0.2388,
+            "period8px": 0.4627,
+            "period16px": 0.4157,
+            "period32px": 0.4082
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1648,
+            "stroke11px": 0.617,
+            "stroke15px": 0.0704
+          },
+          "rustContrast": 0.2705
+        },
+        "client1600_server1280": {
+          "bytes": 72041,
+          "kb": 70.4,
+          "width": 1280,
+          "height": 960,
+          "sharpnessLapVar": 585.69,
+          "meanLuma": 136.74,
+          "rmsContrast": 16.07,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.004,
+          "entropyBits": 5.626,
+          "scratchCnr": {
+            "1px": 19.025,
+            "2px": 34.715,
+            "3px": 55.527,
+            "5px": 68.21,
+            "8px": 51.861,
+            "13px": 59.221
+          },
+          "patternContrast": {
+            "period4px": 0.3783,
+            "period8px": 0.4532,
+            "period16px": 0.4157,
+            "period32px": 0.4007
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1515,
+            "stroke11px": 0.6344,
+            "stroke15px": 0.0704
+          },
+          "rustContrast": 0.278
+        },
+        "client1600_server1600": {
+          "bytes": 123293,
+          "kb": 120.4,
+          "width": 1600,
+          "height": 1200,
+          "sharpnessLapVar": 522.01,
+          "meanLuma": 136.81,
+          "rmsContrast": 16.55,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.002,
+          "entropyBits": 5.638,
+          "scratchCnr": {
+            "1px": 0,
+            "2px": 47.067,
+            "3px": 39.978,
+            "5px": 51.451,
+            "8px": 51.903,
+            "13px": 50.06
+          },
+          "patternContrast": {
+            "period4px": 0.4532,
+            "period8px": 0.4157,
+            "period16px": 0.4157,
+            "period32px": 0.3933
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1218,
+            "stroke11px": 0.6432,
+            "stroke15px": 0.0704
+          },
+          "rustContrast": 0.2941
+        },
+        "client1600_server2048": {
+          "bytes": 123293,
+          "kb": 120.4,
+          "width": 1600,
+          "height": 1200,
+          "sharpnessLapVar": 522.01,
+          "meanLuma": 136.81,
+          "rmsContrast": 16.55,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.002,
+          "entropyBits": 5.638,
+          "scratchCnr": {
+            "1px": 0,
+            "2px": 47.067,
+            "3px": 39.978,
+            "5px": 51.451,
+            "8px": 51.903,
+            "13px": 50.06
+          },
+          "patternContrast": {
+            "period4px": 0.4532,
+            "period8px": 0.4157,
+            "period16px": 0.4157,
+            "period32px": 0.3933
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1218,
+            "stroke11px": 0.6432,
+            "stroke15px": 0.0704
+          },
+          "rustContrast": 0.2941
+        },
+        "client2048_server2048": {
+          "bytes": 201429,
+          "kb": 196.7,
+          "width": 2048,
+          "height": 1536,
+          "sharpnessLapVar": 361.34,
+          "meanLuma": 136.85,
+          "rmsContrast": 16.75,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.001,
+          "entropyBits": 5.634,
+          "scratchCnr": {
+            "1px": 33.006,
+            "2px": 53.813,
+            "3px": 49.575,
+            "5px": 60.514,
+            "8px": 50.879,
+            "13px": 52.816
+          },
+          "patternContrast": {
+            "period4px": 0.4682,
+            "period8px": 0.4179,
+            "period16px": 0.4104,
+            "period32px": 0.3858
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1055,
+            "stroke11px": 0.6522,
+            "stroke15px": 0.0704
+          },
+          "rustContrast": 0.3051
+        },
+        "client3024_server2048": {
+          "bytes": 200447,
+          "kb": 195.7,
+          "width": 2048,
+          "height": 1536,
+          "sharpnessLapVar": 338.46,
+          "meanLuma": 136.86,
+          "rmsContrast": 16.71,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.001,
+          "entropyBits": 5.63,
+          "scratchCnr": {
+            "1px": 31.003,
+            "2px": 53.486,
+            "3px": 47.446,
+            "5px": 62.567,
+            "8px": 53.325,
+            "13px": 53.635
+          },
+          "patternContrast": {
+            "period4px": 0.4701,
+            "period8px": 0.4211,
+            "period16px": 0.403,
+            "period32px": 0.3806
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1095,
+            "stroke11px": 0.6522,
+            "stroke15px": 0.0737
+          },
+          "rustContrast": 0.2966
+        },
+        "client4032_server2048": {
+          "bytes": 196668,
+          "kb": 192.1,
+          "width": 2048,
+          "height": 1536,
+          "sharpnessLapVar": 333.13,
+          "meanLuma": 136.87,
+          "rmsContrast": 16.67,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.001,
+          "entropyBits": 5.626,
+          "scratchCnr": {
+            "1px": 33.277,
+            "2px": 55.871,
+            "3px": 49.972,
+            "5px": 60.35,
+            "8px": 54.327,
+            "13px": 53.036
+          },
+          "patternContrast": {
+            "period4px": 0.4627,
+            "period8px": 0.4179,
+            "period16px": 0.403,
+            "period32px": 0.3806
+          },
+          "textContrast": {
+            "stroke3px": 0.0709,
+            "stroke7px": 0.1055,
+            "stroke11px": 0.6522,
+            "stroke15px": 0.0737
+          },
+          "rustContrast": 0.2966
+        }
+      }
+    },
+    "I3": {
+      "byDegradation": {
+        "clean": {
+          "none (production)": {
+            "bytes": 72041,
+            "kb": 70.4,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 585.69,
+            "meanLuma": 136.74,
+            "rmsContrast": 16.07,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0.004,
+            "entropyBits": 5.626,
+            "scratchCnr": {
+              "1px": 19.025,
+              "2px": 34.715,
+              "3px": 55.527,
+              "5px": 68.21,
+              "8px": 51.861,
+              "13px": 59.221
+            },
+            "patternContrast": {
+              "period4px": 0.3783,
+              "period8px": 0.4532,
+              "period16px": 0.4157,
+              "period32px": 0.4007
+            },
+            "textContrast": {
+              "stroke3px": 0.0709,
+              "stroke7px": 0.1515,
+              "stroke11px": 0.6344,
+              "stroke15px": 0.0704
+            },
+            "rustContrast": 0.278
+          },
+          "normalize": {
+            "bytes": 109269,
+            "kb": 106.7,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 1457.39,
+            "meanLuma": 95.55,
+            "rmsContrast": 24.84,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 1.095,
+            "entropyBits": 6.303,
+            "scratchCnr": {
+              "1px": 21.593,
+              "2px": 38.74,
+              "3px": 51.78,
+              "5px": 66.193,
+              "8px": 44.792,
+              "13px": 61.153
+            },
+            "patternContrast": {
+              "period4px": 0.9022,
+              "period8px": 1,
+              "period16px": 1,
+              "period32px": 0.978
+            },
+            "textContrast": {
+              "stroke3px": 0.1667,
+              "stroke7px": 0.36,
+              "stroke11px": 0.9835,
+              "stroke15px": 0.1579
+            },
+            "rustContrast": 0.7698
+          },
+          "CLAHE": {
+            "bytes": 78988,
+            "kb": 77.1,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 699.22,
+            "meanLuma": 137.26,
+            "rmsContrast": 16.86,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0.005,
+            "entropyBits": 5.684,
+            "scratchCnr": {
+              "1px": 15.901,
+              "2px": 36.066,
+              "3px": 41.443,
+              "5px": 57.79,
+              "8px": 45.621,
+              "13px": 49.896
+            },
+            "patternContrast": {
+              "period4px": 0.4135,
+              "period8px": 0.4906,
+              "period16px": 0.4511,
+              "period32px": 0.4307
+            },
+            "textContrast": {
+              "stroke3px": 0.0559,
+              "stroke7px": 0.1176,
+              "stroke11px": 0.617,
+              "stroke15px": 0.0556
+            },
+            "rustContrast": 0.3008
+          },
+          "sharpen": {
+            "bytes": 118181,
+            "kb": 115.4,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 2323.18,
+            "meanLuma": 136.54,
+            "rmsContrast": 22.77,
+            "clippedHighlightPct": 0.02,
+            "clippedShadowPct": 0.176,
+            "entropyBits": 5.872,
+            "scratchCnr": {
+              "1px": 22.115,
+              "2px": 37.116,
+              "3px": 44.033,
+              "5px": 51.963,
+              "8px": 35.879,
+              "13px": 36.577
+            },
+            "patternContrast": {
+              "period4px": 0.696,
+              "period8px": 0.761,
+              "period16px": 0.7154,
+              "period32px": 0.6654
+            },
+            "textContrast": {
+              "stroke3px": 0.078,
+              "stroke7px": 0.125,
+              "stroke11px": 0.8922,
+              "stroke15px": 0.0737
+            },
+            "rustContrast": 0.5946
+          },
+          "median+sharpen": {
+            "bytes": 71634,
+            "kb": 70,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 977.76,
+            "meanLuma": 136.82,
+            "rmsContrast": 18.71,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0.12,
+            "entropyBits": 5.658,
+            "scratchCnr": {
+              "1px": 4.363,
+              "2px": 15.95,
+              "3px": 43.677,
+              "5px": 53.218,
+              "8px": 78.977,
+              "13px": 65.497
+            },
+            "patternContrast": {
+              "period4px": 0.5743,
+              "period8px": 0.6813,
+              "period16px": 0.6265,
+              "period32px": 0.5589
+            },
+            "textContrast": {
+              "stroke3px": 0.0709,
+              "stroke7px": 0.1055,
+              "stroke11px": 0.7895,
+              "stroke15px": 0.0704
+            },
+            "rustContrast": 0.3004
+          },
+          "normalize+sharpen": {
+            "bytes": 135844,
+            "kb": 132.7,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 3107.99,
+            "meanLuma": 106.44,
+            "rmsContrast": 26.01,
+            "clippedHighlightPct": 0.014,
+            "clippedShadowPct": 1.866,
+            "entropyBits": 6.092,
+            "scratchCnr": {
+              "1px": 22.565,
+              "2px": 40.303,
+              "3px": 42.885,
+              "5px": 54.587,
+              "8px": 36.688,
+              "13px": 36.717
+            },
+            "patternContrast": {
+              "period4px": 1,
+              "period8px": 1,
+              "period16px": 1,
+              "period32px": 0.9902
+            },
+            "textContrast": {
+              "stroke3px": 0.1171,
+              "stroke7px": 0.1925,
+              "stroke11px": 0.9701,
+              "stroke15px": 0.115
+            },
+            "rustContrast": 0.9623
+          }
+        },
+        "lowlight": {
+          "none (production)": {
+            "bytes": 26296,
+            "kb": 25.7,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 3.56,
+            "meanLuma": 45.57,
+            "rmsContrast": 1.57,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 2.562,
+            "scratchCnr": {
+              "1px": 0.195,
+              "2px": 0.017,
+              "3px": 0.125,
+              "5px": 0.094,
+              "8px": 0.029,
+              "13px": 0.164
+            },
+            "patternContrast": {
+              "period4px": 0.0337,
+              "period8px": 0.0337,
+              "period16px": 0.0444,
+              "period32px": 0.0444
+            },
+            "textContrast": {
+              "stroke3px": 0.0435,
+              "stroke7px": 0.0435,
+              "stroke11px": 0.0435,
+              "stroke15px": 0.0435
+            },
+            "rustContrast": 0.0323
+          },
+          "normalize": {
+            "bytes": 260556,
+            "kb": 254.4,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 1070.46,
+            "meanLuma": 46.58,
+            "rmsContrast": 19.37,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 1.281,
+            "entropyBits": 6.164,
+            "scratchCnr": {
+              "1px": 0.182,
+              "2px": 0.19,
+              "3px": 0.008,
+              "5px": 0.023,
+              "8px": 0.035,
+              "13px": 0.085
+            },
+            "patternContrast": {
+              "period4px": 0.5733,
+              "period8px": 0.5584,
+              "period16px": 0.5584,
+              "period32px": 0.5443
+            },
+            "textContrast": {
+              "stroke3px": 0.5283,
+              "stroke7px": 0.5094,
+              "stroke11px": 0.5046,
+              "stroke15px": 0.5046
+            },
+            "rustContrast": 0.4074
+          },
+          "CLAHE": {
+            "bytes": 28896,
+            "kb": 28.2,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 4.4,
+            "meanLuma": 46.57,
+            "rmsContrast": 1.65,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 2.61,
+            "scratchCnr": {
+              "1px": 0.251,
+              "2px": 0.089,
+              "3px": 0.182,
+              "5px": 0.081,
+              "8px": 0.004,
+              "13px": 0.282
+            },
+            "patternContrast": {
+              "period4px": 0.033,
+              "period8px": 0.033,
+              "period16px": 0.0435,
+              "period32px": 0.033
+            },
+            "textContrast": {
+              "stroke3px": 0.0426,
+              "stroke7px": 0.0426,
+              "stroke11px": 0.0426,
+              "stroke15px": 0.0426
+            },
+            "rustContrast": 0.0316
+          },
+          "sharpen": {
+            "bytes": 59267,
+            "kb": 57.9,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 24.64,
+            "meanLuma": 45.4,
+            "rmsContrast": 2.4,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 3.25,
+            "scratchCnr": {
+              "1px": 0.078,
+              "2px": 0.068,
+              "3px": 0.012,
+              "5px": 0.083,
+              "8px": 0.028,
+              "13px": 0.1
+            },
+            "patternContrast": {
+              "period4px": 0.0787,
+              "period8px": 0.0667,
+              "period16px": 0.0667,
+              "period32px": 0.0667
+            },
+            "textContrast": {
+              "stroke3px": 0.087,
+              "stroke7px": 0.087,
+              "stroke11px": 0.087,
+              "stroke15px": 0.087
+            },
+            "rustContrast": 0.0652
+          },
+          "median+sharpen": {
+            "bytes": 32773,
+            "kb": 32,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 4.25,
+            "meanLuma": 45.41,
+            "rmsContrast": 1.75,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 2.73,
+            "scratchCnr": {
+              "1px": 0.071,
+              "2px": 0.474,
+              "3px": 0.037,
+              "5px": 0.015,
+              "8px": 0.034,
+              "13px": 0.136
+            },
+            "patternContrast": {
+              "period4px": 0.0337,
+              "period8px": 0.0337,
+              "period16px": 0.0337,
+              "period32px": 0.0337
+            },
+            "textContrast": {
+              "stroke3px": 0.0435,
+              "stroke7px": 0.0435,
+              "stroke11px": 0.0538,
+              "stroke15px": 0.0538
+            },
+            "rustContrast": 0.0435
+          },
+          "normalize+sharpen": {
+            "bytes": 284279,
+            "kb": 277.6,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 1738.89,
+            "meanLuma": 43.55,
+            "rmsContrast": 17.21,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 1.387,
+            "entropyBits": 6.071,
+            "scratchCnr": {
+              "1px": 0.118,
+              "2px": 0.165,
+              "3px": 0.029,
+              "5px": 0.094,
+              "8px": 0.038,
+              "13px": 0.071
+            },
+            "patternContrast": {
+              "period4px": 0.6267,
+              "period8px": 0.6316,
+              "period16px": 0.6104,
+              "period32px": 0.5949
+            },
+            "textContrast": {
+              "stroke3px": 0.5876,
+              "stroke7px": 0.5714,
+              "stroke11px": 0.56,
+              "stroke15px": 0.56
+            },
+            "rustContrast": 0.4898
+          }
+        },
+        "glare": {
+          "none (production)": {
+            "bytes": 34879,
+            "kb": 34.1,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 4.97,
+            "meanLuma": 143.63,
+            "rmsContrast": 27.66,
+            "clippedHighlightPct": 2.977,
+            "clippedShadowPct": 0,
+            "entropyBits": 4.771,
+            "scratchCnr": {
+              "1px": 0.067,
+              "2px": 0.076,
+              "3px": 0.245,
+              "5px": 0.228,
+              "8px": 0.272,
+              "13px": 0.214
+            },
+            "patternContrast": {
+              "period4px": 0.2434,
+              "period8px": 0.1623,
+              "period16px": 0.0883,
+              "period32px": 0.0301
+            },
+            "textContrast": {
+              "stroke3px": 0.026,
+              "stroke7px": 0.0296,
+              "stroke11px": 0.0296,
+              "stroke15px": 0.0296
+            },
+            "rustContrast": 0.0185
+          },
+          "normalize": {
+            "bytes": 62956,
+            "kb": 61.5,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 14.25,
+            "meanLuma": 37.2,
+            "rmsContrast": 53.08,
+            "clippedHighlightPct": 2.731,
+            "clippedShadowPct": 4.542,
+            "entropyBits": 5.689,
+            "scratchCnr": {
+              "1px": 0.25,
+              "2px": 0.072,
+              "3px": 0.247,
+              "5px": 0.272,
+              "8px": 0.169,
+              "13px": 0.019
+            },
+            "patternContrast": {
+              "period4px": 0.907,
+              "period8px": 0.8532,
+              "period16px": 0.7097,
+              "period32px": 0.4545
+            },
+            "textContrast": {
+              "stroke3px": 0.3846,
+              "stroke7px": 0.35,
+              "stroke11px": 0.3659,
+              "stroke15px": 0.3333
+            },
+            "rustContrast": 0.1556
+          },
+          "CLAHE": {
+            "bytes": 37247,
+            "kb": 36.4,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 5.51,
+            "meanLuma": 143.09,
+            "rmsContrast": 27.1,
+            "clippedHighlightPct": 2.895,
+            "clippedShadowPct": 0,
+            "entropyBits": 4.76,
+            "scratchCnr": {
+              "1px": 0.067,
+              "2px": 0.067,
+              "3px": 0.273,
+              "5px": 0.282,
+              "8px": 0.274,
+              "13px": 0.217
+            },
+            "patternContrast": {
+              "period4px": 0.2321,
+              "period8px": 0.1569,
+              "period16px": 0.0819,
+              "period32px": 0.0264
+            },
+            "textContrast": {
+              "stroke3px": 0.0299,
+              "stroke7px": 0.0299,
+              "stroke11px": 0.0335,
+              "stroke15px": 0.0335
+            },
+            "rustContrast": 0.0185
+          },
+          "sharpen": {
+            "bytes": 44118,
+            "kb": 43.1,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 17.09,
+            "meanLuma": 143.52,
+            "rmsContrast": 27.76,
+            "clippedHighlightPct": 2.977,
+            "clippedShadowPct": 0,
+            "entropyBits": 4.804,
+            "scratchCnr": {
+              "1px": 0.192,
+              "2px": 0.08,
+              "3px": 0.238,
+              "5px": 0.266,
+              "8px": 0.213,
+              "13px": 0.018
+            },
+            "patternContrast": {
+              "period4px": 0.2434,
+              "period8px": 0.1623,
+              "period16px": 0.0883,
+              "period32px": 0.0301
+            },
+            "textContrast": {
+              "stroke3px": 0.0335,
+              "stroke7px": 0.0335,
+              "stroke11px": 0.0335,
+              "stroke15px": 0.0296
+            },
+            "rustContrast": 0.0185
+          },
+          "median+sharpen": {
+            "bytes": 36868,
+            "kb": 36,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 10.03,
+            "meanLuma": 143.53,
+            "rmsContrast": 27.73,
+            "clippedHighlightPct": 2.978,
+            "clippedShadowPct": 0,
+            "entropyBits": 4.762,
+            "scratchCnr": {
+              "1px": 0.173,
+              "2px": 0.069,
+              "3px": 0.243,
+              "5px": 0.256,
+              "8px": 0.215,
+              "13px": 0.173
+            },
+            "patternContrast": {
+              "period4px": 0.2434,
+              "period8px": 0.1623,
+              "period16px": 0.0883,
+              "period32px": 0.0264
+            },
+            "textContrast": {
+              "stroke3px": 0.0299,
+              "stroke7px": 0.0296,
+              "stroke11px": 0.0296,
+              "stroke15px": 0.0296
+            },
+            "rustContrast": 0.0185
+          },
+          "normalize+sharpen": {
+            "bytes": 82499,
+            "kb": 80.6,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 52.17,
+            "meanLuma": 36.98,
+            "rmsContrast": 53.25,
+            "clippedHighlightPct": 2.725,
+            "clippedShadowPct": 5.04,
+            "entropyBits": 5.732,
+            "scratchCnr": {
+              "1px": 0.207,
+              "2px": 0.038,
+              "3px": 0.246,
+              "5px": 0.282,
+              "8px": 0.194,
+              "13px": 0.161
+            },
+            "patternContrast": {
+              "period4px": 0.9186,
+              "period8px": 0.8704,
+              "period16px": 0.7419,
+              "period32px": 0.5
+            },
+            "textContrast": {
+              "stroke3px": 0.4211,
+              "stroke7px": 0.4,
+              "stroke11px": 0.4,
+              "stroke15px": 0.4
+            },
+            "rustContrast": 0.2273
+          }
+        },
+        "blur": {
+          "none (production)": {
+            "bytes": 29540,
+            "kb": 28.8,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 6.1,
+            "meanLuma": 136.4,
+            "rmsContrast": 11.32,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 5.37,
+            "scratchCnr": {
+              "1px": 8.823,
+              "2px": 16.549,
+              "3px": 24.574,
+              "5px": 28.931,
+              "8px": 44.453,
+              "13px": 69.752
+            },
+            "patternContrast": {
+              "period4px": 0.0262,
+              "period8px": 0.0301,
+              "period16px": 0.2809,
+              "period32px": 0.3633
+            },
+            "textContrast": {
+              "stroke3px": 0.0747,
+              "stroke7px": 0.2032,
+              "stroke11px": 0.3246,
+              "stroke15px": 0.0704
+            },
+            "rustContrast": 0.1034
+          },
+          "normalize": {
+            "bytes": 45827,
+            "kb": 44.8,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 28.89,
+            "meanLuma": 90.28,
+            "rmsContrast": 25.41,
+            "clippedHighlightPct": 0.003,
+            "clippedShadowPct": 1.142,
+            "entropyBits": 6.088,
+            "scratchCnr": {
+              "1px": 12.355,
+              "2px": 18.691,
+              "3px": 23.138,
+              "5px": 35.899,
+              "8px": 50.11,
+              "13px": 90.317
+            },
+            "patternContrast": {
+              "period4px": 0.0854,
+              "period8px": 0.122,
+              "period16px": 1,
+              "period32px": 1
+            },
+            "textContrast": {
+              "stroke3px": 0.2563,
+              "stroke7px": 0.8797,
+              "stroke11px": 1,
+              "stroke15px": 0.2308
+            },
+            "rustContrast": 0.404
+          },
+          "CLAHE": {
+            "bytes": 32347,
+            "kb": 31.6,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 7.47,
+            "meanLuma": 136.7,
+            "rmsContrast": 11.71,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 5.39,
+            "scratchCnr": {
+              "1px": 9.13,
+              "2px": 19.045,
+              "3px": 22.044,
+              "5px": 27.405,
+              "8px": 32.716,
+              "13px": 45.075
+            },
+            "patternContrast": {
+              "period4px": 0.0262,
+              "period8px": 0.0376,
+              "period16px": 0.3132,
+              "period32px": 0.406
+            },
+            "textContrast": {
+              "stroke3px": 0.0559,
+              "stroke7px": 0.189,
+              "stroke11px": 0.313,
+              "stroke15px": 0.0519
+            },
+            "rustContrast": 0.1145
+          },
+          "sharpen": {
+            "bytes": 34225,
+            "kb": 33.4,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 12.6,
+            "meanLuma": 136.39,
+            "rmsContrast": 11.93,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 5.394,
+            "scratchCnr": {
+              "1px": 9.508,
+              "2px": 15.447,
+              "3px": 29.459,
+              "5px": 28.315,
+              "8px": 42.802,
+              "13px": 76.611
+            },
+            "patternContrast": {
+              "period4px": 0.0376,
+              "period8px": 0.0451,
+              "period16px": 0.3609,
+              "period32px": 0.3783
+            },
+            "textContrast": {
+              "stroke3px": 0.0747,
+              "stroke7px": 0.2032,
+              "stroke11px": 0.3604,
+              "stroke15px": 0.0704
+            },
+            "rustContrast": 0.1197
+          },
+          "median+sharpen": {
+            "bytes": 31877,
+            "kb": 31.1,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 10.83,
+            "meanLuma": 136.4,
+            "rmsContrast": 11.73,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 0,
+            "entropyBits": 5.384,
+            "scratchCnr": {
+              "1px": 8.363,
+              "2px": 15.861,
+              "3px": 31.53,
+              "5px": 31.981,
+              "8px": 48.078,
+              "13px": 77.492
+            },
+            "patternContrast": {
+              "period4px": 0.015,
+              "period8px": 0.0376,
+              "period16px": 0.3383,
+              "period32px": 0.3708
+            },
+            "textContrast": {
+              "stroke3px": 0.0747,
+              "stroke7px": 0.2032,
+              "stroke11px": 0.3422,
+              "stroke15px": 0.0704
+            },
+            "rustContrast": 0.1077
+          },
+          "normalize+sharpen": {
+            "bytes": 50205,
+            "kb": 49,
+            "width": 1280,
+            "height": 960,
+            "sharpnessLapVar": 48.88,
+            "meanLuma": 90.83,
+            "rmsContrast": 23.73,
+            "clippedHighlightPct": 0,
+            "clippedShadowPct": 1.123,
+            "entropyBits": 6.033,
+            "scratchCnr": {
+              "1px": 9.1,
+              "2px": 19.858,
+              "3px": 28.514,
+              "5px": 32.799,
+              "8px": 45.262,
+              "13px": 83.387
+            },
+            "patternContrast": {
+              "period4px": 0.119,
+              "period8px": 0.1617,
+              "period16px": 1,
+              "period32px": 1
+            },
+            "textContrast": {
+              "stroke3px": 0.2222,
+              "stroke7px": 0.7664,
+              "stroke11px": 1,
+              "stroke15px": 0.2039
+            },
+            "rustContrast": 0.4156
+          }
+        }
+      }
+    },
+    "I4": {
+      "byDegradation": {
+        "clean": {
+          "sharpnessLapVar": 585.69,
+          "meanLuma": 136.74,
+          "rmsContrast": 16.07,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0.004,
+          "entropyBits": 5.626,
+          "meanScratchCnr": 48.09
+        },
+        "lowlight": {
+          "sharpnessLapVar": 3.56,
+          "meanLuma": 45.57,
+          "rmsContrast": 1.57,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0,
+          "entropyBits": 2.562,
+          "meanScratchCnr": 0.1
+        },
+        "glare": {
+          "sharpnessLapVar": 4.97,
+          "meanLuma": 143.63,
+          "rmsContrast": 27.66,
+          "clippedHighlightPct": 2.977,
+          "clippedShadowPct": 0,
+          "entropyBits": 4.771,
+          "meanScratchCnr": 0.18
+        },
+        "blur": {
+          "sharpnessLapVar": 6.1,
+          "meanLuma": 136.4,
+          "rmsContrast": 11.32,
+          "clippedHighlightPct": 0,
+          "clippedShadowPct": 0,
+          "entropyBits": 5.37,
+          "meanScratchCnr": 32.18
+        }
+      }
+    },
+    "I5": {
+      "byQuality": {
+        "50": {
+          "kb": 38.9,
+          "ssimVsQ100": 0.9691,
+          "psnrVsQ100": 38.15,
+          "scratchCnr1px": 24.818,
+          "scratchCnr3px": 62.902,
+          "scratchCnr8px": 24.954,
+          "pattern4px": 0.3806,
+          "textStroke3px": 0.0714
+        },
+        "60": {
+          "kb": 43.7,
+          "ssimVsQ100": 0.9704,
+          "psnrVsQ100": 38.89,
+          "scratchCnr1px": 20.253,
+          "scratchCnr3px": 105.811,
+          "scratchCnr8px": 36.688,
+          "pattern4px": 0.3835,
+          "textStroke3px": 0.0709
+        },
+        "70": {
+          "kb": 53.7,
+          "ssimVsQ100": 0.9722,
+          "psnrVsQ100": 39.87,
+          "scratchCnr1px": 20.335,
+          "scratchCnr3px": 63.888,
+          "scratchCnr8px": 45.817,
+          "pattern4px": 0.3858,
+          "textStroke3px": 0.0709
+        },
+        "78": {
+          "kb": 70.4,
+          "ssimVsQ100": 0.9746,
+          "psnrVsQ100": 40.83,
+          "scratchCnr1px": 19.025,
+          "scratchCnr3px": 55.527,
+          "scratchCnr8px": 51.861,
+          "pattern4px": 0.3783,
+          "textStroke3px": 0.0709
+        },
+        "85": {
+          "kb": 97.9,
+          "ssimVsQ100": 0.9774,
+          "psnrVsQ100": 41.91,
+          "scratchCnr1px": 19.224,
+          "scratchCnr3px": 49.385,
+          "scratchCnr8px": 46.652,
+          "pattern4px": 0.3731,
+          "textStroke3px": 0.0709
+        },
+        "92": {
+          "kb": 153,
+          "ssimVsQ100": 0.9815,
+          "psnrVsQ100": 43.46,
+          "scratchCnr1px": 19.661,
+          "scratchCnr3px": 45.872,
+          "scratchCnr8px": 46.622,
+          "pattern4px": 0.3783,
+          "textStroke3px": 0.0709
+        },
+        "97": {
+          "kb": 266.1,
+          "ssimVsQ100": 0.9836,
+          "psnrVsQ100": 44.5,
+          "scratchCnr1px": 19.213,
+          "scratchCnr3px": 46.67,
+          "scratchCnr8px": 49.212,
+          "pattern4px": 0.3783,
+          "textStroke3px": 0.0709
+        }
+      }
+    }
+  },
+  "chartReference": {
+    "bytes": 7581303,
+    "kb": 7403.6,
+    "width": 4032,
+    "height": 3024,
+    "sharpnessLapVar": 320,
+    "meanLuma": 136.95,
+    "rmsContrast": 17.25,
+    "clippedHighlightPct": 0,
+    "clippedShadowPct": 0,
+    "entropyBits": 5.556,
+    "scratchCnr": {
+      "1px": 42.51,
+      "2px": 40.88,
+      "3px": 39.176,
+      "5px": 37.416,
+      "8px": 36.081,
+      "13px": 33.883
+    },
+    "patternContrast": {
+      "period4px": 0.3731,
+      "period8px": 0.3731,
+      "period16px": 0.3731,
+      "period32px": 0.3731
+    },
+    "textContrast": {
+      "stroke3px": 0.0742,
+      "stroke7px": 0.078,
+      "stroke11px": 0.6721,
+      "stroke15px": 0.0737
+    },
+    "rustContrast": 0.31
+  }
+}

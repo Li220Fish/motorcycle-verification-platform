@@ -5,8 +5,9 @@ import { CORE_VISION_FRONT_SUSPENSION_V1_PROMPT } from './core-vision-front-susp
 import { CORE_VISION_ENGINE_BOTTOM_V1_PROMPT } from './core-vision-engine-bottom-v1'
 import { DASHBOARD_OCR_V2_PROMPT } from './dashboard-ocr-v2'
 import { COLD_ENGINE_TOUCH_PROMPT } from './cold-engine-touch-v3'
-import { ENGINE_AUDIO_V2_PROMPT } from './audio/engine-audio-v2'
-import { REGISTRATION_OCR_PROMPT } from './registration-ocr-v1'
+import { ENGINE_AUDIO_V3_PROMPT } from './audio/engine-audio-v3'
+import { ENGINE_AUDIO_HOT_V1_PROMPT } from './audio/engine-audio-hot-v1'
+import { REGISTRATION_OCR_GEMINI_V3_PROMPT } from './registration-ocr-gemini-v3'
 
 export interface AiPromptDefinition {
   key: string
@@ -63,17 +64,30 @@ export const AI_PROMPT_REGISTRY: AiPromptDefinition[] = [
     defaultText: COLD_ENGINE_TOUCH_PROMPT,
   },
   {
-    key: 'engine-audio-v2',
-    label: '引擎啟動／怠速／油門音訊判定',
-    defaultText: ENGINE_AUDIO_V2_PROMPT,
+    // v3：Gemini 只負責解讀，前面已經跑過完整 DSP 管線（音質/Phase/事件偵測/
+    // Hard Rule）——見 functions/src/ai/engine-audio/。這段 prompt 文字後面
+    // 會被 engine-sensor-session.service.ts 動態接上一段 deterministic
+    // context block 才送出，這裡看到的只是固定前綴。
+    key: 'engine-audio-v3',
+    label: '引擎啟動／怠速／油門音訊判定（DSP + Gemini）',
+    defaultText: ENGINE_AUDIO_V3_PROMPT,
   },
   {
-    // 已完整串接、不是半成品：VehicleRegistrationCard.vue 上傳行照照片後直接
-    // 呼叫這支，結果（引擎/車身號碼或「未通過」訊息）當場顯示在畫面上，跟上面
-    // 的儀表板 OCR 不同。
-    key: 'registration-ocr-v1',
-    label: '行照 OCR',
-    defaultText: REGISTRATION_OCR_PROMPT,
+    // 買家複驗專用：上路後的熱車怠速／油門音訊判定，跟 engine-audio-v3 同一套
+    // DSP 管線，只是沒有啟動階段（引擎在錄音開始前就已經在運轉）。
+    key: 'engine-audio-hot-v1',
+    label: '熱車怠速／油門音訊判定（買家複驗，DSP + Gemini）',
+    defaultText: ENGINE_AUDIO_HOT_V1_PROMPT,
+  },
+  {
+    // 2026-10 v3: 只問引擎號碼一個欄位——是否為行照由本機 OpenCV 樣板比對
+    // （registration-document-template.service.ts，純離線、不用任何 API）
+    // 先判斷，這支 prompt 只讀取遮罩後只露出引擎號碼那一列的圖，個資不會
+    // 離開自己的後端。本機 Tesseract（registration-ocr.service.ts）降級成
+    // 只有在這支 Gemini 呼叫本身失敗（額度/網路）時才用的備援。
+    key: 'registration-ocr-gemini-v3',
+    label: '行照 OCR（Gemini，僅引擎號碼，讀遮罩後圖片）',
+    defaultText: REGISTRATION_OCR_GEMINI_V3_PROMPT,
   },
 ]
 

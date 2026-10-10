@@ -40,8 +40,7 @@ The evidence clearly shows that the full required five-second contact procedure 
 unsure:
 The video evidence is insufficient to determine whether the procedure was completed.
 
-For attention and unsure:
-note is required.
+note is required for every result, including normal — one or two sentences stating what was observed that supports the result.
 
 The note field must be written in Traditional Chinese (繁體中文，台灣用語習慣) — never Simplified Chinese, never English, never a mix of languages. label stays a short English machine tag, unaffected by this rule.
 

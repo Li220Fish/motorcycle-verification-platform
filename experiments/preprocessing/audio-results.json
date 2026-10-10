@@ -1,0 +1,665 @@
+{
+  "generatedAt": "2026-10-02T13:24:14.294Z",
+  "recordings": {
+    "A": {
+      "label": "錄音 A (1789735537560)",
+      "file": "1789735537560-ENG-03.aac",
+      "durationSec": 22.87,
+      "overallRms": 0.1496,
+      "quietPrefixRms1s": 0.0152
+    },
+    "B": {
+      "label": "錄音 B (1789277691470)",
+      "file": "1789277691470-ENG-03.aac",
+      "durationSec": 23.08,
+      "overallRms": 0.1469,
+      "quietPrefixRms1s": 0.0052
+    }
+  },
+  "experiments": {
+    "A1": {
+      "byRecording": {
+        "A": {
+          "startup": {
+            "bands": {
+              "b0_500": 66.65,
+              "b500_2k": 13.55,
+              "b2k_5k": 15.51,
+              "b5k_6k": 1.37,
+              "b6k_8k": 1.51,
+              "b8k_11k": 1.23,
+              "b11k_16k": 0.15,
+              "b16k_22k": 0.03
+            },
+            "pctAbove5k": 4.29,
+            "pctKnockBand6to8k": 1.51,
+            "pctLostAtDecode": 0.18
+          },
+          "idle": {
+            "bands": {
+              "b0_500": 93.22,
+              "b500_2k": 3.56,
+              "b2k_5k": 1.9,
+              "b5k_6k": 0.38,
+              "b6k_8k": 0.71,
+              "b8k_11k": 0.17,
+              "b11k_16k": 0.04,
+              "b16k_22k": 0.02
+            },
+            "pctAbove5k": 1.32,
+            "pctKnockBand6to8k": 0.71,
+            "pctLostAtDecode": 0.06
+          },
+          "rev": {
+            "bands": {
+              "b0_500": 90.44,
+              "b500_2k": 6.09,
+              "b2k_5k": 2.19,
+              "b5k_6k": 0.39,
+              "b6k_8k": 0.67,
+              "b8k_11k": 0.18,
+              "b11k_16k": 0.03,
+              "b16k_22k": 0.01
+            },
+            "pctAbove5k": 1.29,
+            "pctKnockBand6to8k": 0.67,
+            "pctLostAtDecode": 0.05
+          }
+        },
+        "B": {
+          "startup": {
+            "bands": {
+              "b0_500": 84.99,
+              "b500_2k": 10.3,
+              "b2k_5k": 1.71,
+              "b5k_6k": 0.5,
+              "b6k_8k": 0.71,
+              "b8k_11k": 1.26,
+              "b11k_16k": 0.52,
+              "b16k_22k": 0
+            },
+            "pctAbove5k": 3,
+            "pctKnockBand6to8k": 0.71,
+            "pctLostAtDecode": 0.52
+          },
+          "idle": {
+            "bands": {
+              "b0_500": 82.81,
+              "b500_2k": 9.52,
+              "b2k_5k": 3.27,
+              "b5k_6k": 0.68,
+              "b6k_8k": 1.29,
+              "b8k_11k": 1.71,
+              "b11k_16k": 0.72,
+              "b16k_22k": 0
+            },
+            "pctAbove5k": 4.4,
+            "pctKnockBand6to8k": 1.29,
+            "pctLostAtDecode": 0.72
+          },
+          "rev": {
+            "bands": {
+              "b0_500": 82.75,
+              "b500_2k": 5.31,
+              "b2k_5k": 3.16,
+              "b5k_6k": 1.08,
+              "b6k_8k": 1.87,
+              "b8k_11k": 3.96,
+              "b11k_16k": 1.86,
+              "b16k_22k": 0
+            },
+            "pctAbove5k": 8.77,
+            "pctKnockBand6to8k": 1.87,
+            "pctLostAtDecode": 1.86
+          }
+        }
+      }
+    },
+    "A2": {
+      "byRecording": {
+        "A": {
+          "none (DC only)": {
+            "pctBelow50Hz": 0.03,
+            "pctBelow100Hz": 17.05,
+            "overallRms": 0.1496,
+            "band100_5kRelative": 81.54
+          },
+          "one-pole 20Hz (production)": {
+            "pctBelow50Hz": 0.02,
+            "pctBelow100Hz": 16.59,
+            "overallRms": 0.1476,
+            "band100_5kRelative": 81.97
+          },
+          "one-pole 80Hz": {
+            "pctBelow50Hz": 0.01,
+            "pctBelow100Hz": 12.57,
+            "overallRms": 0.1295,
+            "band100_5kRelative": 85.59
+          },
+          "biquad 80Hz x2 (4th order)": {
+            "pctBelow50Hz": 0,
+            "pctBelow100Hz": 8.71,
+            "overallRms": 0.1309,
+            "band100_5kRelative": 89.45
+          },
+          "biquad 120Hz x2": {
+            "pctBelow50Hz": 0,
+            "pctBelow100Hz": 2.4,
+            "overallRms": 0.1044,
+            "band100_5kRelative": 94.71
+          }
+        },
+        "B": {
+          "none (DC only)": {
+            "pctBelow50Hz": 1.36,
+            "pctBelow100Hz": 27.66,
+            "overallRms": 0.1469,
+            "band100_5kRelative": 66.49
+          },
+          "one-pole 20Hz (production)": {
+            "pctBelow50Hz": 1.17,
+            "pctBelow100Hz": 26.46,
+            "overallRms": 0.1438,
+            "band100_5kRelative": 67.47
+          },
+          "one-pole 80Hz": {
+            "pctBelow50Hz": 0.5,
+            "pctBelow100Hz": 18.11,
+            "overallRms": 0.121,
+            "band100_5kRelative": 73.46
+          },
+          "biquad 80Hz x2 (4th order)": {
+            "pctBelow50Hz": 0.03,
+            "pctBelow100Hz": 8.98,
+            "overallRms": 0.1159,
+            "band100_5kRelative": 81.61
+          },
+          "biquad 120Hz x2": {
+            "pctBelow50Hz": 0,
+            "pctBelow100Hz": 2.1,
+            "overallRms": 0.0895,
+            "band100_5kRelative": 82.17
+          }
+        }
+      }
+    },
+    "A3": {
+      "byRecording": {
+        "A": {
+          "peakScaleShiftPct": -27.53,
+          "rmsScaleShiftPct": -0.09,
+          "peakNorm_idleFlatnessShiftPct": 1.93,
+          "rmsNorm_idleFlatnessShiftPct": 1.93,
+          "peakNorm_idleCentroidShiftPct": 1.53,
+          "rmsNorm_idleCentroidShiftPct": 1.53
+        },
+        "B": {
+          "peakScaleShiftPct": 0,
+          "rmsScaleShiftPct": -0.09,
+          "peakNorm_idleFlatnessShiftPct": 0.75,
+          "rmsNorm_idleFlatnessShiftPct": 0.75,
+          "peakNorm_idleCentroidShiftPct": 1.79,
+          "rmsNorm_idleCentroidShiftPct": 1.79
+        }
+      }
+    },
+    "A4": {
+      "byRecording": {
+        "A": {
+          "prefixRms": 0.015,
+          "idleRms": 0.159,
+          "prefixMarginDb": 20.5,
+          "perPhase": {
+            "idle": {
+              "harmonicToFloorDb": {
+                "baseline": 24.09,
+                "trueNoiseProfile": 23.88,
+                "percentileProfile": 24.6
+              },
+              "hnrMedianDb": {
+                "baseline": 0.77,
+                "trueNoiseProfile": 0.73,
+                "percentileProfile": 0.83
+              }
+            },
+            "rev": {
+              "harmonicToFloorDb": {
+                "baseline": 23.9,
+                "trueNoiseProfile": 23.7,
+                "percentileProfile": 24.49
+              },
+              "hnrMedianDb": {
+                "baseline": -0.86,
+                "trueNoiseProfile": -0.87,
+                "percentileProfile": -0.41
+              }
+            }
+          }
+        },
+        "B": {
+          "prefixRms": 0.0051,
+          "idleRms": 0.1009,
+          "prefixMarginDb": 25.9,
+          "perPhase": {
+            "idle": {
+              "harmonicToFloorDb": {
+                "baseline": 19.83,
+                "trueNoiseProfile": 19.86,
+                "percentileProfile": 21.33
+              },
+              "hnrMedianDb": {
+                "baseline": -1.66,
+                "trueNoiseProfile": -1.54,
+                "percentileProfile": -1.57
+              }
+            },
+            "rev": {
+              "harmonicToFloorDb": {
+                "baseline": 16.47,
+                "trueNoiseProfile": 16.42,
+                "percentileProfile": 17.12
+              },
+              "hnrMedianDb": {
+                "baseline": -2.24,
+                "trueNoiseProfile": -2.34,
+                "percentileProfile": -2.1
+              }
+            }
+          }
+        }
+      }
+    },
+    "A5": {
+      "byRecording": {
+        "A": {
+          "250/125 ms (production)": {
+            "windowCount": 71,
+            "maxFluxZ": 2.56,
+            "windowsAbove3Sigma": 0,
+            "pctWindowsAbove3Sigma": 0,
+            "computeMs": 38
+          },
+          "100/50 ms": {
+            "windowCount": 178,
+            "maxFluxZ": 4.01,
+            "windowsAbove3Sigma": 3,
+            "pctWindowsAbove3Sigma": 1.69,
+            "computeMs": 44
+          },
+          "46/23 ms": {
+            "windowCount": 390,
+            "maxFluxZ": 4.41,
+            "windowsAbove3Sigma": 24,
+            "pctWindowsAbove3Sigma": 6.17,
+            "computeMs": 24
+          },
+          "23/11 ms": {
+            "windowCount": 815,
+            "maxFluxZ": 6.48,
+            "windowsAbove3Sigma": 87,
+            "pctWindowsAbove3Sigma": 10.69,
+            "computeMs": 24
+          }
+        },
+        "B": {
+          "250/125 ms (production)": {
+            "windowCount": 71,
+            "maxFluxZ": 6.31,
+            "windowsAbove3Sigma": 3,
+            "pctWindowsAbove3Sigma": 4.29,
+            "computeMs": 33
+          },
+          "100/50 ms": {
+            "windowCount": 178,
+            "maxFluxZ": 10.74,
+            "windowsAbove3Sigma": 14,
+            "pctWindowsAbove3Sigma": 7.91,
+            "computeMs": 37
+          },
+          "46/23 ms": {
+            "windowCount": 390,
+            "maxFluxZ": 18.39,
+            "windowsAbove3Sigma": 50,
+            "pctWindowsAbove3Sigma": 12.85,
+            "computeMs": 21
+          },
+          "23/11 ms": {
+            "windowCount": 815,
+            "maxFluxZ": 19.11,
+            "windowsAbove3Sigma": 82,
+            "pctWindowsAbove3Sigma": 10.07,
+            "computeMs": 22
+          }
+        }
+      },
+      "note": "flux series computed within the idle phase only"
+    },
+    "A6": {
+      "byRecording": {
+        "A": {
+          "rms": {
+            "cohensD": 0.244,
+            "inCurrentPipeline": true,
+            "idleMean": 0.1588,
+            "revMean": 0.1621
+          },
+          "peak": {
+            "cohensD": 0.557,
+            "inCurrentPipeline": true,
+            "idleMean": 0.5188,
+            "revMean": 0.55
+          },
+          "crestFactor": {
+            "cohensD": 0.464,
+            "inCurrentPipeline": true,
+            "idleMean": 3.2694,
+            "revMean": 3.3984
+          },
+          "zcr": {
+            "cohensD": 0.254,
+            "inCurrentPipeline": true,
+            "idleMean": 0.0773,
+            "revMean": 0.08
+          },
+          "centroid": {
+            "cohensD": 0.877,
+            "inCurrentPipeline": true,
+            "idleMean": 251.5382,
+            "revMean": 313.4043
+          },
+          "flatness": {
+            "cohensD": 0.975,
+            "inCurrentPipeline": true,
+            "idleMean": 0.0294,
+            "revMean": 0.0385
+          },
+          "entropy": {
+            "cohensD": 1.027,
+            "inCurrentPipeline": true,
+            "idleMean": 0.5152,
+            "revMean": 0.5593
+          },
+          "flux": {
+            "cohensD": 1.018,
+            "inCurrentPipeline": true,
+            "idleMean": 16.2137,
+            "revMean": 27.3952
+          },
+          "hnrDb": {
+            "cohensD": 1.31,
+            "inCurrentPipeline": false,
+            "idleMean": 0.6208,
+            "revMean": -1.5922
+          },
+          "periodHz": {
+            "cohensD": 1.268,
+            "inCurrentPipeline": false,
+            "idleMean": 16.5337,
+            "revMean": 58.7091
+          },
+          "autocorrR": {
+            "cohensD": 1.328,
+            "inCurrentPipeline": false,
+            "idleMean": 0.5355,
+            "revMean": 0.4156
+          },
+          "mfcc1": {
+            "cohensD": 0.824,
+            "inCurrentPipeline": false,
+            "idleMean": 17.9265,
+            "revMean": 19.4991
+          },
+          "mfcc2": {
+            "cohensD": 0.541,
+            "inCurrentPipeline": false,
+            "idleMean": 8.6041,
+            "revMean": 7.2516
+          },
+          "mfcc3": {
+            "cohensD": 0.679,
+            "inCurrentPipeline": false,
+            "idleMean": 12.7574,
+            "revMean": 11.6301
+          },
+          "centroidFull": {
+            "cohensD": 0.751,
+            "inCurrentPipeline": false,
+            "idleMean": 336.1333,
+            "revMean": 396.657
+          }
+        },
+        "B": {
+          "rms": {
+            "cohensD": 0.885,
+            "inCurrentPipeline": true,
+            "idleMean": 0.0992,
+            "revMean": 0.167
+          },
+          "peak": {
+            "cohensD": 0.98,
+            "inCurrentPipeline": true,
+            "idleMean": 0.3888,
+            "revMean": 0.5825
+          },
+          "crestFactor": {
+            "cohensD": 0.045,
+            "inCurrentPipeline": true,
+            "idleMean": 3.9262,
+            "revMean": 3.8829
+          },
+          "zcr": {
+            "cohensD": 1.107,
+            "inCurrentPipeline": true,
+            "idleMean": 0.0994,
+            "revMean": 0.1467
+          },
+          "centroid": {
+            "cohensD": 0.528,
+            "inCurrentPipeline": true,
+            "idleMean": 317.0854,
+            "revMean": 445.1613
+          },
+          "flatness": {
+            "cohensD": 0.635,
+            "inCurrentPipeline": true,
+            "idleMean": 0.053,
+            "revMean": 0.094
+          },
+          "entropy": {
+            "cohensD": 0.13,
+            "inCurrentPipeline": true,
+            "idleMean": 0.5959,
+            "revMean": 0.5819
+          },
+          "flux": {
+            "cohensD": 0.818,
+            "inCurrentPipeline": true,
+            "idleMean": 5.1732,
+            "revMean": 20.7994
+          },
+          "hnrDb": {
+            "cohensD": 0.086,
+            "inCurrentPipeline": false,
+            "idleMean": -2.1404,
+            "revMean": -1.8648
+          },
+          "periodHz": {
+            "cohensD": 0.175,
+            "inCurrentPipeline": false,
+            "idleMean": 57.2599,
+            "revMean": 53.4599
+          },
+          "autocorrR": {
+            "cohensD": 0.102,
+            "inCurrentPipeline": false,
+            "idleMean": 0.3879,
+            "revMean": 0.4044
+          },
+          "mfcc1": {
+            "cohensD": 1.845,
+            "inCurrentPipeline": false,
+            "idleMean": 19.1594,
+            "revMean": 9.5722
+          },
+          "mfcc2": {
+            "cohensD": 0.258,
+            "inCurrentPipeline": false,
+            "idleMean": 11.1571,
+            "revMean": 9.665
+          },
+          "mfcc3": {
+            "cohensD": 0.865,
+            "inCurrentPipeline": false,
+            "idleMean": 1.0731,
+            "revMean": 3.366
+          },
+          "centroidFull": {
+            "cohensD": 0.869,
+            "inCurrentPipeline": false,
+            "idleMean": 530.754,
+            "revMean": 947.3255
+          }
+        }
+      }
+    },
+    "A7": {
+      "byRecording": {
+        "A": {
+          "rms": {
+            "halfToHalfDriftPct": 0.19,
+            "withinIdleCv": 0.029
+          },
+          "peak": {
+            "halfToHalfDriftPct": 0.93,
+            "withinIdleCv": 0.0707
+          },
+          "crestFactor": {
+            "halfToHalfDriftPct": 1.02,
+            "withinIdleCv": 0.0748
+          },
+          "zcr": {
+            "halfToHalfDriftPct": 0.89,
+            "withinIdleCv": 0.07
+          },
+          "centroid": {
+            "halfToHalfDriftPct": 1.72,
+            "withinIdleCv": 0.0471
+          },
+          "flatness": {
+            "halfToHalfDriftPct": 0.18,
+            "withinIdleCv": 0.0819
+          },
+          "entropy": {
+            "halfToHalfDriftPct": 1.94,
+            "withinIdleCv": 0.0267
+          },
+          "flux": {
+            "halfToHalfDriftPct": 5.74,
+            "withinIdleCv": 0.2995
+          },
+          "hnrDb": {
+            "halfToHalfDriftPct": 35.47,
+            "withinIdleCv": 1.3932
+          },
+          "periodHz": {
+            "halfToHalfDriftPct": 0.64,
+            "withinIdleCv": 0.115
+          },
+          "autocorrR": {
+            "halfToHalfDriftPct": 2.01,
+            "withinIdleCv": 0.0919
+          },
+          "mfcc1": {
+            "halfToHalfDriftPct": 1.8,
+            "withinIdleCv": 0.0617
+          },
+          "mfcc2": {
+            "halfToHalfDriftPct": 1.2,
+            "withinIdleCv": 0.1151
+          },
+          "mfcc3": {
+            "halfToHalfDriftPct": 1.07,
+            "withinIdleCv": 0.056
+          },
+          "centroidFull": {
+            "halfToHalfDriftPct": 0.65,
+            "withinIdleCv": 0.0584
+          }
+        },
+        "B": {
+          "rms": {
+            "halfToHalfDriftPct": 6.38,
+            "withinIdleCv": 0.2233
+          },
+          "peak": {
+            "halfToHalfDriftPct": 16.01,
+            "withinIdleCv": 0.2863
+          },
+          "crestFactor": {
+            "halfToHalfDriftPct": 10.39,
+            "withinIdleCv": 0.194
+          },
+          "zcr": {
+            "halfToHalfDriftPct": 26.68,
+            "withinIdleCv": 0.3964
+          },
+          "centroid": {
+            "halfToHalfDriftPct": 65.71,
+            "withinIdleCv": 0.6223
+          },
+          "flatness": {
+            "halfToHalfDriftPct": 145.98,
+            "withinIdleCv": 0.9936
+          },
+          "entropy": {
+            "halfToHalfDriftPct": 8,
+            "withinIdleCv": 0.1128
+          },
+          "flux": {
+            "halfToHalfDriftPct": 18.78,
+            "withinIdleCv": 0.6628
+          },
+          "hnrDb": {
+            "halfToHalfDriftPct": 28.82,
+            "withinIdleCv": 0
+          },
+          "periodHz": {
+            "halfToHalfDriftPct": 16.76,
+            "withinIdleCv": 0.2693
+          },
+          "autocorrR": {
+            "halfToHalfDriftPct": 5.48,
+            "withinIdleCv": 0.3151
+          },
+          "mfcc1": {
+            "halfToHalfDriftPct": 8.7,
+            "withinIdleCv": 0.2792
+          },
+          "mfcc2": {
+            "halfToHalfDriftPct": 31.57,
+            "withinIdleCv": 0.2916
+          },
+          "mfcc3": {
+            "halfToHalfDriftPct": 2628.22,
+            "withinIdleCv": 2.8372
+          },
+          "centroidFull": {
+            "halfToHalfDriftPct": 64.99,
+            "withinIdleCv": 0.8207
+          }
+        }
+      }
+    },
+    "A8": {
+      "windowsMeasured": 40,
+      "windowsPerSession": 181,
+      "perSessionMs": {
+        "direct DFT, 5 kHz ceiling (production)": 4362,
+        "direct DFT, extended to 11 kHz": 9518,
+        "FFT, full band to 11 kHz": 55
+      },
+      "fftSpeedupVsProduction": 78.8,
+      "fftSpeedupVsExtendedDft": 171.9
+    }
+  }
+}

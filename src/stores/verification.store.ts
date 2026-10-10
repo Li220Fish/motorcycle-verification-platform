@@ -7,7 +7,7 @@ import type {
   VerificationItem,
   VerificationSection,
 } from '@/data/verification'
-import { inferTransmissionType } from '@/data/verification/engine-session'
+import { inferTransmissionType, LOCKED_ENGINE_SECTION_ID } from '@/data/verification/engine-session'
 import {
   analyzeColdEngineTouchCheck,
   analyzeCoreVisionEngineBottom,
@@ -16,6 +16,7 @@ import {
   analyzeCoreVisionSides,
   analyzeDocumentMaintenance,
   analyzeEngineSensorSessionV2,
+  analyzeHotEngineSensorSessionV2,
   analyzeOcrDashboard,
 } from '@/services/firebase/ai-analysis.service'
 import { verificationService } from '@/services/firebase/verification.service'
@@ -127,22 +128,35 @@ export const useVerificationStore = defineStore('verification', () => {
   const flowKind = computed(() =>
     currentVerification.value?.type === 'buyer' ? 'buyer' : 'seller',
   )
-  /** Step 19's item id is filtered out of the flow entirely for a
-   * confirmed-scooter vehicle (see hasExposedChainSprocket above) — not
-   * hidden via CSS, actually absent from flatItems/sections so it can never
-   * appear in progress counts, the Hub, or missingRequiredItems. Same
-   * treatment for any item declaring `visibleWhen` (e.g.
-   * PREP-02-DAMAGE-PHOTOS, shown only once PREP-02 discloses 碰撞/其他) —
-   * both checks live here so a single pass covers every conditionally-shown
-   * item instead of one bespoke filter per condition. */
+  /** Step 19's item id, and 基本12項健檢's own 鏈條 tap marker (BASIC-chain —
+   * see basic-health-check-items.ts), are both filtered out of the flow
+   * entirely for a confirmed-scooter vehicle (see hasExposedChainSprocket
+   * above) — not hidden via CSS, actually absent from flatItems/sections so
+   * neither can ever appear in progress counts, the Hub, or
+   * missingRequiredItems. Same treatment for any item declaring
+   * `visibleWhen` (e.g. PREP-02-DAMAGE-PHOTOS, shown only once PREP-02
+   * discloses 碰撞/其他) — both checks live here so a single pass covers
+   * every conditionally-shown item instead of one bespoke filter per
+   * condition. */
+  const CHAIN_CONDITIONAL_ITEM_IDS = new Set(['APR-transmission-chain', 'BASIC-chain'])
   function isItemVisible(item: VerificationItem): boolean {
-    if (item.id === 'APR-transmission-chain' && !hasExposedChainSprocket.value) return false
+    if (CHAIN_CONDITIONAL_ITEM_IDS.has(item.id) && !hasExposedChainSprocket.value) return false
     if (item.visibleWhen) {
       const selections = answers.value[item.visibleWhen.itemId]?.selections ?? []
       if (!item.visibleWhen.anyOfSelections.some((value) => selections.includes(value))) {
         return false
       }
     }
+    // 其他主動揭露 (seller-phase4-disclosure: PREP-*/ELEC-10..13/ENG-01) is
+    // entirely Optional self-disclosure the SELLER volunteers about the
+    // vehicle's history/condition — a buyer re-verifying doesn't fill these
+    // in themselves, so they're dropped from the buyer flow outright (not
+    // just visually hidden — absent from flatItems/sections, same "single
+    // pass" treatment as the chain/visibleWhen filters above, so they never
+    // appear in progress counts, the Hub, or missingRequiredItems either).
+    // Buyer's own Required items (RIDE-01, HOT-*) are unaffected — every one
+    // of them stays `required: true`.
+    if (flowKind.value === 'buyer' && !item.required) return false
     return true
   }
   const flatItems = computed<FlatVerificationItem[]>(() =>
@@ -211,11 +225,25 @@ export const useVerificationStore = defineStore('verification', () => {
       }
       evidenceByItem.value = mergedEvidence
 
-      // best-effort push of anything that only exists locally (offline draft catch-up)
+      // Best-effort push of anything that only exists locally (offline draft
+      // catch-up) — MUST skip anything that already exists remotely.
+      // saveAnswer()/saveEvidence() are both full setDoc() overwrites, and
+      // the local draft copy is whatever was on hand at capture time, before
+      // any backend write (an AI-written aiResult on an answer doc, or
+      // upload-queue.store.ts's updateEvidenceRemoteUrl() on an evidence
+      // doc) ever reached it. Blindly re-pushing every local item here — as
+      // this used to do — silently overwrote and destroyed those
+      // server-side-only fields on every resume, real data loss found via a
+      // production report showing evidence with only a dead blob: localUri
+      // and no remoteUrl despite the file having actually uploaded fine.
+      const remoteAnswerIds = new Set(remoteAnswers.map((answer) => answer.itemId))
+      const remoteEvidenceIds = new Set(remoteEvidence.map((evidence) => evidence.id))
       for (const answer of localAnswers) {
+        if (remoteAnswerIds.has(answer.itemId)) continue
         verificationService.saveAnswer(verificationId, answer).catch(() => {})
       }
       for (const evidence of localEvidence) {
+        if (remoteEvidenceIds.has(evidence.id)) continue
         verificationService.saveEvidence(evidence).catch(() => {})
       }
 
@@ -352,7 +380,8 @@ export const useVerificationStore = defineStore('verification', () => {
       | 'coreVisionEngineBottom'
       | 'dashboardOcr'
       | 'coldCheck'
-      | 'engineSensorSession',
+      | 'engineSensorSession'
+      | 'hotEngineSensorSession',
   ): Promise<void> {
     const verificationId = currentVerification.value?.id
     if (!verificationId) return
@@ -365,6 +394,8 @@ export const useVerificationStore = defineStore('verification', () => {
       else if (key === 'dashboardOcr') await analyzeOcrDashboard(verificationId)
       else if (key === 'coldCheck') await analyzeColdEngineTouchCheck(verificationId)
       else if (key === 'engineSensorSession') await analyzeEngineSensorSessionV2(verificationId)
+      else if (key === 'hotEngineSensorSession')
+        await analyzeHotEngineSensorSessionV2(verificationId)
     } catch (error) {
       console.error(`[AI analysis] retry ${key} failed:`, error)
     }
@@ -403,6 +434,93 @@ export const useVerificationStore = defineStore('verification', () => {
       (evidence) => evidence.id !== keepEvidenceId,
     )
     await Promise.all(superseded.map((evidence) => removeEvidence(itemId, evidence.id)))
+  }
+
+  /** A genuine delete, not a re-save — see verificationService.deleteAnswer's
+   * own comment. Clears every layer an answer can live in (in-memory,
+   * localStorage draft, Firestore) so a reload can never resurrect it. */
+  async function removeAnswer(itemId: string): Promise<void> {
+    const { [itemId]: _removed, ...rest } = answers.value
+    answers.value = rest
+    const verificationId = currentVerification.value?.id
+    if (verificationId) {
+      localDraftService.removeAnswer(verificationId, itemId)
+      await verificationService.deleteAnswer(verificationId, itemId).catch(() => {})
+    }
+  }
+
+  // A Trusted-Backend AI verdict already in flight the moment the user left
+  // (e.g. Cold Check's Gemini call, fired the instant ENG-02's recording
+  // finishes) can still land a few seconds AFTER resetLockedEngineSection's
+  // own delete pass below already ran, resurrecting an answer doc with no
+  // evidence behind it — the Trusted Backend writes straight to Firestore
+  // with the Admin SDK, so nothing on the client can cancel a call once
+  // triggered. Every legitimate answer on these items is always written
+  // together with its own evidence (see ColdTouchCapture.vue/
+  // EngineInspectionFlow.vue: addEvidence always precedes saveAnswer in the
+  // same function), so an answer with NO evidence at all is unambiguous
+  // leftover noise — safe to delete outright, whenever it's found. Doesn't
+  // cover a late verdict landing AFTER the user has already re-recorded the
+  // SAME item within this window (evidence exists by then, so it looks
+  // legitimate and gets skipped) — a known, narrow gap; fully closing it
+  // needs the Trusted Backend itself to reject writes against superseded
+  // evidence, out of scope here. Two checkpoints, not one — live-observed
+  // Gemini latency for this route varies well past 8s under real load, so a
+  // single early check misses a real fraction of these.
+  const ENGINE_RESET_SWEEP_DELAYS_MS = [10000, 30000]
+  async function sweepStaleEngineAnswers(verificationId: string, itemIds: string[]): Promise<void> {
+    const [freshAnswers, freshEvidence] = await Promise.all([
+      verificationService.listAnswers(verificationId).catch(() => [] as VerificationAnswer[]),
+      verificationService.listEvidence(verificationId).catch(() => [] as VerificationEvidence[]),
+    ])
+    const itemsWithEvidence = new Set(freshEvidence.map((evidence) => evidence.itemId))
+    for (const answer of freshAnswers) {
+      if (!itemIds.includes(answer.itemId) || itemsWithEvidence.has(answer.itemId)) continue
+      localDraftService.removeAnswer(verificationId, answer.itemId)
+      await verificationService.deleteAnswer(verificationId, answer.itemId).catch(() => {})
+      if (currentVerification.value?.id === verificationId && answers.value[answer.itemId]) {
+        const { [answer.itemId]: _removed, ...rest } = answers.value
+        answers.value = rest
+      }
+    }
+  }
+
+  /**
+   * 冷車＋引擎檢查 (LOCKED_ENGINE_SECTION_ID) — and, for a buyer flow, 熱車檢查
+   * (LOCKED_HOT_ENGINE_SECTION_ID) — are both all-or-nothing units by product
+   * decision: once any of a locked section's items has an answer, the whole
+   * section must be finished in one sitting. VerificationStepsView.vue calls
+   * this right before letting the user actually leave the section mid-way
+   * (after their explicit confirmation on a warning dialog) — wipes every
+   * evidence doc/file and every answer for every item in the section, and
+   * rewinds the local "resume here" bookmark back to the section's own first
+   * item, so the next visit is a genuinely blank restart rather than
+   * resuming into a partially-deleted, confusing mid-section state.
+   */
+  async function resetLockedEngineSection(
+    sectionId: string = LOCKED_ENGINE_SECTION_ID,
+  ): Promise<void> {
+    const verificationId = currentVerification.value?.id
+    if (!verificationId) return
+    const section = sections.value.find((candidate) => candidate.id === sectionId)
+    if (!section) return
+    const itemIds = section.items.map((item) => item.id)
+
+    for (const itemId of itemIds) {
+      const evidenceList = evidenceByItem.value[itemId] ?? []
+      await Promise.all(evidenceList.map((evidence) => removeEvidence(itemId, evidence.id)))
+      await removeAnswer(itemId)
+    }
+    const firstItemId = itemIds[0]
+    if (firstItemId) localDraftService.saveLastPosition(verificationId, firstItemId)
+
+    for (const delayMs of ENGINE_RESET_SWEEP_DELAYS_MS) {
+      setTimeout(() => {
+        sweepStaleEngineAnswers(verificationId, itemIds).catch((error) =>
+          console.error('[verification.store] sweepStaleEngineAnswers failed:', error),
+        )
+      }, delayMs)
+    }
   }
 
   /**
@@ -579,6 +697,7 @@ export const useVerificationStore = defineStore('verification', () => {
     'dashboardOcr',
     'coldCheck',
     'engineSensorSession',
+    'hotEngineSensorSession',
   ]
   function analysisStatusFor(key: string): 'processing' | 'completed' | 'failed' | undefined {
     return currentVerification.value?.analysisStatus?.[key]?.status
@@ -668,9 +787,11 @@ export const useVerificationStore = defineStore('verification', () => {
     sections,
     loadFlow,
     saveAnswer,
+    removeAnswer,
     addEvidence,
     removeEvidence,
     discardOtherEvidence,
+    resetLockedEngineSection,
     resolveNextIndex,
     resumeIndex,
     sectionProgress,

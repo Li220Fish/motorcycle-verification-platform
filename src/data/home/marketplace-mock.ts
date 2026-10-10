@@ -31,15 +31,41 @@ export interface VehicleSnapshot {
   color: string
   mileage: number
   modified: boolean
+  /** Copied from the backing vehicleModels/{modelId} doc's own bodyType/
+   * powerType (admin/sections/ModelsSection.vue) at publish time — same
+   * "snapshot, never live-joined" reasoning as the rest of this interface.
+   * null on any listing published before this field existed, or whose
+   * vehicle has no modelId link — MarketplaceView.vue's filter treats a
+   * missing value as "doesn't match" rather than "matches everything",
+   * since guessing wrong here (e.g. surfacing a gasoline bike under an
+   * 電動 filter) is worse than just not being filterable yet. */
+  bodyType: string | null
+  powerType: 'gasoline' | 'electric' | null
   /** Hotlinked URLs for seeded DEMO listings; Firebase Storage download URLs
    * (public `marketplace/{listingId}/...` path — see storage.rules) for real
    * user-submitted listings. First entry is the cover photo. */
   photos: string[]
+  /** Copied from the backing vehicle's `modelId` (types/vehicle.ts) at
+   * publish time — the buyer-facing "了解車輛" button on
+   * MarketplaceListingView.vue links to /discussion/vehicle-knowledge/{this}
+   * only when present. Never live-joined, same reasoning as the rest of this
+   * snapshot: a buyer can't read the seller's private `vehicles/{id}` doc
+   * directly (firestore.rules scopes it to the owner), and a listing
+   * published before this field existed simply has no link — the button is
+   * hidden rather than guessed at from brand/model text. */
+  modelId?: string | null
 }
 
 export interface MockMarketListing {
   id: string
-  status: 'draft' | 'published'
+  /** 'sold' — set by transferVehicleOwnership (Cloud Function) once the
+   *  seller confirms a 車輛過戶; already excluded from browse automatically
+   *  since homeContentService's query filters status=='published'. No UI
+   *  path ever writes this directly.
+   *  'delisted' — the seller's own take-down (listingService.delist()),
+   *  reversible via relist() — same "excluded from browse for free" effect
+   *  as 'sold', just seller-initiated instead of system-triggered. */
+  status: 'draft' | 'published' | 'sold' | 'delisted'
   /** Which completed Verification(s) back this listing — empty on the
    * seeded DEMO listings, which have no real inspection behind them.
    * publish() flips isPublic=true on every id in here. */
@@ -139,6 +165,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: 'CVT 無段變速',
       color: '曜石灰',
       modified: false,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Yamaha_nmax_cpd150_YCP.JPG/960px-Yamaha_nmax_cpd150_YCP.JPG',
       ],
@@ -166,6 +194,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: '6速手排',
       color: '珍珠白',
       modified: false,
+      bodyType: '街車',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/2022_Honda_CB300R.png/960px-2022_Honda_CB300R.png',
       ],
@@ -193,6 +223,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: 'CVT 無段變速',
       color: '琉璃藍',
       modified: true,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/2021_Kymco_KRV_Type_S.jpg/960px-2021_Kymco_KRV_Type_S.jpg',
       ],
@@ -220,6 +252,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: 'CVT 無段變速',
       color: '消光紅',
       modified: false,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/SYM_Jet_14_in_Avellino.jpg/960px-SYM_Jet_14_in_Avellino.jpg',
       ],
@@ -247,6 +281,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: 'CVT 無段變速',
       color: '競速藍',
       modified: true,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Yamaha_CygnusX.jpg/960px-Yamaha_CygnusX.jpg',
       ],
@@ -274,6 +310,8 @@ export const MOCK_MARKET_LISTINGS: MockMarketListing[] = [
       transmission: '6速手排',
       color: '消光黑',
       modified: false,
+      bodyType: '街車',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Yamaha_MT-07.jpg/960px-Yamaha_MT-07.jpg',
       ],

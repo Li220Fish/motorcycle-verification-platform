@@ -35,6 +35,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/vehicles/new',
+      name: 'vehicle-add',
+      component: () => import('@/views/VehicleAddView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/vehicles/transfer',
+      name: 'vehicle-transfer',
+      component: () => import('@/views/VehicleTransferView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/vehicles/:id',
       name: 'vehicle-detail',
       component: () => import('@/views/VehicleDetailView.vue'),
@@ -82,6 +94,21 @@ const router = createRouter({
       meta: { requiresAuth: true },
       props: true,
     },
+    // Public, unauthenticated report link (ShareReportView.vue's "複製連結")
+    // — the one route in this app a stranger with no account can open.
+    // hideChrome since AppHeader/BottomNavigation assume a logged-in user
+    // (notification bell, avatar, nav tabs). SharedReportView.vue itself
+    // signs the visitor in anonymously on mount (never counted as
+    // authenticated — see auth.store.ts's isAuthenticated) purely to satisfy
+    // firestore.rules' signedIn() for the isPublic verification/answers/
+    // evidence read rules, which never required more than that.
+    {
+      path: '/share/:id',
+      name: 'shared-report',
+      component: () => import('@/views/SharedReportView.vue'),
+      meta: { requiresAuth: false, hideChrome: true },
+      props: true,
+    },
     {
       path: '/probe',
       name: 'probe',
@@ -98,7 +125,17 @@ const router = createRouter({
       path: '/marketplace/:id',
       name: 'marketplace-listing',
       component: () => import('@/views/MarketplaceListingView.vue'),
-      meta: { requiresAuth: true },
+      // `requiresAuth` stays true (default chrome behavior — bottom nav/
+      // sidebar show exactly as they always have for a real signed-in
+      // visitor — is unaffected) but `allowAnonymous` tells the guard below
+      // not to force a redirect even without one. This is the "分享的連結
+      //會是車子頁面" link: an anonymous visitor who followed it signs in
+      // anonymously on mount (see MarketplaceListingView.vue, same pattern
+      // as SharedReportView.vue) and sees a restricted view — booking/chat/
+      // favorite prompt for a real login, and the report link routes to
+      // /share/:id (restricted photos/AI notes) instead of
+      // /verification/:id/report (which still hard-requires a real login).
+      meta: { requiresAuth: true, allowAnonymous: true },
       props: true,
     },
     {
@@ -208,6 +245,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
       props: true,
     },
+    {
+      path: '/discussion/vehicle-knowledge/:modelId',
+      name: 'vehicle-knowledge-detail',
+      component: () => import('@/views/VehicleKnowledgeDetailView.vue'),
+      meta: { requiresAuth: true },
+      props: true,
+    },
     // --- MotoVerify 營運後台 (/admin) — see docs/admin-backend.md. Entirely
     // separate from the mobile app's views/components/design tokens; only
     // the Firestore `db` handle and a few read-only type contracts are
@@ -235,6 +279,13 @@ const router = createRouter({
       props: (route) => ({ page: 'verifydetail', id: route.params.id }),
     },
     {
+      path: '/admin/vehicles/:id',
+      name: 'admin-vehicle-detail',
+      component: () => import('@/admin/AdminDashboardView.vue'),
+      meta: { hideChrome: true },
+      props: (route) => ({ page: 'vehicledetail', id: route.params.id }),
+    },
+    {
       path: '/admin/:page?',
       name: 'admin-dashboard',
       component: () => import('@/admin/AdminDashboardView.vue'),
@@ -257,7 +308,7 @@ router.beforeEach(async (to) => {
   }
 
   const requiresAuth = to.meta.requiresAuth !== false
-  if (requiresAuth && !authStore.isAuthenticated) {
+  if (requiresAuth && !authStore.isAuthenticated && !to.meta.allowAnonymous) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.name === 'login' && authStore.isAuthenticated) {

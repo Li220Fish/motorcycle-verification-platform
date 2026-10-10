@@ -49,6 +49,16 @@ function saveAnswer(verificationId: string, answer: VerificationAnswer): void {
   writeJson(answersKey(verificationId), answers)
 }
 
+/** Mirrors removeEvidence below — a genuine delete, not overwriting with a
+ *  cleared value, so a later loadFlow() merge (remote + local, newest
+ *  updatedAt wins) can't resurrect a stale local copy of an answer that was
+ *  just deleted server-side (see verification.store.ts's
+ *  resetLockedEngineSection). */
+function removeAnswer(verificationId: string, itemId: string): void {
+  const answers = loadAnswers(verificationId).filter((existing) => existing.itemId !== itemId)
+  writeJson(answersKey(verificationId), answers)
+}
+
 function loadEvidence(verificationId: string): VerificationEvidence[] {
   return readJson<VerificationEvidence>(evidenceKey(verificationId))
 }
@@ -89,6 +99,7 @@ function saveLastPosition(verificationId: string, itemId: string): void {
 export const localDraftService = {
   loadAnswers,
   saveAnswer,
+  removeAnswer,
   loadEvidence,
   saveEvidence,
   removeEvidence,

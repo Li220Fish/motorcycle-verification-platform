@@ -47,10 +47,10 @@ async function coldCheckWindowStillOpen(verificationId: string): Promise<boolean
  * verification, since every 重試 tap hits this exact same guard forever with
  * no way out. Reproduced live 2026-09-08).
  *
- * ColdTouchCapture.vue already wrote a manual placeholder Answer
- * (`saveAnswer('ENG-02', 'normal')`) the instant the video was recorded —
- * this keeps that `result` untouched (never silently flips 正常→須注意 or vice
- * versa) but, unlike the original fix, actually writes an honest `aiResult`
+ * ColdTouchCapture.vue already wrote a placeholder Answer
+ * (`saveAnswer('ENG-02', 'unsure')`) the instant the video was recorded —
+ * this keeps that `result` untouched (never silently flips it to 正常/須注意)
+ * but, unlike the original fix, actually writes an honest `aiResult`
  * explaining WHY no real Gemini review happened, using the same
  * backend-decided-with-zero-Gemini-cost shape as writeSystemNotApplicable —
  * `model: 'motoverify-backend-rules'`, never claiming to be a real model
@@ -58,13 +58,21 @@ async function coldCheckWindowStillOpen(verificationId: string): Promise<boolean
  * blank and a viewer had no way to tell "actually reviewed, genuinely fine"
  * apart from "never reviewed at all, timing just didn't allow it" — the two
  * look identical without an explicit note.
+ *
+ * The placeholder defaulting to 'unsure' (not 'normal') means
+ * `coldStateValid` below is honestly `false` in this fallback unless
+ * something upstream genuinely set `result` to 'normal' — no real reviewer
+ * (AI or human) ever confirmed this window-closed case, so it must not read
+ * as confirmed-fine just because that used to be the placeholder's default.
  */
 async function acceptExistingManualAnswer(verificationId: string): Promise<GeminiItemResult> {
   const existing = await getAnswer(verificationId, ENG_02)
-  const result = existing?.result ?? 'normal'
+  const result = existing?.result ?? 'unsure'
   const coldStateValid = result === 'normal'
   const note =
-    '引擎已啟動，冷車觸感無法再進行 AI 覆核，維持錄影當下車主自行確認的結果，未經 AI 檢視。'
+    result === 'unsure'
+      ? '引擎已啟動，冷車觸感無法再進行 AI 覆核，且分析完成前使用者已繼續下一步，本項目未經任何審核。'
+      : '引擎已啟動，冷車觸感無法再進行 AI 覆核，維持錄影當下車主自行確認的結果，未經 AI 檢視。'
   const item: GeminiItemResult = {
     itemId: ENG_02,
     result,

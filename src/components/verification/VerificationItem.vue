@@ -295,7 +295,7 @@ function handleUnflagIssue(): void {
 
 .success-flash {
   position: fixed;
-  top: max(var(--space-lg), env(safe-area-inset-top));
+  top: max(var(--space-lg), var(--safe-area-inset-top, env(safe-area-inset-top)));
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;

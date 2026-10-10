@@ -23,6 +23,7 @@ export type AnalysisRouteKey =
   | 'dashboardOcr'
   | 'coldCheck'
   | 'engineSensorSession'
+  | 'hotEngineSensorSession'
 
 async function writeStatus(
   verificationId: string,

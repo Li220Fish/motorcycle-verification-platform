@@ -46,9 +46,36 @@ function handleBack(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-height);
+  /* min-height, not height — with the project-wide `box-sizing: border-box`
+     reset, a fixed `height` makes `padding-top` eat into that same fixed
+     box instead of growing it, so on a device with a real inset (a notch/
+     pill cutout) this header's actual rendered height never exceeds
+     --header-height no matter the inset. Every sticky bar that stacks
+     below this one (e.g. VerificationCategoryNav.vue's .category-nav)
+     positions itself via `top: calc(var(--header-height) + <the same inset
+     below>)`, i.e. already assumes this header IS that tall — min-height
+     (grows to fit the padding) is what actually makes that true. Found
+     live on a real device (40px inset): the mismatch left a 40px gap
+     between this header and the next sticky bar with no opaque element
+     covering it, through which normally-scrolling content behind both bars
+     became briefly visible while passing through.
+
+     padding-top below reads `var(--safe-area-inset-top, env(...))` rather
+     than plain `env(safe-area-inset-top)` — Capacitor's Android WebView
+     does NOT support the standard CSS env() safe-area variables at all
+     (only iOS/WebKit does); Capacitor 8's built-in SystemBars plugin
+     instead injects the inset as a `--safe-area-inset-*` CSS custom
+     property on <html> (see node_modules/@capacitor/android/capacitor/src/
+     main/java/com/getcapacitor/plugin/SystemBars.java). This pattern (var()
+     preferring the injected property, falling back to env() for iOS/plain
+     web) is used everywhere this app reads a safe-area inset — found live
+     on a real Android 15+ device (targetSdk 36 enforces edge-to-edge,
+     unlike older Android which let the OS reserve the status bar's space
+     automatically): content sat flush under the status bar with zero top
+     padding, since env() alone silently resolves to 0 on Android. */
+  min-height: var(--header-height);
   padding: 0 18px;
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top));
   background: var(--color-background);
   position: sticky;
   top: 0;

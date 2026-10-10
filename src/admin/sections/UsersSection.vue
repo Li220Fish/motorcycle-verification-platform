@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  deleteUserCascade,
   listAllListings,
   listAllVehicles,
   listAllVerifications,
@@ -35,6 +36,73 @@ const filtered = computed(() => {
     (u) => (u.displayName ?? '').toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
   )
 })
+
+// Row-selection delete mode — off by default so a stray click never selects
+// anything; toggled on by "刪除" the same way most admin bulk-actions do.
+const selecting = ref(false)
+const selectedUids = ref<Set<string>>(new Set())
+const deleting = ref(false)
+
+const allFilteredSelected = computed(
+  () => filtered.value.length > 0 && filtered.value.every((u) => selectedUids.value.has(u.uid)),
+)
+
+function toggleSelecting(): void {
+  selecting.value = !selecting.value
+  if (!selecting.value) selectedUids.value = new Set()
+}
+
+function toggleSelectAll(): void {
+  selectedUids.value = allFilteredSelected.value
+    ? new Set()
+    : new Set(filtered.value.map((u) => u.uid))
+}
+
+function toggleSelectOne(uid: string): void {
+  const next = new Set(selectedUids.value)
+  if (next.has(uid)) next.delete(uid)
+  else next.add(uid)
+  selectedUids.value = next
+}
+
+async function handleDeleteSelected(): Promise<void> {
+  const targets = users.value.filter((u) => selectedUids.value.has(u.uid))
+  if (targets.length === 0) return
+  const preview = targets
+    .slice(0, 5)
+    .map((u) => u.email || u.uid)
+    .join('、')
+  const suffix = targets.length > 5 ? ` 等共 ${targets.length} 位` : ''
+  if (
+    !window.confirm(
+      `刪除 ${preview}${suffix} 的帳號？\n\n` +
+        `會一併刪除其名下的車輛、驗車紀錄、刊登、貼文與留言，但不會刪除其 Firebase Auth 帳號本身（無法從前端以 admin 身分代刪他人帳號）。此操作無法復原。`,
+    )
+  ) {
+    return
+  }
+  deleting.value = true
+  try {
+    const totals = { vehicles: 0, verifications: 0, listings: 0, posts: 0, comments: 0 }
+    for (const u of targets) {
+      const summary = await deleteUserCascade(u.uid)
+      totals.vehicles += summary.vehicles
+      totals.verifications += summary.verifications
+      totals.listings += summary.listings
+      totals.posts += summary.posts
+      totals.comments += summary.comments
+    }
+    const deletedUids = new Set(targets.map((u) => u.uid))
+    users.value = users.value.filter((u) => !deletedUids.has(u.uid))
+    selectedUids.value = new Set()
+    selecting.value = false
+    window.alert(
+      `已刪除 ${targets.length} 位使用者，一併移除：車輛 ${totals.vehicles}、驗車紀錄 ${totals.verifications}、刊登 ${totals.listings}、貼文 ${totals.posts}、留言 ${totals.comments}。`,
+    )
+  } finally {
+    deleting.value = false
+  }
+}
 
 function formatDate(ms: number): string {
   if (!ms) return '—'
@@ -74,14 +142,32 @@ onMounted(async () => {
         <h2>使用者</h2>
         <span class="sub">{{ users.length }}</span>
         <div class="spacer"></div>
+        <span v-if="selecting && selectedUids.size > 0" class="sub"
+          >已選 {{ selectedUids.size }}</span
+        >
+        <button
+          v-if="selecting"
+          class="admin-btn danger sm"
+          :disabled="selectedUids.size === 0 || deleting"
+          @click="handleDeleteSelected"
+        >
+          {{ deleting ? '刪除中…' : '刪除' }}
+        </button>
+        <button class="admin-btn sm" @click="toggleSelecting">
+          {{ selecting ? '取消' : '刪除帳號' }}
+        </button>
         <input v-model="search" class="admin-search" type="search" placeholder="搜尋名稱或 email" />
       </div>
       <div class="admin-panel-body flush admin-table-wrap">
         <table class="admin-table">
           <thead>
             <tr>
+              <th v-if="selecting" class="admin-check-col">
+                <input type="checkbox" :checked="allFilteredSelected" @change="toggleSelectAll" />
+              </th>
               <th>名稱</th>
               <th>Email</th>
+              <th class="num">評分</th>
               <th class="num">登記車輛</th>
               <th class="num">自建刊登</th>
               <th class="num">完成檢驗</th>
@@ -91,16 +177,24 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-if="!loading && filtered.length === 0">
-              <td class="admin-empty-cell" colspan="7">尚無資料</td>
+              <td class="admin-empty-cell" :colspan="selecting ? 9 : 8">尚無資料</td>
             </tr>
             <tr
               v-for="u in filtered"
               :key="u.uid"
               class="clickable"
-              @click="emit('open-user', u.uid)"
+              @click="selecting ? toggleSelectOne(u.uid) : emit('open-user', u.uid)"
             >
+              <td v-if="selecting" class="admin-check-col" @click.stop="toggleSelectOne(u.uid)">
+                <input
+                  type="checkbox"
+                  :checked="selectedUids.has(u.uid)"
+                  @change="toggleSelectOne(u.uid)"
+                />
+              </td>
               <td class="strong">{{ u.displayName || '（未設定名稱）' }}</td>
               <td class="dim">{{ u.email }}</td>
+              <td class="num">{{ u.score }}</td>
               <td class="num">{{ vehicleCountByUid[u.uid] ?? 0 }}</td>
               <td class="num">{{ listingCountByUid[u.uid] ?? 0 }}</td>
               <td class="num">{{ verificationCountByUid[u.uid] ?? 0 }}</td>
@@ -113,3 +207,10 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.admin-check-col {
+  width: 32px;
+  text-align: center;
+}
+</style>

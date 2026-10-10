@@ -57,6 +57,7 @@ function toVehicle(id: string, data: VehicleDoc): Vehicle {
     chassisNumber: data.chassisNumber ?? null,
     photos: data.photos ?? [],
     registrationDocumentUrl: data.registrationDocumentUrl ?? null,
+    registrationDocumentMaskedUrl: data.registrationDocumentMaskedUrl ?? null,
     registrationVerification: data.registrationVerification,
     sortOrder: data.sortOrder ?? null,
     createdAt: toMillisOrNow(data.createdAt),

@@ -6,6 +6,7 @@ import { chatService } from '@/services/chat/chat.service'
 import { conversationService } from '@/services/chat/conversation.service'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
+import { useAuthStore } from '@/stores/auth.store'
 import type {
   ChatMessage,
   Conversation,
@@ -14,6 +15,7 @@ import type {
 } from '@/services/chat/chat.types'
 
 export const useChatStore = defineStore('chat', () => {
+  const authStore = useAuthStore()
   const currentUid = ref<string | null>(null)
   const conversations = ref<Conversation[]>([])
   const conversationsLoaded = ref(false)
@@ -35,6 +37,17 @@ export const useChatStore = defineStore('chat', () => {
   function otherMemberIds(conversation: Conversation): string[] {
     const uid = currentUid.value
     return conversation.memberIds.filter((id) => id !== uid)
+  }
+
+  /** The signed-in user's own up-to-date displayName/photoUrl, refreshed
+   *  into the conversation's memberSnapshots on every send — see
+   *  chat.service.ts's `senderSnapshot` doc comment for why this is the
+   *  only place that can keep the OTHER member's view of "what do I look
+   *  like" current. */
+  function mySnapshot(): MemberSnapshot | undefined {
+    const user = authStore.user
+    if (!user) return undefined
+    return { displayName: user.displayName ?? user.email ?? '使用者', photoUrl: user.photoUrl }
   }
 
   /** Call once per session (e.g. from the messages/home shell) — idempotent per uid. */
@@ -105,6 +118,7 @@ export const useChatStore = defineStore('chat', () => {
         currentUid.value,
         otherMemberIds(conversation),
         text.trim(),
+        mySnapshot(),
       )
     } catch (error) {
       sendError.value = error instanceof Error ? error.message : '傳送失敗'
@@ -135,6 +149,7 @@ export const useChatStore = defineStore('chat', () => {
         otherMemberIds(conversation),
         imageUrl,
         messageId,
+        mySnapshot(),
       )
     } catch (error) {
       sendError.value = error instanceof Error ? error.message : '圖片上傳失敗'

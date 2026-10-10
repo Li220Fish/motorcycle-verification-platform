@@ -20,7 +20,7 @@ const users = ref<AdminUserProfile[]>([])
 const filter = ref<'all' | 'seller' | 'buyer'>('all')
 
 const TYPE_LABEL: Record<string, string> = {
-  seller: '賣家驗證',
+  seller: '車輛驗證',
   buyer: '買家複驗',
   professional: '專業檢驗',
 }
@@ -32,11 +32,13 @@ const STATUS_LABEL: Record<string, string> = {
   expired: '已過期',
 }
 
-function vehicleLabel(vehicleId: string): string {
+function vehicleLabel(vehicleId: string | undefined): string {
+  if (!vehicleId) return '（找不到車輛）'
   const v = vehicles.value.find((x) => x.id === vehicleId)
   return v ? `${v.brand} ${v.model}` : '（找不到車輛）'
 }
-function userLabel(userId: string): string {
+function userLabel(userId: string | undefined): string {
+  if (!userId) return '（缺少提交者）'
   return users.value.find((u) => u.uid === userId)?.displayName || userId.slice(0, 8)
 }
 function vehicleExists(vehicleId: string): boolean {
@@ -96,7 +98,7 @@ onMounted(async () => {
       <div>
         <dt>本月檢驗</dt>
         <dd>{{ loading ? '—' : monthCount }}</dd>
-        <div class="note">賣家驗證＋買家複驗</div>
+        <div class="note">車輛驗證＋買家複驗</div>
       </div>
       <div>
         <dt>待複核</dt>
@@ -133,7 +135,7 @@ onMounted(async () => {
             :class="{ active: filter === 'seller' }"
             @click="filter = 'seller'"
           >
-            賣家驗證
+            車輛驗證
           </button>
           <button
             class="admin-chip"

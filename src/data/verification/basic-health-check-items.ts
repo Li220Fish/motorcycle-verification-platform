@@ -1,8 +1,16 @@
+import type { VerificationItem } from './verification.types'
+
 /**
- * Canonical item list for 基本13項健檢 (BasicHealthCheck13.vue) — the single
+ * Canonical item list for 基本12項健檢 (BasicHealthCheck13.vue) — the single
  * source of truth for each item's `key`/`label`/`required` flag, shared by
  * both the consumer-facing runtime component and the admin health-check
  * anchor annotation tool (src/admin/sections/HealthCheckSection.vue).
+ *
+ * Also the source for this checklist's real VerificationItem entries (see
+ * buildBasicHealthCheckVerificationItems below) — it's a real tab/section in
+ * seller-verification.ts now, not a standalone Hub-only flow, so each item's
+ * saved answer lives at `BASIC-${key}` in the normal answers subcollection
+ * alongside every other checklist item.
  *
  * Deliberately does NOT include anchor/page — those are per-vehicle-model
  * data, admin-edited and stored on vehicleModels/{id}.healthCheckAnchors.
@@ -47,6 +55,44 @@ export function basicHealthCheckItemsFor(
     ? [...BASIC_HEALTH_CHECK_BASE_ITEMS, BASIC_HEALTH_CHECK_CHAIN_ITEM]
     : BASIC_HEALTH_CHECK_BASE_ITEMS
 }
+
+/** This checklist's item ids in the shared verifications/{id}/answers
+ *  subcollection — prefixed so they can never collide with an unrelated
+ *  PREP/APR/ELEC/ENG id. */
+export function basicHealthCheckItemId(key: string): string {
+  return `BASIC-${key}`
+}
+
+/**
+ * Real VerificationItem entries for seller-verification.ts — always includes
+ * BASIC-chain (unlike basicHealthCheckItemsFor's hasChain param, which this
+ * deliberately does not take): visibility for a transmission-conditional
+ * item is decided once, at runtime, by verification.store.ts's
+ * isItemVisible (see its hasExposedChainSprocket check) — the exact same
+ * pattern APR-transmission-chain already uses — rather than baked into the
+ * static section content at module-load time.
+ */
+export function buildBasicHealthCheckVerificationItems(): VerificationItem[] {
+  return [...BASIC_HEALTH_CHECK_BASE_ITEMS, BASIC_HEALTH_CHECK_CHAIN_ITEM].map((def) => ({
+    id: basicHealthCheckItemId(def.key),
+    title: def.label,
+    description:
+      def.key === 'othermod'
+        ? '基本12項健檢：點擊車輛照片上的標記快速標示，並可補充改裝說明。'
+        : '基本12項健檢：點擊車輛照片上的標記快速標示打勾（正常）或打叉（異常）。',
+    type: 'check',
+    required: def.required,
+  }))
+}
+
+/** Every item id this checklist can produce, chain included — used by
+ *  VerificationStepsView.vue to detect "current item belongs to this
+ *  consolidated tap-on-photo group" the same way it does for the other
+ *  swapped-in flows (Core Photo / Engine Session / Lights). */
+export const BASIC_HEALTH_CHECK_ITEM_IDS: string[] = [
+  ...BASIC_HEALTH_CHECK_BASE_ITEMS,
+  BASIC_HEALTH_CHECK_CHAIN_ITEM,
+].map((def) => basicHealthCheckItemId(def.key))
 
 export interface HealthCheckAnchor {
   x: number

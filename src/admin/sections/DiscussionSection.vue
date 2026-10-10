@@ -8,6 +8,7 @@ import {
   listAllReports,
   listUserProfiles,
   resolveReport,
+  restorePost,
   type AdminReport,
   type AdminUserProfile,
 } from '../services/admin-data.service'
@@ -19,6 +20,15 @@ const reports = ref<AdminReport[]>([])
 const users = ref<AdminUserProfile[]>([])
 const resolving = ref<string | null>(null)
 const hiding = ref<string | null>(null)
+const restoring = ref<string | null>(null)
+/** Click a post's row to expand its full body/media inline — no separate
+ *  detail page exists for posts (unlike users/verifications), so this is
+ *  the simplest way to actually read what was reported/hidden. */
+const expandedPostId = ref<string | null>(null)
+
+function toggleExpand(postId: string): void {
+  expandedPostId.value = expandedPostId.value === postId ? null : postId
+}
 
 const STATUS_LABEL: Record<PostStatus, string> = {
   active: '已發布',
@@ -73,6 +83,17 @@ async function handleHide(postId: string): Promise<void> {
   }
 }
 
+async function handleRestore(postId: string): Promise<void> {
+  restoring.value = postId
+  try {
+    await restorePost(postId)
+    const post = posts.value.find((p) => p.id === postId)
+    if (post) post.status = 'active'
+  } finally {
+    restoring.value = null
+  }
+}
+
 onMounted(async () => {
   const [allPosts, allReports, allUsers] = await Promise.all([
     listAllPosts(),
@@ -110,28 +131,46 @@ onMounted(async () => {
             <tr v-if="!loading && posts.length === 0">
               <td class="admin-empty-cell" colspan="7">尚無資料</td>
             </tr>
-            <tr v-for="p in posts" :key="p.id">
-              <td class="strong">{{ p.title }}</td>
-              <td class="dim">{{ p.authorSnapshot.displayName }}</td>
-              <td>{{ p.category }}</td>
-              <td class="num dim">{{ p.likeCount }}</td>
-              <td class="num dim">{{ p.commentCount }}</td>
-              <td>
-                <span class="admin-pill" :class="p.status === 'active' ? 'ok' : 'mute'">
-                  {{ STATUS_LABEL[p.status] }}
-                </span>
-              </td>
-              <td>
-                <button
-                  v-if="p.status === 'active'"
-                  class="admin-btn sm"
-                  :disabled="hiding === p.id"
-                  @click="handleHide(p.id)"
-                >
-                  隱藏
-                </button>
-              </td>
-            </tr>
+            <template v-for="p in posts" :key="p.id">
+              <tr class="clickable" @click="toggleExpand(p.id)">
+                <td class="strong">{{ p.title }}</td>
+                <td class="dim">{{ p.authorSnapshot.displayName }}</td>
+                <td>{{ p.category }}</td>
+                <td class="num dim">{{ p.likeCount }}</td>
+                <td class="num dim">{{ p.commentCount }}</td>
+                <td>
+                  <span class="admin-pill" :class="p.status === 'active' ? 'ok' : 'mute'">
+                    {{ STATUS_LABEL[p.status] }}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    v-if="p.status === 'active'"
+                    class="admin-btn sm"
+                    :disabled="hiding === p.id"
+                    @click.stop="handleHide(p.id)"
+                  >
+                    隱藏
+                  </button>
+                  <button
+                    v-else-if="p.status === 'hidden'"
+                    class="admin-btn sm"
+                    :disabled="restoring === p.id"
+                    @click.stop="handleRestore(p.id)"
+                  >
+                    恢復
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="expandedPostId === p.id" class="admin-detail-row">
+                <td colspan="7">
+                  <p class="admin-post-body">{{ p.body }}</p>
+                  <div v-if="p.media.length > 0" class="admin-post-media">
+                    <img v-for="m in p.media" :key="m.url" :src="m.url" alt="" />
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>

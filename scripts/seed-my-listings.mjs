@@ -88,6 +88,8 @@ const TARGETS = [
     transmission: 'CVT 無段變速',
     color: '珍珠白',
     modified: false,
+    bodyType: '速可達',
+    powerType: 'gasoline',
     description: '定期保養，車況良好，隨時歡迎預約賞車。',
   },
   {
@@ -103,6 +105,8 @@ const TARGETS = [
     transmission: '6速手排',
     color: '消光黑',
     modified: false,
+    bodyType: '街車',
+    powerType: 'gasoline',
     description: '車商保證車，已完成專業檢驗，可協助貸款手續。',
   },
   {
@@ -118,6 +122,8 @@ const TARGETS = [
     transmission: 'CVT 無段變速',
     color: '紅色',
     modified: false,
+    bodyType: '速可達',
+    powerType: 'gasoline',
     description: '通勤代步車，油耗表現佳，龍頭手把新換。',
   },
 ]
@@ -244,6 +250,8 @@ async function main() {
         transmission: target.transmission,
         color: target.color,
         modified: target.modified,
+        bodyType: target.bodyType,
+        powerType: target.powerType,
         photos: vehicle.photos ?? [],
       },
       availableDates: DEFAULT_AVAILABLE_DATES,

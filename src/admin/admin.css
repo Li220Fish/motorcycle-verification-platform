@@ -72,11 +72,16 @@
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: var(--action);
+  overflow: hidden;
   display: grid;
   place-items: center;
   flex: 0 0 26px;
   color: #fff;
+}
+
+.admin-brand-mark svg {
+  width: 100%;
+  height: 100%;
 }
 
 .admin-brand-name {
@@ -353,6 +358,18 @@
   text-align: right;
 }
 
+/* 評分紀錄 (UserDetailSection.vue) — a positive score delta vs a negative
+ * one, same tokens the admin pill/button color system already uses. */
+.admin-table .num.positive {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.admin-table .num.negative {
+  color: var(--risk);
+  font-weight: 700;
+}
+
 .admin-table .strong {
   font-weight: 600;
 }
@@ -367,12 +384,77 @@
   font-size: 12px;
 }
 
+/* VehicleDetailSection.vue's 行照照片 panel — links to the full-size photo
+ * in a new tab, same "no in-app lightbox" convention VerifyDetailSection
+ * .vue's evidence-media already uses. */
+.document-photo {
+  max-width: 320px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+/* Masked + original side by side (temporary — see VehicleDetailSection
+ * .vue's comment on registrationDocumentMaskedUrl). Stacks on narrow
+ * viewports since admin isn't expected to run mobile-width, but costs
+ * nothing to keep it from overflowing if it ever does. */
+.document-photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.document-photo-label {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* Generic clickable affordance for a non-table element (e.g.
+ * VehicleDetailSection.vue's owner link) — .admin-table tbody tr.clickable
+ * above only covers table rows. */
+.clickable {
+  cursor: pointer;
+}
+
 .admin-table tbody tr.clickable {
   cursor: pointer;
 }
 
 .admin-table tbody tr.clickable:hover {
   background: #f4f7fc;
+}
+
+/* DiscussionSection.vue / NewsSection.vue — click a row to expand this
+ * directly below it, inline, instead of navigating to a separate detail
+ * page (neither has one). */
+.admin-detail-row td {
+  background: #f7f9fc;
+  padding: 14px 17px 18px;
+}
+
+.admin-post-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.admin-post-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-post-media img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 7px;
+  border: 1px solid var(--line);
 }
 
 .admin-empty-cell {
@@ -523,6 +605,21 @@
 
 .admin-note b {
   color: var(--text);
+}
+
+/* UserDetailSection.vue's 重設密碼 result message. */
+.admin-reset-msg {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-reset-msg.ok {
+  color: var(--ok);
+}
+
+.admin-reset-msg.error {
+  color: var(--risk);
 }
 
 .admin-split {

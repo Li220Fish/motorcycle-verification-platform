@@ -15,6 +15,14 @@ const submitting = ref(false)
 
 const draft = ref({ title: '', category: '', sourceName: '', content: '' })
 
+/** Click a row to expand its full content inline — no separate detail page
+ *  exists for news articles, same pattern as DiscussionSection.vue's posts. */
+const expandedNewsId = ref<string | null>(null)
+
+function toggleExpand(id: string): void {
+  expandedNewsId.value = expandedNewsId.value === id ? null : id
+}
+
 function formatPublishedAt(ms: number): string {
   return new Date(ms).toLocaleString('zh-TW')
 }
@@ -30,7 +38,7 @@ async function handleCreate(): Promise<void> {
     await createVehicleNews({
       title: draft.value.title.trim(),
       category: draft.value.category.trim() || '一般',
-      sourceName: draft.value.sourceName.trim() || 'MotoVerify 編輯部',
+      sourceName: draft.value.sourceName.trim() || 'RiDE78 編輯部',
       content: draft.value.content.trim(),
     })
     draft.value = { title: '', category: '', sourceName: '', content: '' }
@@ -111,15 +119,25 @@ onMounted(async () => {
             <tr v-if="!loading && news.length === 0">
               <td class="admin-empty-cell" colspan="5">尚無資料</td>
             </tr>
-            <tr v-for="n in news" :key="n.id">
-              <td class="strong">{{ n.title }}</td>
-              <td>
-                <span class="admin-pill info">{{ n.category }}</span>
-              </td>
-              <td class="dim">{{ n.sourceName }}</td>
-              <td class="dim">{{ formatPublishedAt(n.publishedAt) }}</td>
-              <td><button class="admin-btn sm danger" @click="handleDelete(n.id)">刪除</button></td>
-            </tr>
+            <template v-for="n in news" :key="n.id">
+              <tr class="clickable" @click="toggleExpand(n.id)">
+                <td class="strong">{{ n.title }}</td>
+                <td>
+                  <span class="admin-pill info">{{ n.category }}</span>
+                </td>
+                <td class="dim">{{ n.sourceName }}</td>
+                <td class="dim">{{ formatPublishedAt(n.publishedAt) }}</td>
+                <td>
+                  <button class="admin-btn sm danger" @click.stop="handleDelete(n.id)">刪除</button>
+                </td>
+              </tr>
+              <tr v-if="expandedNewsId === n.id" class="admin-detail-row">
+                <td colspan="5">
+                  <p v-if="n.summary" class="admin-post-body dim">{{ n.summary }}</p>
+                  <p class="admin-post-body">{{ n.content }}</p>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>

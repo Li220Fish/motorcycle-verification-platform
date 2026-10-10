@@ -100,8 +100,10 @@ function skip(): void {
   display: flex;
   flex-direction: column;
   padding: var(--space-lg);
-  padding-top: calc(var(--space-lg) + env(safe-area-inset-top));
-  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
+  padding-top: calc(var(--space-lg) + var(--safe-area-inset-top, env(safe-area-inset-top)));
+  padding-bottom: calc(
+    var(--space-lg) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
+  );
 }
 
 /* Deliberately loud (filled pill, primary color, top-right) rather than a

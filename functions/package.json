@@ -15,15 +15,17 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "node --test --loader ts-node/esm src/**/*.test.ts"
+    "test": "node --require ts-node/register --test --test-reporter spec src/**/*.test.ts"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
     "@google/genai": "^2.21.0",
+    "@techstark/opencv-js": "^5.0.0-release.1",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.3.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

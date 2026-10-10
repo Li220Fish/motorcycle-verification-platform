@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { MessageCircle, Home, ShieldCheck, ShoppingBag, Users } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
+import VehicleTransferredModal from '@/components/common/VehicleTransferredModal.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { useNotificationStore } from '@/stores/notification.store'
@@ -45,6 +46,23 @@ function isActive(path: string): boolean {
 function showChrome(): boolean {
   return route.meta.requiresAuth !== false && route.meta.hideChrome !== true
 }
+
+// 車輛轉移的強制彈窗 — the oldest unread `vehicle_transferred` notification,
+// if any. Rendered at this top level (not any one page) so it shows up no
+// matter where the user lands after signing in. Dismissing marks it read,
+// which (via notificationStore's live subscription) naturally reveals the
+// next one if more than one vehicle was transferred while they were away.
+const pendingTransferNotice = computed(
+  () =>
+    [...notificationStore.notifications]
+      .filter((n) => n.type === 'vehicle_transferred' && !n.read)
+      .sort((a, b) => a.createdAt - b.createdAt)[0],
+)
+
+function acknowledgeTransferNotice(): void {
+  if (!pendingTransferNotice.value) return
+  void notificationStore.markAsRead(pendingTransferNotice.value.id)
+}
 </script>
 
 <template>
@@ -72,6 +90,13 @@ function showChrome(): boolean {
     </main>
 
     <BottomNavigation v-if="showChrome()" class="mobile-only" />
+
+    <VehicleTransferredModal
+      v-if="pendingTransferNotice"
+      :title="pendingTransferNotice.title"
+      :body="pendingTransferNotice.body"
+      @ack="acknowledgeTransferNotice"
+    />
   </div>
 </template>
 
@@ -123,7 +148,9 @@ function showChrome(): boolean {
 .app-main {
   flex: 1;
   min-width: 0;
-  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--bottom-nav-height) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
+  );
 }
 
 .app-main.full-bleed {

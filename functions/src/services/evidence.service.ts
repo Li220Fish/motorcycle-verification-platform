@@ -222,23 +222,41 @@ export async function resolveImuEvidence(
   return { evidenceId: latest.id, json }
 }
 
-/** Writes Gemini's free-text engine-type impression (engine-sensor-session
- *  .service.ts's ENGINE TYPE DESCRIPTION result) onto the source audio
- *  Evidence doc's own `metadata.engineType` — not an Answer/aiResult, same
- *  reasoning as dashboard OCR's `metadata.ocr` (ocr.service.ts): this is a
- *  descriptive impression for a human reviewer, not a checklist item with a
- *  pass/fail verdict. */
-export async function markEngineTypeOnEvidence(
+/** Engine Audio v3's full backend JSON (spec §23), written ONCE onto the
+ *  shared audio Evidence doc's `metadata.engineAudioV3` rather than
+ *  duplicated across the 4 Answer docs that share this one recording — same
+ *  reasoning the older `markEngineTypeOnEvidence` already established for
+ *  `engineTypeNote` (superseded by this, see below), and dashboard OCR's own
+ *  `metadata.ocr` (ocr.service.ts): session-level descriptive data lives on
+ *  the Evidence doc, not on any one checklist item's Answer. Each item's own
+ *  `aiResult.details` still gets its OWN `pipelineVersions`/`hardRuleApplied`
+ *  (see answer-writer.service.ts) for per-item traceability — this is the
+ *  shared context around all four, not a duplicate of their verdicts. */
+export interface EngineAudioAnalysisRecord {
+  recordingAssessment: unknown
+  phaseAssessment: unknown
+  detectedEvents: unknown
+  dspSummary: unknown
+  engineTypeNote: string
+  engineTypeConfidence: number
+  pipelineVersions: Record<string, string>
+  analyzedAt: number
+}
+
+export async function markEngineAudioAnalysisOnEvidence(
   verificationId: string,
   evidenceId: string,
-  note: string,
+  record: Omit<EngineAudioAnalysisRecord, 'analyzedAt'>,
 ): Promise<void> {
   await getFirestore()
     .collection('verifications')
     .doc(verificationId)
     .collection('evidence')
     .doc(evidenceId)
-    .set({ metadata: { engineType: { note, analyzedAt: Date.now() } } }, { merge: true })
+    .set(
+      { metadata: { engineAudioV3: { ...record, analyzedAt: Date.now() } } },
+      { merge: true },
+    )
 }
 
 export { itemIdForView }

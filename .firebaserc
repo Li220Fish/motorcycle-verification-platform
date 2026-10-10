@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "motorcycle-verification"
+    "default": "ride78",
+    "staging": "motorcycle-verification"
   }
 }

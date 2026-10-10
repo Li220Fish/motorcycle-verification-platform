@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore'
 
 import { db } from '@/services/firebase/firebase'
-import type { ChatMessage, MessageType } from './chat.types'
+import type { ChatMessage, MemberSnapshot, MessageType } from './chat.types'
 
 const CONVERSATIONS = 'conversations'
 const MESSAGES = 'messages'
@@ -114,6 +114,13 @@ interface SendMessageInput {
   imageUrl?: string
   previewText: string
   messageId?: string
+  /** Opportunistically refreshes the sender's OWN entry in the parent
+   *  conversation's `memberSnapshots` on every send (displayName/photoUrl
+   *  can only ever be written by the user they belong to — see
+   *  firestore.rules' `users/{uid}` get rule — so there is no other point
+   *  where the other member's copy of "what do I look like" can be kept
+   *  current). Omitted for system notes with no real acting user. */
+  senderSnapshot?: MemberSnapshot
 }
 
 /**
@@ -149,6 +156,9 @@ async function send(input: SendMessageInput): Promise<void> {
     lastMessageAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     ...unreadUpdates,
+    ...(input.senderSnapshot
+      ? { [`memberSnapshots.${input.senderId}`]: input.senderSnapshot }
+      : {}),
   })
 
   await batch.commit()
@@ -159,8 +169,17 @@ async function sendText(
   senderId: string,
   otherMemberIds: string[],
   text: string,
+  senderSnapshot?: MemberSnapshot,
 ) {
-  await send({ conversationId, senderId, otherMemberIds, type: 'text', text, previewText: text })
+  await send({
+    conversationId,
+    senderId,
+    otherMemberIds,
+    type: 'text',
+    text,
+    previewText: text,
+    senderSnapshot,
+  })
 }
 
 async function sendImage(
@@ -169,6 +188,7 @@ async function sendImage(
   otherMemberIds: string[],
   imageUrl: string,
   messageId?: string,
+  senderSnapshot?: MemberSnapshot,
 ) {
   await send({
     conversationId,
@@ -178,6 +198,7 @@ async function sendImage(
     imageUrl,
     previewText: '[圖片]',
     messageId,
+    senderSnapshot,
   })
 }
 
@@ -186,8 +207,17 @@ async function sendSystemNote(
   senderId: string,
   otherMemberIds: string[],
   text: string,
+  senderSnapshot?: MemberSnapshot,
 ) {
-  await send({ conversationId, senderId, otherMemberIds, type: 'system', text, previewText: text })
+  await send({
+    conversationId,
+    senderId,
+    otherMemberIds,
+    type: 'system',
+    text,
+    previewText: text,
+    senderSnapshot,
+  })
 }
 
 export const chatService = {

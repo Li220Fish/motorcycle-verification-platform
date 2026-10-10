@@ -19,8 +19,9 @@ import {
   ENGINE_SESSION_ITEM_IDS,
   ENGINE_SESSION_PHASES,
   ENGINE_STARTUP_ITEM_IDS,
+  HOT_ENGINE_SESSION_ITEM_IDS,
 } from '@/data/verification/engine-session'
-import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
+import { getPhotoSlotByItemId, getRetiredPhotoSlotLabel } from '@/data/verification/photo-slots'
 import { storageService } from '@/services/firebase/storage.service'
 import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
 import type { Vehicle } from '@/types/vehicle'
@@ -45,14 +46,31 @@ function evidenceFor(itemId: string): VerificationEvidence[] {
   return evidenceByItem.value[itemId] ?? []
 }
 
-/** Gemini's free-text engine-type impression lives on the shared 23s audio
- * Evidence doc's own `metadata.engineType` (see engine-sensor-session
- * .service.ts's markEngineTypeOnEvidence) — that evidence is filed under
- * ENG-03, same file ENG-03..06 all share. */
-function engineTypeNoteFromEvidence(): string | undefined {
+/** Engine Audio v3's full backend JSON (spec §23/§26) lives on the shared
+ * 23s audio Evidence doc's own `metadata.engineAudioV3` (see
+ * engine-sensor-session.service.ts's markEngineAudioAnalysisOnEvidence) —
+ * that evidence is filed under ENG-03, same file ENG-03..06 all share.
+ * Loosely typed (`unknown` sub-shapes rendered as-is via JSON.stringify
+ * below) since this is a debug/traceability view, not something the admin
+ * UI needs to deeply interact with field-by-field. */
+interface EngineAudioAnalysisSummary {
+  recordingAssessment?: {
+    usable?: boolean
+    audioQuality?: string
+    silenceRatio?: number
+    clippingRatio?: number
+  }
+  phaseAssessment?: Record<string, { valid?: boolean; stallDetected?: boolean }>
+  detectedEvents?: { type: string; timeMs: number; endTimeMs?: number; confidence: number }[]
+  dspSummary?: unknown
+  engineTypeNote?: string
+  engineTypeConfidence?: number
+  pipelineVersions?: Record<string, string>
+}
+
+function engineAudioAnalysisFromEvidence(): EngineAudioAnalysisSummary | undefined {
   const audioEvidence = evidenceFor(ENGINE_STARTUP_ITEM_IDS[0]).find((e) => e.type === 'audio')
-  const engineType = audioEvidence?.metadata?.engineType as { note?: string } | undefined
-  return engineType?.note
+  return audioEvidence?.metadata?.engineAudioV3 as EngineAudioAnalysisSummary | undefined
 }
 
 /** The 23s engine-session audio file is one blob shared across ENG-03..06
@@ -115,6 +133,7 @@ type AnalysisRouteKey =
   | 'dashboardOcr'
   | 'coldCheck'
   | 'engineSensorSession'
+  | 'hotEngineSensorSession'
 
 const CORE_VISION_ROUTE_BY_SLOT_ID: Record<string, AnalysisRouteKey> = {
   'left-side': 'coreVisionSides',
@@ -140,6 +159,7 @@ const CORE_VISION_ROUTE_BY_AI_ITEM_ID: Record<string, AnalysisRouteKey> = {
 function analysisRouteKeyFor(itemId: string): AnalysisRouteKey | null {
   if (itemId === 'ENG-02') return 'coldCheck'
   if (ENGINE_SESSION_ITEM_IDS.includes(itemId)) return 'engineSensorSession'
+  if (HOT_ENGINE_SESSION_ITEM_IDS.includes(itemId)) return 'hotEngineSensorSession'
   if (CORE_VISION_ROUTE_BY_AI_ITEM_ID[itemId]) return CORE_VISION_ROUTE_BY_AI_ITEM_ID[itemId]
   const slot = getPhotoSlotByItemId(itemId)
   if (slot && CORE_VISION_ROUTE_BY_SLOT_ID[slot.id]) return CORE_VISION_ROUTE_BY_SLOT_ID[slot.id]
@@ -170,7 +190,7 @@ const STATUS_LABEL: Record<string, string> = {
   expired: '已過期',
 }
 const TYPE_LABEL: Record<string, string> = {
-  seller: '賣家驗證',
+  seller: '車輛驗證',
   buyer: '買家複驗',
   professional: '專業檢驗',
 }
@@ -186,6 +206,33 @@ const RESULT_TONE: Record<string, 'ok' | 'attn' | 'mute'> = {
   unsure: 'mute',
   not_applicable: 'mute',
 }
+const RESULT_SEVERITY: Record<string, number> = {
+  attention: 3,
+  unsure: 2,
+  normal: 1,
+  not_applicable: 0,
+}
+
+/**
+ * Mirrors VerificationReportView.vue's effectiveItemResult(): a checklist
+ * item's (APR-* etc.) own answer.result is just a capture-time placeholder
+ * (see AnswerGroup's doc comment below) — it's never overwritten with a real
+ * verdict, because AI analysis writes to the separate Group A/B/C item ids
+ * nested in `aiSubAnswers` instead. Without this, the top-level pill always
+ * shows the placeholder (不確定) even when its AI sub-items came back 正常,
+ * exactly what this looks like when captured live. Only the pill uses this
+ * — the raw placeholder answer (itemId/note/its own aiResult, if any) still
+ * renders as-is everywhere else on the card, since traceability is the
+ * whole point of this screen. */
+function effectiveResult(group: AnswerGroup): string {
+  const aiResults = group.aiSubAnswers.filter((a) => !!a.aiResult)
+  if (aiResults.length === 0) return group.answer.result
+  return aiResults.reduce((worst, candidate) =>
+    (RESULT_SEVERITY[candidate.result] ?? 0) > (RESULT_SEVERITY[worst.result] ?? 0)
+      ? candidate
+      : worst,
+  ).result
+}
 
 function formatDate(ms?: number): string {
   if (!ms) return '—'
@@ -200,7 +247,12 @@ function formatDate(ms?: number): string {
  * verdict, even once the title is human-readable. */
 function itemTitle(itemId: string): string {
   const kind = verification.value?.type === 'buyer' ? 'buyer' : 'seller'
-  return findItemById(kind, itemId)?.title ?? aiVisionItemTitle(itemId) ?? itemId
+  return (
+    findItemById(kind, itemId)?.title ??
+    aiVisionItemTitle(itemId) ??
+    getRetiredPhotoSlotLabel(itemId) ??
+    itemId
+  )
 }
 
 function isChecklistItem(itemId: string): boolean {
@@ -221,18 +273,25 @@ function isChecklistItem(itemId: string): boolean {
 interface AnswerGroup {
   answer: VerificationAnswer
   aiSubAnswers: VerificationAnswer[]
+  /** True when no Answer doc exists at all for this item (a skipped Optional
+   *  item, most commonly) — `answer` is synthesized here purely for display
+   *  (never written to Firestore) so it still shows as 不確定 instead of
+   *  silently vanishing from its section, or — if every item in a section
+   *  was skipped — the whole section disappearing outright. Found live via a
+   *  real admin report: "為什麼主動揭露完全不見了". */
+  unanswered: boolean
 }
 
 interface AnswerSection {
   id: string
   title: string
   groups: AnswerGroup[]
-  /** Gemini's free-text engine-type impression (engine-audio-v2.ts's ENGINE
-   *  TYPE DESCRIPTION section) — lives on the shared 23s audio Evidence
-   *  doc's `metadata.engineType`, not on any one ENG-03..08 answer, so it's
-   *  surfaced once on the section that holds those items rather than
-   *  repeated on every one of their answer-cards. */
-  engineTypeNote?: string
+  /** Engine Audio v3's full backend JSON (quality/phase validity/detected
+   *  events/DSP summary/engine type/pipeline versions) — lives on the
+   *  shared 23s audio Evidence doc's `metadata.engineAudioV3`, not on any
+   *  one ENG-03..08 answer, so it's surfaced once on the section that holds
+   *  those items rather than repeated on every one of their answer-cards. */
+  engineAudioAnalysis?: EngineAudioAnalysisSummary
 }
 
 /**
@@ -251,38 +310,51 @@ const answerSections = computed<AnswerSection[]>(() => {
   const byId = new Map(answers.value.map((a) => [a.itemId, a]))
   const consumedAiIds = new Set<string>()
 
-  const sections = getFlowSections(flowKind)
-    .map((section) => {
-      const groups = section.items
-        .map((item) => byId.get(item.id))
+  const sections = getFlowSections(flowKind).map((section) => {
+    const groups = section.items.map((item) => {
+      const existing = byId.get(item.id)
+      // Optional items (主動揭露 etc.) never get an Answer doc at all when
+      // the user skips them — synthesized here purely for display so the
+      // item still shows as 不確定 instead of silently vanishing, same
+      // reasoning as defaulting the capture-time placeholder to 'unsure'
+      // rather than 'normal' elsewhere in this pass.
+      const answer: VerificationAnswer = existing ?? {
+        itemId: item.id,
+        result: 'unsure',
+        updatedAt: 0,
+      }
+      const aiSubAnswers = aiVisionItemsForAprItem(item.id)
+        .map((meta) => byId.get(meta.id))
         .filter((a): a is VerificationAnswer => !!a)
-        .map((answer) => {
-          const aiSubAnswers = aiVisionItemsForAprItem(answer.itemId)
-            .map((meta) => byId.get(meta.id))
-            .filter((a): a is VerificationAnswer => !!a)
-          for (const a of aiSubAnswers) consumedAiIds.add(a.itemId)
-          return { answer, aiSubAnswers }
-        })
-      const engineTypeNote = groups.some((g) => ENGINE_SESSION_ITEM_IDS.includes(g.answer.itemId))
-        ? engineTypeNoteFromEvidence()
-        : undefined
-      return { id: section.id, title: section.title, groups, engineTypeNote }
+      for (const a of aiSubAnswers) consumedAiIds.add(a.itemId)
+      return { answer, aiSubAnswers, unanswered: !existing }
     })
-    .filter((section) => section.groups.length > 0)
+    const engineAudioAnalysis = groups.some((g) =>
+      ENGINE_SESSION_ITEM_IDS.includes(g.answer.itemId),
+    )
+      ? engineAudioAnalysisFromEvidence()
+      : undefined
+    return { id: section.id, title: section.title, groups, engineAudioAnalysis }
+  })
 
-  // Any AI-vision answer whose APR-* item hasn't been answered yet (or whose
-  // mapping is somehow missing) still needs to be visible somewhere, not
-  // silently dropped — collected into a trailing catch-all section instead
-  // of one belonging to no real checklist phase.
-  const orphanAiAnswers = answers.value.filter(
+  // Any answer whose item id isn't part of the CURRENT flow — an AI-vision
+  // sub-answer whose APR-* item hasn't been answered yet (or whose mapping
+  // is somehow missing), or a plain manual answer under an item id since
+  // removed from the registry entirely (e.g. 後避震/前煞車/坐墊外觀 etc.,
+  // superseded by 基本12項健檢 — see photo-slots.ts's RETIRED_PHOTO_SLOTS) —
+  // still needs to be visible somewhere, not silently dropped. Collected
+  // into a trailing catch-all section instead of one belonging to no real
+  // checklist phase; itemTitle() above already resolves a real Chinese
+  // label for the retired-slot case instead of showing the raw itemId.
+  const orphanAnswers = answers.value.filter(
     (a) => !isChecklistItem(a.itemId) && !consumedAiIds.has(a.itemId),
   )
-  if (orphanAiAnswers.length > 0) {
+  if (orphanAnswers.length > 0) {
     sections.push({
-      id: 'orphan-ai-answers',
-      title: '其他 AI 判定（找不到對應檢測項目）',
-      groups: orphanAiAnswers.map((answer) => ({ answer, aiSubAnswers: [] })),
-      engineTypeNote: undefined,
+      id: 'orphan-answers',
+      title: '其他找不到對應檢測項目（AI 判定或已停用的舊版項目）',
+      groups: orphanAnswers.map((answer) => ({ answer, aiSubAnswers: [], unanswered: false })),
+      engineAudioAnalysis: undefined,
     })
   }
 
@@ -481,9 +553,63 @@ onMounted(async () => {
 
               <Transition name="expand">
                 <div v-if="expandedSectionId === section.id" class="answer-list">
-                  <p v-if="section.engineTypeNote" class="engine-type-note">
-                    <strong>引擎類型（AI 判讀）：</strong>{{ section.engineTypeNote }}
-                  </p>
+                  <div v-if="section.engineAudioAnalysis" class="engine-audio-analysis">
+                    <p v-if="section.engineAudioAnalysis.engineTypeNote" class="engine-type-note">
+                      <strong
+                        >引擎類型（AI 判讀，信心
+                        {{
+                          section.engineAudioAnalysis.engineTypeConfidence?.toFixed(2) ?? 'n/a'
+                        }}）：</strong
+                      >{{ section.engineAudioAnalysis.engineTypeNote }}
+                    </p>
+                    <p class="engine-audio-summary-line">
+                      音質：{{
+                        section.engineAudioAnalysis.recordingAssessment?.audioQuality ?? '—'
+                      }}
+                      （靜音比
+                      {{
+                        section.engineAudioAnalysis.recordingAssessment?.silenceRatio?.toFixed(2) ??
+                        '—'
+                      }}、削頂比
+                      {{
+                        section.engineAudioAnalysis.recordingAssessment?.clippingRatio?.toFixed(
+                          2,
+                        ) ?? '—'
+                      }}）
+                    </p>
+                    <p class="engine-audio-summary-line">
+                      Phase 有效性：
+                      <span
+                        v-for="(phase, phaseName) in section.engineAudioAnalysis.phaseAssessment"
+                        :key="phaseName"
+                        :class="{ 'phase-invalid': phase.valid === false }"
+                      >
+                        {{ phaseName }}={{ phase.valid ? '✓' : '✗'
+                        }}{{ phase.stallDetected ? '（熄火）' : '' }}
+                      </span>
+                    </p>
+                    <p
+                      v-if="(section.engineAudioAnalysis.detectedEvents?.length ?? 0) > 0"
+                      class="engine-audio-summary-line"
+                    >
+                      偵測事件：
+                      <span
+                        v-for="(event, i) in section.engineAudioAnalysis.detectedEvents"
+                        :key="i"
+                      >
+                        {{ event.type }}@{{ (event.timeMs / 1000).toFixed(1) }}s（信心
+                        {{ event.confidence.toFixed(2) }}）{{
+                          i < (section.engineAudioAnalysis.detectedEvents?.length ?? 0) - 1
+                            ? '、'
+                            : ''
+                        }}
+                      </span>
+                    </p>
+                    <details class="engine-audio-raw">
+                      <summary>完整 JSON（Debug／研究用）</summary>
+                      <pre>{{ JSON.stringify(section.engineAudioAnalysis, null, 2) }}</pre>
+                    </details>
+                  </div>
                   <div
                     v-for="group in section.groups"
                     :key="group.answer.itemId"
@@ -501,10 +627,11 @@ onMounted(async () => {
                       <span
                         v-else
                         class="admin-pill"
-                        :class="RESULT_TONE[group.answer.result] ?? 'mute'"
+                        :class="RESULT_TONE[effectiveResult(group)] ?? 'mute'"
                       >
-                        {{ RESULT_LABEL[group.answer.result] ?? group.answer.result }}
+                        {{ RESULT_LABEL[effectiveResult(group)] ?? effectiveResult(group) }}
                       </span>
+                      <span v-if="group.unanswered" class="admin-unanswered-badge">未填寫</span>
                     </div>
                     <p v-if="group.answer.note" class="answer-note">
                       使用者備註：{{ group.answer.note }}
@@ -823,13 +950,48 @@ onMounted(async () => {
   color: var(--muted);
 }
 
-.engine-type-note {
+.engine-audio-analysis {
   margin: 12px 0 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--action-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.engine-type-note {
+  margin: 0;
   font-size: 12.5px;
   color: var(--text);
+}
+
+.engine-audio-summary-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.phase-invalid {
+  color: var(--danger, #d33);
+  font-weight: 700;
+}
+
+.engine-audio-raw {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.engine-audio-raw pre {
+  margin: 6px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface, #f6f6f6);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .answer-manual {
@@ -852,6 +1014,16 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 800;
   cursor: help;
+}
+
+.admin-unanswered-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
 }
 
 .answer-fail-reason {

@@ -15,6 +15,7 @@ defineProps<{
 const emit = defineEmits<{ decide: [TransactionDecision] }>()
 
 const decisions: Array<{ value: TransactionDecision; label: string }> = [
+  { value: 'purchased', label: '已完成購買' },
   { value: 'continue_considering', label: '繼續考慮' },
   { value: 'need_third_party', label: '需要第三方檢查' },
   { value: 'not_buying', label: '暫不購買' },
@@ -62,6 +63,9 @@ const decisions: Array<{ value: TransactionDecision; label: string }> = [
         {{ option.label }}
       </PrimaryButton>
     </div>
+    <p v-if="decision === 'purchased'" class="purchased-hint">
+      已標記為完成購買——接下來請賣家到「刊登管理」頁面確認過戶給你，車輛過戶後才會真正轉移到你的車庫。
+    </p>
   </div>
 </template>
 
@@ -111,5 +115,12 @@ const decisions: Array<{ value: TransactionDecision; label: string }> = [
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.purchased-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
 }
 </style>

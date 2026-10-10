@@ -24,6 +24,9 @@ export interface GeminiResponseEnvelope {
   /** Engine Audio only (see ai/schemas/schema-builder.ts's
    *  buildEngineAudioSchema) — absent from every other route's response. */
   engineTypeNote?: string
+  /** Engine Audio only, alongside engineTypeNote — 0.0-1.0, admin/backend
+   *  traceability only. */
+  engineTypeConfidence?: number
 }
 
 export interface PromptVersion {
@@ -70,6 +73,16 @@ export interface AiResultDoc {
     featureVersion?: string
     attempts: AiAttempt[]
     finalAttempt: number
+    /** Engine Audio v3 only (functions/src/ai/engine-audio/) — every
+     *  pipeline-stage version string this result was produced with, so a
+     *  future threshold/config change never leaves an ambiguous "which
+     *  version graded this" record. */
+    pipelineVersions?: Record<string, string>
+    /** Engine Audio v3 only — the Hard Rule label that decided this item's
+     *  final result (see engine-hard-rule-evaluator.ts), or null when
+     *  Gemini's own verdict stood unmodified. Absent entirely for every
+     *  other analysisType. */
+    hardRuleApplied?: string | null
   }
 }
 

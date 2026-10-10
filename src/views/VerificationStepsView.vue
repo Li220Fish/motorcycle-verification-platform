@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
 import BasicHealthCheck13 from '@/components/verification/BasicHealthCheck13.vue'
+import BuyerDisclosureCheck from '@/components/verification/BuyerDisclosureCheck.vue'
+import BuyerYearGate from '@/components/verification/BuyerYearGate.vue'
 import CorePhotoCaptureFlow from '@/components/verification/CorePhotoCaptureFlow.vue'
 import ElectricalLightsCheck from '@/components/verification/ElectricalLightsCheck.vue'
 import EngineCompleteChoice from '@/components/verification/EngineCompleteChoice.vue'
 import EngineInspectionFlow from '@/components/verification/engine/EngineInspectionFlow.vue'
 import ColdTouchCapture from '@/components/verification/environment/ColdTouchCapture.vue'
+import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import RideSafetyGate from '@/components/verification/RideSafetyGate.vue'
+import RideTransition from '@/components/verification/RideTransition.vue'
 import VehicleTypeGate from '@/components/verification/VehicleTypeGate.vue'
 import VerificationCategoryNav from '@/components/verification/VerificationCategoryNav.vue'
 import VerificationHub from '@/components/verification/VerificationHub.vue'
@@ -21,13 +25,19 @@ import { getAppearanceGroup } from '@/data/verification/appearance-groups'
 // in handleNext, which is commented out below — its import is dropped here
 // only to avoid an unused-import lint error; re-add `, getAppearanceGroupId`
 // to this import when that block is restored.
+import { BASIC_HEALTH_CHECK_ITEM_IDS } from '@/data/verification/basic-health-check-items'
 import {
   ENGINE_SESSION_ITEM_IDS,
+  HOT_ENGINE_SESSION_ITEM_IDS,
   inferTransmissionType,
+  LOCKED_ENGINE_SECTION_ID,
+  LOCKED_HOT_ENGINE_SECTION_ID,
   transmissionLabelFor,
   type EngineTransmissionType,
 } from '@/data/verification/engine-session'
 import { SELLER_ELECTRIC_LIGHT_ITEM_IDS } from '@/data/verification/seller-verification'
+import { verificationService } from '@/services/firebase/verification.service'
+import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { localDraftService } from '@/services/verification/local-draft.service'
 import { tourService } from '@/services/verification/tour.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
@@ -39,7 +49,18 @@ import { useVerificationStore } from '@/stores/verification.store'
 // keeps the still-live "skip past this section from the category tab" jump
 // logic pointed at the right section id.
 const APPEARANCE_SECTION_ID = 'seller-phase1-core'
+// 其他主動揭露 — for a buyer flow, every one of this section's 9 items is
+// `required:false` and so gets filtered out of flatItems/sections entirely
+// by isItemVisible (verification.store.ts), which otherwise left buyers
+// with no way to ever reach this section at all (Hub tap silently no-oped,
+// linear Next skipped straight past it into 上路). BuyerDisclosureCheck.vue
+// is shown as a standalone interstitial instead — see showBuyerDisclosure
+// below — bypassing flatItems/sections for its own (dynamically-built)
+// content entirely.
+const DISCLOSURE_SECTION_ID = 'seller-phase4-disclosure'
 const ENGINE_SESSION_LAST_ITEM_ID = 'ENG-08'
+const HOT_ENGINE_SESSION_LAST_ITEM_ID = 'HOT-07'
+const LOCKED_SECTION_IDS = [LOCKED_ENGINE_SECTION_ID, LOCKED_HOT_ENGINE_SECTION_ID]
 
 const props = defineProps<{ id: string }>()
 
@@ -62,10 +83,10 @@ const hubOpen = ref(true)
 // there's nothing left blocking completion at this exact point — asking
 // explicitly ("直接結束" vs "填寫補充項目") beats silently continuing.
 const showEngineCompleteChoice = ref(false)
-// 基本13項健檢 — a standalone checklist opened from the Hub, kept separate
-// from hubOpen/currentIndex since it isn't part of the flat item flow (see
-// BasicHealthCheck13.vue's own header comment for why).
-const basicHealthCheckOpen = ref(false)
+// 買家流程的「其他主動揭露」替代畫面 (BuyerDisclosureCheck.vue) — see
+// DISCLOSURE_SECTION_ID's own comment above for why this can't just be a
+// normal flatItems stop the way every other section is.
+const showBuyerDisclosure = ref(false)
 // Chain/sprocket detection bug fix: hasExposedChainSprocket (both the
 // client's Phase 1 item-visibility check and the Trusted Backend's Core
 // Vision v2 gating — see vehicle-context.service.ts) reads Vehicle.
@@ -105,6 +126,70 @@ function handlePickVehicleType(type: EngineTransmissionType): void {
     .updateVehicle(vehicleId, { transmission: transmissionLabelFor(type) })
     .catch((error) => console.error('[VehicleTypeGate] updateVehicle failed:', error))
 }
+
+// 買家複驗專屬：年份詢問關卡 (requirement 3b) + 通病自動帶入 (3c). See
+// BuyerYearGate.vue's own doc comment for why this is a one-time gate, not
+// a normal checklist item. `vehicleSnapshot` present means this verification
+// came from an appointment (see VerificationView.vue's handleStartFromAppointment)
+// — a buyer can never read vehicles/{id} for that path, so the live vehicle
+// doc is never consulted; its ABSENCE means the 幫這次驗車取個名字 fallback
+// path, where the buyer owns the vehicle outright and vehicleStore
+// .currentVehicle works normally.
+const yearGateDismissed = ref(false)
+const needsYearGate = computed(() => {
+  if (yearGateDismissed.value) return false
+  if (verificationStore.flowKind !== 'buyer') return false
+  const verification = verificationStore.currentVerification
+  if (!verification) return false
+  if (verification.vehicleSnapshot) return verification.vehicleSnapshot.manufactureYear == null
+  return vehicleStore.currentVehicle?.manufactureYear == null
+})
+
+const knownIssuesChecked = ref(false)
+async function ensureBuyerKnownIssuesLoaded(): Promise<void> {
+  const verification = verificationStore.currentVerification
+  if (!verification || verificationStore.flowKind !== 'buyer') return
+  if (knownIssuesChecked.value) return
+  knownIssuesChecked.value = true
+  if (verification.buyerKnownIssuesSnapshot) return
+  const modelId = verification.vehicleSnapshot?.modelId
+  if (!modelId) return
+  try {
+    const profile = await vehicleModelService.getProfile(modelId)
+    if (profile) {
+      await verificationService.saveBuyerKnownIssuesSnapshot(verification.id, profile.knownIssues)
+    }
+  } catch (error) {
+    console.error('[BuyerYearGate] failed to load known issues:', error)
+  }
+}
+
+async function handleConfirmYear(year: number): Promise<void> {
+  const verification = verificationStore.currentVerification
+  yearGateDismissed.value = true
+  if (verification) {
+    try {
+      if (verification.vehicleSnapshot) {
+        await verificationService.saveBuyerVehicleYear(verification.id, year)
+      } else {
+        await vehicleStore.updateVehicle(verification.vehicleId, { manufactureYear: year })
+      }
+    } catch (error) {
+      console.error('[BuyerYearGate] failed to save year:', error)
+    }
+  }
+  await ensureBuyerKnownIssuesLoaded()
+}
+
+// Already-known-year buyer verifications never show the gate at all, so
+// this is the other place ensureBuyerKnownIssuesLoaded() needs to fire —
+// once flowLoaded resolves and the gate turns out not to be needed.
+watch(
+  () => verificationStore.flowLoaded,
+  (loaded) => {
+    if (loaded && !needsYearGate.value) void ensureBuyerKnownIssuesLoaded()
+  },
+)
 
 const rideSafetyConfirmedIndex = ref(-1)
 const completing = ref(false)
@@ -161,6 +246,16 @@ const needsRideSafetyGate = computed(
     currentFlat.value?.item.type === 'ride' &&
     rideSafetyConfirmedIndex.value !== currentIndex.value,
 )
+// Once the safety checklist is confirmed, RIDE-01 shows RideTransition.vue
+// (the GIF "go ride it" screen) instead of falling through to
+// VerificationItem.vue's generic normal/attention/unsure selector — RIDE-01
+// isn't a judged checklist item, it's a "go do this, then come back"
+// procedural step.
+const needsRideTransition = computed(
+  () =>
+    currentFlat.value?.item.type === 'ride' &&
+    rideSafetyConfirmedIndex.value === currentIndex.value,
+)
 
 const isAppearanceSection = computed(() => currentFlat.value?.section.id === APPEARANCE_SECTION_ID)
 
@@ -181,6 +276,16 @@ const corePhotoItemIds = computed(() =>
     .map((flat) => flat.item.id),
 )
 
+// 基本12項健檢 (BASIC-*, see basic-health-check-items.ts) renders as ONE
+// consolidated tap-on-photo screen, same "swap in at this level" pattern as
+// the other groups above — it used to be its own standalone mode opened
+// from the Hub (a separate card, outside the flat item/section system);
+// now it's a real section/tab like everything else, landing on ANY of its
+// items (free-jump, resume, or linear Next) shows the same screen.
+const isBasicHealthCheckGroup = computed(
+  () => !!currentFlat.value && BASIC_HEALTH_CHECK_ITEM_IDS.includes(currentFlat.value.item.id),
+)
+
 // ENG-03..08 (啟動馬達聲音..油門轉動運轉穩定度) render as one consolidated
 // 3-session flow (EngineInspectionFlow.vue) instead of 6 separate one-item
 // screens — see MotoVerify_Engine_Audio_IMU_UI_Agent_Implementation.md.
@@ -189,6 +294,15 @@ const isEngineSessionGroup = computed(
   () => !!currentFlat.value && ENGINE_SESSION_ITEM_IDS.includes(currentFlat.value.item.id),
 )
 const engineSessionRecording = ref(false)
+
+// HOT-04..07 (熱車怠速運轉聲..熱車轉動油門震動資料) — same "one consolidated
+// recording session" treatment as isEngineSessionGroup above, via the same
+// EngineInspectionFlow.vue component in `mode="hot"`. HOT-01..03 (引擎底部/
+// 汽缸頭/排氣端 leak checks) are untouched, still plain VerificationItem.
+const isHotEngineSessionGroup = computed(
+  () => !!currentFlat.value && HOT_ENGINE_SESSION_ITEM_IDS.includes(currentFlat.value.item.id),
+)
+const hotEngineSessionRecording = ref(false)
 
 // Step 39 (Cold-State spec) — single-item custom capture screen, same
 // "swap in at this level" pattern as the lights/engine groups above, just
@@ -201,10 +315,17 @@ const coldTouchRecording = ref(false)
 // not just hidden step-chips — see isItemAdvanceReady in the store. The
 // Engine session group is a single bundle: ready only once ALL 6 underlying
 // items are answered, not just whichever one `currentIndex` happens to sit
-// on (that index barely moves while the consolidated flow is active).
+// on (that index barely moves while the consolidated flow is active). Same
+// idea for the hot session group's 4 items.
 const nextDisabled = computed(() => {
   if (isEngineSessionGroup.value) {
     return !ENGINE_SESSION_ITEM_IDS.every((itemId) => {
+      const flat = verificationStore.flatItems.find((candidate) => candidate.item.id === itemId)
+      return !!flat && verificationStore.isItemAdvanceReady(flat)
+    })
+  }
+  if (isHotEngineSessionGroup.value) {
+    return !HOT_ENGINE_SESSION_ITEM_IDS.every((itemId) => {
       const flat = verificationStore.flatItems.find((candidate) => candidate.item.id === itemId)
       return !!flat && verificationStore.isItemAdvanceReady(flat)
     })
@@ -219,9 +340,112 @@ const nextDisabledHint = computed(
 // from inside a checklist item could land anywhere depending on how the user
 // arrived (deep link, category jump, resumed session), which reads as random.
 // Leaving the flow always goes to this verification's own Vehicle Detail page.
+// Not wrapped in guardLeaveEngineSection below — this is a real router
+// navigation, so the onBeforeRouteLeave guard further down already catches
+// it (same as hardware back / browser back), and double-guarding would pop
+// the warning dialog twice.
 function handleBack(): void {
   const vehicleId = verificationStore.currentVerification?.vehicleId
   router.push(vehicleId ? `/vehicles/${vehicleId}` : '/vehicles')
+}
+
+// --- 冷車＋引擎檢查 (LOCKED_ENGINE_SECTION_ID) leave-mid-way guard ---------
+// Product decision: this whole section is all-or-nothing — once ANY of its
+// items has an answer, abandoning it before every item is done wipes the
+// section back to a blank slate (see verificationStore.resetLockedEngine
+// Section) instead of silently letting the user resume later. Two separate
+// mechanisms feed the SAME warning dialog:
+//   1. guardLeaveEngineSection() — for in-app "leaves" that are plain local
+//      state changes, not a router navigation (the review icon opening the
+//      Hub, switching to a different category tab). A pending plain
+//      callback runs once confirmed.
+//   2. The onBeforeRouteLeave guard below — for anything that IS a router
+//      navigation: the header back button (handleBack, above), the Android
+//      hardware back button / edge-swipe-back gesture (both funnel through
+//      router.back() — see main.ts), and a plain browser back/forward. Vue
+//      Router awaits a Promise return from this guard, so it's held pending
+//      until the dialog resolves it (true = let the navigation through,
+//      false = stay put).
+// A THIRD path — the app being killed/crashing, or the tab being closed
+// outright — can't be intercepted by either mechanism; that's instead
+// caught defensively on the NEXT visit (see the "already in progress on
+// load" check further below), which is the only way to guarantee this rule
+// holds regardless of how the interruption happened.
+// Generalized 2026-09 to cover TWO locked sections (LOCKED_SECTION_IDS: the
+// cold 冷車＋引擎檢查 pass every flow has, plus a buyer flow's own 熱車檢查) —
+// "which one" is just whichever section the current item happens to sit in;
+// a user is only ever inside one locked section at a time, so this stays a
+// single pair of computeds rather than one per section.
+function sectionInProgress(sectionId: string): boolean {
+  const progress = verificationStore.sectionProgress.find((entry) => entry.sectionId === sectionId)
+  return !!progress && progress.done > 0 && progress.done < progress.total
+}
+const currentLockedSectionId = computed<string | null>(() => {
+  const id = currentFlat.value?.section.id
+  return id && LOCKED_SECTION_IDS.includes(id) ? id : null
+})
+const isInsideLockedEngineSection = computed(() => currentLockedSectionId.value !== null)
+const lockedEngineSectionInProgress = computed(
+  () => !!currentLockedSectionId.value && sectionInProgress(currentLockedSectionId.value),
+)
+const showLeaveEngineWarning = ref(false)
+const resettingEngineSection = ref(false)
+let pendingLeaveAction: (() => void) | null = null
+let pendingRouteLeaveResolve: ((allow: boolean) => void) | null = null
+
+function guardLeaveEngineSection(proceed: () => void): void {
+  if (isInsideLockedEngineSection.value && lockedEngineSectionInProgress.value) {
+    pendingLeaveAction = proceed
+    showLeaveEngineWarning.value = true
+    return
+  }
+  proceed()
+}
+
+function dismissLeaveEngineWarning(): void {
+  showLeaveEngineWarning.value = false
+  pendingLeaveAction = null
+  // Cancelling mid-navigation (hardware back / browser back) must actively
+  // tell the router "no" — just hiding the dialog leaves that guard's
+  // Promise unresolved forever, silently stuck.
+  pendingRouteLeaveResolve?.(false)
+  pendingRouteLeaveResolve = null
+}
+
+async function confirmLeaveEngineSection(): Promise<void> {
+  const proceed = pendingLeaveAction
+  const allowRoute = pendingRouteLeaveResolve
+  const sectionId = currentLockedSectionId.value ?? LOCKED_ENGINE_SECTION_ID
+  pendingLeaveAction = null
+  pendingRouteLeaveResolve = null
+  resettingEngineSection.value = true
+  try {
+    await verificationStore.resetLockedEngineSection(sectionId)
+  } catch (error) {
+    console.error('[VerificationStepsView] resetLockedEngineSection failed:', error)
+  } finally {
+    resettingEngineSection.value = false
+  }
+  showLeaveEngineWarning.value = false
+  proceed?.()
+  allowRoute?.(true)
+}
+
+// Router-level leave: covers the header back button, Android hardware back /
+// edge-swipe gesture, and plain browser back/forward — anything that goes
+// through Vue Router rather than a plain ref change (see the comment above).
+onBeforeRouteLeave(() => {
+  if (!isInsideLockedEngineSection.value || !lockedEngineSectionInProgress.value) return true
+  return new Promise<boolean>((resolve) => {
+    pendingRouteLeaveResolve = resolve
+    showLeaveEngineWarning.value = true
+  })
+})
+
+function handleReview(): void {
+  guardLeaveEngineSection(() => {
+    hubOpen.value = true
+  })
 }
 
 function handlePrev(): void {
@@ -251,6 +475,15 @@ function handlePrev(): void {
     currentIndex.value = Math.max(firstEngineIndex - 1, 0)
     return
   }
+  if (isHotEngineSessionGroup.value) {
+    // Same idea — leave the whole 2-session 熱車檢查 flow as one unit,
+    // landing back on HOT-03 (排氣端), not mid-flow.
+    const firstHotIndex = verificationStore.flatItems.findIndex(
+      (flat) => flat.item.id === HOT_ENGINE_SESSION_ITEM_IDS[0],
+    )
+    currentIndex.value = Math.max(firstHotIndex - 1, 0)
+    return
+  }
   if (isCorePhotoGroup.value) {
     // Same idea — leave the whole consolidated camera session as one unit.
     // Not reachable via the (hidden, Teleported-over) footer button in
@@ -260,6 +493,17 @@ function handlePrev(): void {
       corePhotoItemIds.value.includes(flat.item.id),
     )
     currentIndex.value = Math.max(firstCoreIndex - 1, 0)
+    return
+  }
+  if (isBasicHealthCheckGroup.value) {
+    // Same idea — leave the whole tap-on-photo checklist as one unit. Not
+    // reachable via the (hidden, Teleported-over) footer button in practice
+    // — BasicHealthCheck13.vue's own back arrow opens the Hub directly —
+    // kept for consistency with the other groups above.
+    const firstBasicIndex = verificationStore.flatItems.findIndex((flat) =>
+      BASIC_HEALTH_CHECK_ITEM_IDS.includes(flat.item.id),
+    )
+    currentIndex.value = Math.max(firstBasicIndex - 1, 0)
     return
   }
   currentIndex.value -= 1
@@ -296,14 +540,39 @@ function handleNext(): void {
   }
   if (isEngineSessionGroup.value) {
     // nextDisabled above already guarantees all 6 items are done before this
-    // can be reached. Everything from here to the end of the flow (Phase 4,
-    // 其他主動揭露) is Optional — nothing left can block 完成驗證 — so ask
-    // instead of silently marching into it (see showEngineCompleteChoice).
+    // can be reached. For a SELLER flow, everything from here to the end
+    // (Phase 4, 其他主動揭露) is Optional — nothing left can block 完成驗證 —
+    // so ask instead of silently marching into it (see
+    // showEngineCompleteChoice). A BUYER flow shows BuyerDisclosureCheck.vue
+    // as its own interstitial instead (Phase 4's actual items are hidden
+    // for buyers — see verification.store.ts's isItemVisible — this is a
+    // buyer-only reconstruction of that same section, not the same screen),
+    // then continues into 上路/熱車檢查 once the buyer taps 下一步 there.
     const lastEngineIndex = verificationStore.flatItems.findIndex(
       (flat) => flat.item.id === ENGINE_SESSION_LAST_ITEM_ID,
     )
-    if (lastEngineIndex !== -1 && lastEngineIndex < verificationStore.flatItems.length - 1) {
+    if (verificationStore.flowKind === 'buyer') {
+      showBuyerDisclosure.value = true
+    } else if (
+      lastEngineIndex === -1 ||
+      lastEngineIndex >= verificationStore.flatItems.length - 1
+    ) {
+      hubOpen.value = true
+    } else {
       showEngineCompleteChoice.value = true
+    }
+    return
+  }
+  if (isHotEngineSessionGroup.value) {
+    // nextDisabled above already guarantees all 4 items are done — 熱車檢查
+    // is the last section in the buyer flow, so there's nothing to jump
+    // past into; either straight to the next flat item (shouldn't normally
+    // exist) or back to the Hub.
+    const lastHotIndex = verificationStore.flatItems.findIndex(
+      (flat) => flat.item.id === HOT_ENGINE_SESSION_LAST_ITEM_ID,
+    )
+    if (lastHotIndex !== -1 && lastHotIndex < verificationStore.flatItems.length - 1) {
+      currentIndex.value = lastHotIndex + 1
     } else {
       hubOpen.value = true
     }
@@ -319,6 +588,21 @@ function handleNext(): void {
     })
     if (lastCoreIndex !== -1 && lastCoreIndex < verificationStore.flatItems.length - 1) {
       currentIndex.value = lastCoreIndex + 1
+    } else {
+      hubOpen.value = true
+    }
+    return
+  }
+  if (isBasicHealthCheckGroup.value) {
+    // BasicHealthCheck13.vue only ever emits this once every required item
+    // is tapped (its own 完成 button, gated the same way) — jump past the
+    // WHOLE group at once, mirroring isCorePhotoGroup above.
+    let lastBasicIndex = -1
+    verificationStore.flatItems.forEach((flat, idx) => {
+      if (BASIC_HEALTH_CHECK_ITEM_IDS.includes(flat.item.id)) lastBasicIndex = idx
+    })
+    if (lastBasicIndex !== -1 && lastBasicIndex < verificationStore.flatItems.length - 1) {
+      currentIndex.value = lastBasicIndex + 1
     } else {
       hubOpen.value = true
     }
@@ -394,6 +678,14 @@ const showCategoryNav = computed(() => true)
 const answeredIds = computed(() => Object.keys(verificationStore.answers))
 
 function handleJumpToSection(sectionId: string): void {
+  // 其他主動揭露 (buyer flow only) — its section.items is always empty for
+  // buyers (isItemVisible filters out every one of its required:false
+  // items), so the normal "find first unanswered item" jump below has
+  // nothing to land on; show the interstitial directly instead.
+  if (sectionId === DISCLOSURE_SECTION_ID && verificationStore.flowKind === 'buyer') {
+    showBuyerDisclosure.value = true
+    return
+  }
   const section = verificationStore.sections.find((candidate) => candidate.id === sectionId)
   if (!section || section.items.length === 0) return
   const firstUnanswered = section.items.find((it) => !verificationStore.answers[it.id])
@@ -418,14 +710,16 @@ function handleEnterSectionFromHub(sectionId: string): void {
   hubOpen.value = false
 }
 
-function handleOpenBasicHealthCheck(): void {
-  hubOpen.value = false
-  basicHealthCheckOpen.value = true
-}
-
-function handleCloseBasicHealthCheck(): void {
-  basicHealthCheckOpen.value = false
-  hubOpen.value = true
+// Category tab clicks are a direct alternate exit from the engine section
+// (unlike the Hub cards above, reachable without ever going through
+// handleReview's guard) — re-clicking the section's OWN already-active tab
+// is not a "leave" and skips the guard entirely.
+function handleJumpToSectionGuarded(sectionId: string): void {
+  if (sectionId === LOCKED_ENGINE_SECTION_ID) {
+    handleJumpToSection(sectionId)
+    return
+  }
+  guardLeaveEngineSection(() => handleJumpToSection(sectionId))
 }
 
 const ANALYSIS_ROUTE_KEYS = [
@@ -436,6 +730,7 @@ const ANALYSIS_ROUTE_KEYS = [
   'dashboardOcr',
   'coldCheck',
   'engineSensorSession',
+  'hotEngineSensorSession',
 ] as const
 
 function handleRetryAnalysis(key: string): void {
@@ -453,6 +748,28 @@ function handleEngineChoiceContinue(): void {
 
 function handleEngineChoiceFinish(): void {
   void handleComplete()
+}
+
+/** BuyerDisclosureCheck.vue's own "下一步" — continues into whatever comes
+ *  right after 冷車＋引擎檢查 in the buyer flow (上路's first item), same
+ *  "jump past the whole interstitial at once" shape as
+ *  handleEngineChoiceContinue above. Falls back to the Hub on the (normally
+ *  unreachable) edge case where ENG-08 isn't found. */
+function handleBuyerDisclosureAdvance(): void {
+  showBuyerDisclosure.value = false
+  const lastEngineIndex = verificationStore.flatItems.findIndex(
+    (flat) => flat.item.id === ENGINE_SESSION_LAST_ITEM_ID,
+  )
+  if (lastEngineIndex === -1 || lastEngineIndex >= verificationStore.flatItems.length - 1) {
+    hubOpen.value = true
+  } else {
+    currentIndex.value = lastEngineIndex + 1
+  }
+}
+
+function handleBuyerDisclosureBack(): void {
+  showBuyerDisclosure.value = false
+  hubOpen.value = true
 }
 
 async function handleComplete(): Promise<void> {
@@ -489,6 +806,22 @@ function dismissTour(): void {
   tourSeen.value = true
 }
 
+// Defensive net for an "unknown reason" exit mid-冷車＋引擎檢查 — the app
+// killed/crashed, or the tab/browser closed outright — none of which any
+// router or click guard above can ever see happen. Runs once per fresh
+// flowLoaded, off the real server-loaded answers (not anything cached from
+// this session), so it catches an interruption from a PAST session just as
+// well as one from a moment ago. Purely informational (one button, nothing
+// to "keep") — the data is already an abandoned partial attempt the instant
+// the user is back here looking at it.
+const showEngineSectionResetNotice = ref(false)
+let pendingResetNoticeAck: (() => void) | null = null
+function acknowledgeEngineSectionResetNotice(): void {
+  showEngineSectionResetNotice.value = false
+  pendingResetNoticeAck?.()
+  pendingResetNoticeAck = null
+}
+
 // Resume exactly where the user left off, not "first unanswered item" —
 // those are different concepts. A real prior position also bypasses the
 // Guided Hub entirely (reload/relaunch mid-verification shouldn't force an
@@ -496,10 +829,40 @@ function dismissTour(): void {
 // visited verification shows the Hub first.
 watch(
   () => verificationStore.flowLoaded,
-  (loaded) => {
+  async (loaded) => {
     if (!loaded) return
-    const lastIndex = initialLastItemId
-      ? verificationStore.flatItems.findIndex((flat) => flat.item.id === initialLastItemId)
+
+    let resumeItemId = initialLastItemId
+    // Independent of currentFlat/currentIndex (still 0 at this point, before
+    // the resume position below is even applied) — scans BOTH locked
+    // sections directly by id so an abandoned 熱車檢查 is caught here exactly
+    // as reliably as an abandoned 冷車＋引擎檢查, regardless of where
+    // currentIndex happens to be sitting right now.
+    const staleLockedSectionId = LOCKED_SECTION_IDS.find((id) => sectionInProgress(id))
+    if (staleLockedSectionId) {
+      await new Promise<void>((resolve) => {
+        pendingResetNoticeAck = resolve
+        showEngineSectionResetNotice.value = true
+      })
+      await verificationStore.resetLockedEngineSection(staleLockedSectionId).catch((error) => {
+        console.error('[VerificationStepsView] resetLockedEngineSection (on load) failed:', error)
+      })
+      // The saved position may have pointed INTO the section just wiped —
+      // land on its first item instead of a now-blank item mid-section.
+      const lockedSection = verificationStore.sections.find(
+        (candidate) => candidate.id === staleLockedSectionId,
+      )
+      if (
+        lockedSection &&
+        resumeItemId &&
+        lockedSection.items.some((it) => it.id === resumeItemId)
+      ) {
+        resumeItemId = lockedSection.items[0]?.id ?? null
+      }
+    }
+
+    const lastIndex = resumeItemId
+      ? verificationStore.flatItems.findIndex((flat) => flat.item.id === resumeItemId)
       : -1
     isFreshVerification.value = lastIndex === -1
     if (lastIndex !== -1) {
@@ -527,6 +890,7 @@ onMounted(() => {
 <template>
   <VerificationTour v-if="showTour" @done="dismissTour" />
   <VehicleTypeGate v-else-if="needsVehicleTypeGate" @pick="handlePickVehicleType" />
+  <BuyerYearGate v-else-if="needsYearGate" @confirm="handleConfirmYear" />
   <VerificationHub
     v-else-if="hubOpen"
     :sections="verificationStore.sections"
@@ -541,19 +905,17 @@ onMounted(() => {
     @select-section="handleEnterSectionFromHub"
     @complete="handleComplete"
     @retry-analysis="handleRetryAnalysis"
-    @open-basic-health-check="handleOpenBasicHealthCheck"
-  />
-  <BasicHealthCheck13
-    v-else-if="basicHealthCheckOpen"
-    :has-chain="vehicleStore.currentVehicle?.hasChain"
-    :model-id="vehicleStore.currentVehicle?.modelId"
-    @back="handleCloseBasicHealthCheck"
   />
   <EngineCompleteChoice
     v-else-if="showEngineCompleteChoice"
     :completing="completing"
     @finish="handleEngineChoiceFinish"
     @continue-to-disclosure="handleEngineChoiceContinue"
+  />
+  <BuyerDisclosureCheck
+    v-else-if="showBuyerDisclosure"
+    @back="handleBuyerDisclosureBack"
+    @advance="handleBuyerDisclosureAdvance"
   />
   <VerificationLayout
     v-else-if="currentFlat"
@@ -570,25 +932,30 @@ onMounted(() => {
     :next-disabled-hint="nextDisabledHint"
     :hide-footer="
       (isEngineSessionGroup && engineSessionRecording) ||
+      (isHotEngineSessionGroup && hotEngineSessionRecording) ||
       (isColdTouchSession && coldTouchRecording) ||
-      isCorePhotoGroup
+      isCorePhotoGroup ||
+      isBasicHealthCheckGroup ||
+      needsRideSafetyGate ||
+      needsRideTransition
     "
     @back="handleBack"
     @prev="handlePrev"
     @next="handleNext"
-    @review="hubOpen = true"
+    @review="handleReview"
   >
     <template v-if="showCategoryNav" #nav>
       <VerificationCategoryNav
         :sections="verificationStore.sections"
         :current-item-id="currentFlat.item.id"
         :answered-ids="answeredIds"
-        @select-section="handleJumpToSection"
+        @select-section="handleJumpToSectionGuarded"
         @select-item="handleJumpTo"
       />
     </template>
 
     <RideSafetyGate v-if="needsRideSafetyGate" @confirm="rideSafetyConfirmedIndex = currentIndex" />
+    <RideTransition v-else-if="needsRideTransition" :verification-id="id" @advance="handleNext" />
     <AppearanceCaptureMap
       v-else-if="isAppearanceSection && appearanceMapOpen"
       @select-group="handleSelectAppearanceGroup"
@@ -609,10 +976,25 @@ onMounted(() => {
       @advance="handleNext"
       @recording-active="engineSessionRecording = $event"
     />
+    <EngineInspectionFlow
+      v-else-if="isHotEngineSessionGroup"
+      :verification-id="id"
+      mode="hot"
+      @advance="handleNext"
+      @recording-active="hotEngineSessionRecording = $event"
+    />
     <CorePhotoCaptureFlow
       v-else-if="isCorePhotoGroup"
       :verification-id="id"
       :initial-item-id="currentFlat.item.id"
+      @advance="handleNext"
+      @back="hubOpen = true"
+    />
+    <BasicHealthCheck13
+      v-else-if="isBasicHealthCheckGroup"
+      embedded
+      :has-chain="vehicleStore.currentVehicle?.hasChain"
+      :model-id="vehicleStore.currentVehicle?.modelId"
       @advance="handleNext"
       @back="hubOpen = true"
     />
@@ -630,6 +1012,45 @@ onMounted(() => {
   <p v-else class="loading-text">載入中...</p>
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
+
+  <div v-if="showLeaveEngineWarning" class="leave-engine-overlay">
+    <div class="leave-engine-card">
+      <p class="leave-engine-title">確定要離開「冷車＋引擎檢查」？</p>
+      <p class="leave-engine-sub">
+        這個項目一旦開始就必須一次完成。離開會刪除目前已記錄的影片、錄音與檢測結果，下次需要從頭開始。
+      </p>
+      <div class="leave-engine-actions">
+        <PrimaryButton
+          variant="secondary"
+          block
+          :disabled="resettingEngineSection"
+          @click="dismissLeaveEngineWarning"
+        >
+          返回繼續檢測
+        </PrimaryButton>
+        <PrimaryButton
+          variant="danger"
+          block
+          :disabled="resettingEngineSection"
+          @click="confirmLeaveEngineSection"
+        >
+          {{ resettingEngineSection ? '刪除中...' : '離開並刪除紀錄' }}
+        </PrimaryButton>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showEngineSectionResetNotice" class="leave-engine-overlay">
+    <div class="leave-engine-card">
+      <p class="leave-engine-title">「冷車＋引擎檢查」尚未完成</p>
+      <p class="leave-engine-sub">
+        偵測到上次未把這個項目一次做完，先前記錄的影片、錄音與檢測結果將會清除，需要重新測試。
+      </p>
+      <div class="leave-engine-actions">
+        <PrimaryButton block @click="acknowledgeEngineSectionResetNotice">我知道了</PrimaryButton>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -676,5 +1097,50 @@ onMounted(() => {
   color: var(--color-danger);
   font-size: 13px;
   text-align: center;
+}
+
+.leave-engine-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.leave-engine-card {
+  width: 100%;
+  max-width: 320px;
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.leave-engine-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.leave-engine-sub {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.leave-engine-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 </style>

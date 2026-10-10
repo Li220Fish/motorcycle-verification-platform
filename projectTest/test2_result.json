@@ -1,0 +1,32 @@
+{
+  "plateNumber": {
+    "text": "QHIIL",
+    "raw_text": "Qh “IIL",
+    "confidence": 0.43
+  },
+  "engineNumber": {
+    "text": "JB214019",
+    "raw_text": "JB214019",
+    "confidence": 0.01
+  },
+  "chassisNumber": {
+    "text": "4FGTDAI6ONSO12132",
+    "raw_text": "4FGTDAI6ONSO12132",
+    "confidence": 0.47
+  },
+  "color": {
+    "text": "院",
+    "raw_text": "院",
+    "confidence": 0.0
+  },
+  "displacement": {
+    "text": "158",
+    "raw_text": "158",
+    "confidence": 0.96
+  },
+  "manufactureDate": {
+    "text": null,
+    "raw_text": "",
+    "confidence": 0.0
+  }
+}

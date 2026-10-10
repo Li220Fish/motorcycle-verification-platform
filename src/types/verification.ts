@@ -1,8 +1,18 @@
+import type { VehicleModelKnownIssue } from '@/services/firebase/vehicle-model.service'
+
 export type VerificationType = 'seller' | 'buyer' | 'professional'
 
 export type VerificationStatus = 'draft' | 'in_progress' | 'completed' | 'needs_review' | 'expired'
 
-export type TransactionDecision = 'continue_considering' | 'need_third_party' | 'not_buying'
+/** 'purchased' — the buyer confirms they actually bought the vehicle after
+ *  comparing their re-verification against the seller's (VerificationComparisonView.vue).
+ *  This alone does NOT transfer ownership — it only makes this buyer
+ *  verification ELIGIBLE: the seller still has to pick this buyer and
+ *  confirm the transfer themselves from MyListingManageView.vue (see
+ *  functions/src/functions/transfer-vehicle-ownership.ts), so a unilateral
+ *  buyer self-declaration alone can never move a vehicle's ownership. */
+export type TransactionDecision =
+  'continue_considering' | 'need_third_party' | 'not_buying' | 'purchased'
 
 /** Historical-only: Step 3 (驗車環境檢測/PREP-03) and its Trusted-Backend
  * analysis were removed from the product entirely (no longer part of
@@ -77,6 +87,32 @@ export interface Verification {
   environmentContext?: EnvironmentContext
   coldStateContext?: ColdStateContext
   analysisStatus?: AnalysisStatusMap
+
+  /** Buyer only — a denormalized copy of the target vehicle's own identity
+   *  fields, written once at creation time from marketplaceListings/{id}
+   *  .vehicleSnapshot (see listing-appointment-lookup.service.ts). Exists
+   *  because firestore.rules' vehicles/{id} read rule is owner/admin-only —
+   *  a buyer re-verifying a seller's vehicle can never read vehicles/{id}
+   *  directly, so every buyer-flow screen that needs the vehicle's brand/
+   *  model/year/modelId reads THIS field instead of vehicleStore
+   *  .currentVehicle. manufactureYear starts out whatever the listing had
+   *  (often already known); BuyerYearGate.vue fills it in here when it
+   *  was null. Absent for the manual "幫這次驗車取個名字" fallback path,
+   *  where the buyer owns the vehicle outright and vehicleStore.currentVehicle
+   *  works normally instead. */
+  vehicleSnapshot?: {
+    brand: string
+    model: string
+    manufactureYear: number | null
+    transmission: string
+    modelId?: string | null
+  }
+  /** Buyer only — a one-time snapshot of vehicleModels/{modelId}.knownIssues
+   *  (通病), taken right after vehicleSnapshot.modelId resolves so a buyer
+   *  resuming an in-progress verification doesn't need to re-fetch, and so
+   *  a later admin edit to the model's known-issues list doesn't retroactively
+   *  change what this buyer already saw. Consumed by BuyerDisclosureCheck.vue. */
+  buyerKnownIssuesSnapshot?: VehicleModelKnownIssue[]
 }
 
 // isPublic/protocolVersion/schemaVersion are stamped by verificationService.create()

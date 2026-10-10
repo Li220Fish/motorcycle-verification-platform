@@ -114,6 +114,12 @@ export async function writeAiAnswer(params: {
   if (details.coldStateValid !== undefined) {
     aiResultDetails.coldStateValid = details.coldStateValid as boolean
   }
+  if (details.pipelineVersions !== undefined) {
+    aiResultDetails.pipelineVersions = details.pipelineVersions as Record<string, string>
+  }
+  if (details.hardRuleApplied !== undefined) {
+    aiResultDetails.hardRuleApplied = details.hardRuleApplied as string | null
+  }
 
   const aiResult: AiResultDoc = {
     model: modelId,

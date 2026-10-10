@@ -47,8 +47,8 @@ export const PROMPT_ITEM_MAP: Record<string, PromptItemMapping> = {
   'dashboard-ocr-v2': { itemIds: ['APR-dashboard'] },
   'cold-engine-touch-v3': { itemIds: ['ENG-02'] },
   'engine-audio-v2': { itemIds: ['ENG-03', 'ENG-04', 'ENG-05', 'ENG-06'] },
-  'registration-ocr-v1': {
+  'registration-ocr-gemini-v3': {
     itemIds: [],
-    note: '行照 OCR — 車輛認證流程的一部分，不屬於驗車檢查表項目。',
+    note: '行照 OCR 的正式辨識引擎，僅問引擎號碼一個欄位 — 讀取本機 OpenCV 遮罩後的圖片（個資已塗掉），本機 Tesseract 只在這支呼叫本身失敗時當備援。是否為行照由本機樣板比對判斷，不經過這支 API。不屬於驗車檢查表項目。',
   },
 }

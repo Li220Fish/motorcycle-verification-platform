@@ -44,6 +44,19 @@ async function startVerification(
     .click()
   await page.waitForURL(/\/verification\/[^/]+$/, { timeout: 10000 })
   await page.waitForTimeout(500)
+  // A brand-new account's very first verification triggers the one-time
+  // onboarding tour (VerificationTour.vue, gated on localStorage) BEFORE
+  // anything else — VerificationStepsView.vue's template puts it ahead of
+  // VehicleTypeGate (`v-if="showTour"` / `v-else-if="needsVehicleTypeGate"`),
+  // so it must be dismissed first or the 檔車 button below is never actually
+  // on screen. Pre-existing since that tour was added, unrelated to whatever
+  // this suite is testing.
+  const skipTourBtn = page.locator('button', { hasText: '略過導覽' })
+  await skipTourBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+  if (await skipTourBtn.isVisible().catch(() => false)) {
+    await skipTourBtn.click()
+    await page.waitForTimeout(300)
+  }
   // A freshly-created vehicle has no transmission on file yet, so
   // VehicleTypeGate.vue blocks everything else (including the Hub itself)
   // until 速可達/檔車 is picked — see VerificationStepsView.vue's
@@ -59,11 +72,18 @@ async function startVerification(
     await page.waitForTimeout(300)
   }
   // Guided UI (Task B): /verification/:id now lands on the Section/vehicle-
-  // part Hub first, not directly on the item stepper — enter the first
-  // section (事前準備, same starting point the old direct-to-stepper flow
-  // always landed on) to reach the .tab/category-nav UI the rest of this
-  // suite exercises.
-  await page.locator('.section-card').first().click()
+  // part Hub first, not directly on the item stepper. 核心照片 (the first
+  // card) now immediately swaps in CorePhotoCaptureFlow.vue — a
+  // `position: fixed; z-index: 300` full-viewport live-camera session (see
+  // its own top comment: "camera never closes between shots") that covers
+  // the category tabs entirely, with its own back button as the only way
+  // out. Entering there would make every caller's subsequent `.tab` click
+  // physically unreachable. 基本12項健檢 (the second card) renders inline
+  // instead — even in its unannotated-vehicle empty state, since a
+  // freshly-registered account's vehicle has no catalog model — so land
+  // there to reach the .tab/category-nav UI the rest of this suite
+  // exercises.
+  await page.locator('.section-card').nth(1).click()
   await page.waitForTimeout(300)
 }
 
@@ -72,8 +92,9 @@ test.describe('Verification engine — freeze-zone regression', () => {
     await registerAndLogin(page, 'regress-seller')
     await startVerification(page, 'seller', 'Regression Seller')
 
-    // 4 PHASE tabs (Verification v2: 核心照片/燈光電系/冷車＋引擎檢查/其他主動
-    // 揭露 — supersedes the old 事前準備/車身外觀/電系狀況/引擎狀況 grouping),
+    // 4 PHASE tabs (Verification v2: 核心照片/基本12項健檢/冷車＋引擎檢查/其他
+    // 主動揭露 — supersedes the old 事前準備/車身外觀/電系狀況/引擎狀況
+    // grouping; 燈光電系 was folded into 基本12項健檢, not its own tab),
     // always visible, no horizontal overflow
     const tabCount = await page.locator('.tab').count()
     expect(tabCount).toBe(4)
@@ -95,18 +116,32 @@ test.describe('Verification engine — freeze-zone regression', () => {
       .isVisible()
       .catch(() => false)
     expect(mapVisible).toBe(false)
-    const coreTitle = await page.locator('h2').first().textContent()
+    // CorePhotoCaptureFlow.vue is Teleported to <body> and renders its own
+    // `.top-title` (not the generic per-item `<h2>` — there is none here,
+    // this whole screen replaces that layer entirely), unconditionally
+    // regardless of whether camera permission was granted in this run.
+    const coreTitle = await page.locator('.top-title').first().textContent()
     expect(coreTitle).toBeTruthy()
 
-    // Electrical Quick Check: 9 lights on one screen
-    await page.locator('.tab', { hasText: '燈光電系' }).click()
+    // Back out of CorePhotoCaptureFlow's full-viewport camera session (its
+    // own back button — see startVerification's comment above) before any
+    // further .tab click, then re-enter via the Hub to get back to a
+    // tab-navigable screen.
+    await page.locator('.back-btn').first().click()
     await page.waitForTimeout(400)
-    const lightsVisible = await page
-      .locator('.lights-check')
+    await page.locator('.section-card', { hasText: '基本12項健檢' }).click()
+    await page.waitForTimeout(400)
+
+    // 基本12項健檢: a real tab now (used to be 燈光電系's 9-lights quick-check
+    // screen, folded into this checklist instead — see seller-verification.ts
+    // and basic-health-check-items.ts). AppHeader's own title renders
+    // regardless of whether this account's vehicle has annotated anchors.
+    const basicHealthVisible = await page
+      .locator('text=基本12項健檢')
+      .first()
       .isVisible()
       .catch(() => false)
-    expect(lightsVisible).toBe(true)
-    expect(await page.locator('.quick-btn.ok').count()).toBe(9)
+    expect(basicHealthVisible).toBe(true)
 
     // Engine section: locked-order badge + Next disabled with zero evidence
     await page.locator('.tab', { hasText: '冷車＋引擎檢查' }).click()
@@ -211,7 +246,12 @@ test.describe('Verification engine — freeze-zone regression', () => {
     await startVerification(page, 'seller', 'Regression Resume')
     const url = page.url()
 
-    await page.locator('.tab', { hasText: '核心照片' }).click()
+    // 核心照片 no longer uses the generic per-item stepper/dropdown at all
+    // (CorePhotoCaptureFlow.vue's own full-viewport camera session has no
+    // .item-toggle) — 其他主動揭露 still does (freely-ordered individual
+    // VerificationItem screens), so exercise the dropdown-jump + resume
+    // behavior there instead.
+    await page.locator('.tab', { hasText: '其他主動揭露' }).click()
     await page.waitForTimeout(300)
     await page.locator('.item-toggle').click()
     await page.waitForTimeout(200)

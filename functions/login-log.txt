@@ -1,0 +1,294 @@
+--------- beginning of main
+10-06 00:24:56.282  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:56.283  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8612.000000,R:4670.000000,G:3246.000000,B:1331.000000, lux: 522.782715
+10-06 00:24:56.322  1205  1205 I adbd    : adbd service requested 'shell,v2,TERM=xterm-256color,raw:input tap 610 1200'
+10-06 00:24:56.327 15576  1075 I MediaCodec: [mId: 5] [audio-debug-dec] Stats 5008ms:Client:com.facebook.katana,Component:c2.android.aac.decoder,Qin:0,DQin:0/5,Render:0,Drop:0,DQout:0/0
+--------- beginning of system
+10-06 00:24:56.359  2113  3245 W MIUIInput: Input motion event injection from package: null action ACTION_DOWN
+10-06 00:24:56.359  2113  3245 D InputManager: injectMotionEvent: 12394-{action=ACTION_DOWN, id[0]=0, x[0]=610.0, y[0]=1200.0, pointerCount=1, eventTime=52354706, deviceId=6}
+10-06 00:24:56.360  2113  2509 I MiuiInputUtil: MiuiSpecialWindowInfo: f5a5f36 com.motorcycleverify.app/com.motorcycleverify.app.MainActivity(9,0x0,0x0,[0,0,1220,2712],1.00);GestureStubLeft(4,0x104,0x0,[0,240,62,2635],1.00);GestureStubRight(3,0x104,0x0,[1158,240,1220,2635],1.00);GestureStubHome(5,0x104,0x0,[0,2635,1220,2712],1.00);GestureStub<none>;StatusBar1(8,0x104,0x0,[0,0,1220,120],1.00);StatusBar(18,0x106,0x0,[0,0,1220,120],0.00);
+10-06 00:24:56.361  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x0, deviceId=-1, 52354706, channel 'f5a5f36 com.motorcycleverify.app/com.motorcycleverify.app.MainActivity'
+10-06 00:24:56.362  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x0, deviceId=-1, 52354706, channel '[Gesture Monitor] WMShell'
+10-06 00:24:56.362  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x0, deviceId=-1, 52354706, channel '[Gesture Monitor] miui-gesture'
+10-06 00:24:56.363  3176  3298 D MiuiFreeformModeGestureHandler: start handle MotionEvents:(610.0,1200.0)
+10-06 00:24:56.363  5818  5818 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'com.motorcycleverify.app/com.motorcycleverify.app.MainActivity', { action=ACTION_DOWN, id[0]=0, pointerCount=1, eventTime=52354706, downTime=52354706, phoneEventTime=1791217496359 } moveCount:0
+10-06 00:24:56.363  3176  3298 D MiuiFreeformModeGestureHandler: handleMotionEvents mActiveMiuiFreeformTask null x: 610.0 y: 1200.0 current miuiFreeformModeTaskInfo: 
+10-06 00:24:56.364  2113  2148 I MiuiSplitInputMethodImpl: Skip onPointerDownOutsideFocusLocked
+10-06 00:24:56.365  2113  2683 D SchedBoost: handleSceneBoost type: 17, active :true
+10-06 00:24:56.365  2113  2683 I ProcessManager: getRenderThreadTidByPid, caller=2113
+10-06 00:24:56.365  2113  2683 D SchedBoostThread: thread tid=5818, priority is set to 1
+10-06 00:24:56.365  2113  2683 D SchedBoostThread: thread tid=10649, priority is set to 1
+10-06 00:24:56.363  3176  3298 D MultiTaskingTaskRepository: getTopFullscreenTaskInfo: taskId=3540 windowingMode=1 isVisible=true isTopActivityTransparent=false
+10-06 00:24:56.366  3176  3298 D MiuiDecorationRootViewHost: isTouchedInTopCaption: taskId = 3540, tempViewHost = null
+10-06 00:24:56.366  3176  3298 D MiuiDecorationDot: isTouchedInTopCaption: taskId = 3540, mMulWinSwitchVIewHost is not ready for layout
+10-06 00:24:56.366  3176  3298 D MulWinSwitchEventHandler: dispatchToFullOrSplitDecorationDot: touchedTaskId=-1
+10-06 00:24:56.366  3176  3298 D MulWinSwitchEventHandler: handleReceivedMotionEvent: mTouchedBottomTaskId=-1
+10-06 00:24:56.367  1429  1496 I libPowerHal: [perfLockAcq] idx:11 hdl:47780 hint:25 pid:1429 tid:1429 duration:10000 lock_user:vendor.mediatek => ret_hdl:47780
+10-06 00:24:56.367  2113  2148 I MiuiSplitInputMethodImpl: Skip onPointerDownOutsideFocusLocked
+10-06 00:24:56.368  2113  2148 I MiuiSplitInputMethodImpl: Skip onPointerDownOutsideFocusLocked
+10-06 00:24:56.369  5818  5818 D VRI[MainActivity]: getMiuiFreeformStackInfo mTmpFrames.miuiFreeFormStackInfo: null
+10-06 00:24:56.374  2113  3245 W MIUIInput: Input motion event injection from package: null action ACTION_UP
+10-06 00:24:56.375  2113  3245 D InputManager: injectMotionEvent: 12394-{action=ACTION_UP, id[0]=0, x[0]=610.0, y[0]=1200.0, pointerCount=1, eventTime=52354706, deviceId=6}
+10-06 00:24:56.378  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:56.378  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x1, deviceId=-1, 52354706, channel 'f5a5f36 com.motorcycleverify.app/com.motorcycleverify.app.MainActivity'
+10-06 00:24:56.378  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x1, deviceId=-1, 52354706, channel '[Gesture Monitor] WMShell'
+10-06 00:24:56.378  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8617.000000,R:4666.000000,G:3246.000000,B:1330.000000, lux: 523.816589
+10-06 00:24:56.378  1429  1496 I libPowerHal: [perfLockRel] hdl:47780, idx:11
+10-06 00:24:56.379  5818  5818 I MIUIInput: [MotionEvent] ViewRootImpl windowName 'com.motorcycleverify.app/com.motorcycleverify.app.MainActivity', { action=ACTION_UP, id[0]=0, pointerCount=1, eventTime=52354706, downTime=52354706, phoneEventTime=1791217496359 } moveCount:0
+10-06 00:24:56.379  2113  2509 I MIUIInput: [MotionEvent] publisher action=0x1, deviceId=-1, 52354706, channel '[Gesture Monitor] miui-gesture'
+10-06 00:24:56.425  1524  1524 W binder:1524_5: type=1400 audit(0.0:183523): avc:  denied  { ioctl } for  path="/proc/perfmgr/perf_ioctl" dev="proc" ino=4026535392 ioctlcmd=0x671d scontext=u:r:surfaceflinger:s0 tcontext=u:object_r:proc_perfmgr:s0 tclass=file permissive=0
+10-06 00:24:56.434  1524  1524 I BufferQueueProducer: [com.motorcycleverify.app/com.motorcycleverify.app.MainActivity#22970](this:0xb400007da46d82b0,id:-1,api:0,p:-1,c:1524) queueBuffer: fps=3.70 dur=13770.95 max=13091.08 min=5.47
+10-06 00:24:56.438  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.438  1383  1383 I hwcomposer: [HWCDisplay] [Display_0 (type:1, mode:2)] fps:1.586355,dur:2521.50,max:2416.12,min:4.72  
+10-06 00:24:56.439  1383  2023 I android.hardware.graphics.composer@3.2-service: Sensor: notify citsensorservice to trigger cwb
+10-06 00:24:56.442  1947  2532 I libsensor-frameBufferManager: request dump start
+10-06 00:24:56.442  1524  2041 W libc    : Access denied finding property "ro.vendor.display.max_hdr_luminance"
+10-06 00:24:56.442  1947  2532 D libcomposer_ext: ClientImplAidl::getDispDump(), dpy 1, dst (160, 120), dump_point 1, release_fence -1
+10-06 00:24:56.444  1383  1383 D libcomposer_ext: DeviceImplAidl::syncPerform(14), client_handle: 1
+10-06 00:24:56.445  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::ParseGetDispDump()
+10-06 00:24:56.445  1383  1383 D libcomposer_ext: DeviceImplAidl::ParseGetDispDump(), dpy 1, dst (160, 120), dump_point 1
+10-06 00:24:56.445  1383  1383 I hwcomposer: [HWC] getDispDump(), dpy 1, (822,7,982,127), (160, 120), (1, 2), (-1), (-1), (0xb400007dfb4f0270)  
+10-06 00:24:56.446  1383  1383 I hwcomposer: [DRMDEV] isSupportWbParams(), id_crtc 103, id_connector 34, dump_point 1, src(160, 120), dst(160, 120), config 2  
+10-06 00:24:56.446  1383  1383 E hwcomposer: [DRMDEV] isSupportWbParams(), disp(1220, 2712)  
+10-06 00:24:56.446  1383  1383 I hwcomposer: [DISP_DUMP] setDumpBuf(), dpy(0), src(822, 7, 982, 127), dst(160, 120), (1, 2), -1, (-1), (0xb400007dfb4f0270)  
+10-06 00:24:56.447  1383  1383 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[9]  
+10-06 00:24:56.455  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.457  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::NotifyDispDumpReady()
+10-06 00:24:56.458  1947  2529 D libcomposer_ext: ClientCallbackAidl::asyncPerform(15)
+10-06 00:24:56.458  1947  2529 D libcomposer_ext: ClientImplAidl::ParseNotifyDispDumpReady()
+10-06 00:24:56.475  1947  2533 D libsensor-parseRGB: the value of RGB [23.614881 23.522355 23.037180]
+10-06 00:24:56.484  1429  1455 E libPowerHal: [getHintRscSize] hint_id 56 cannot be found in PowerScnTbl
+10-06 00:24:56.514  1383  2028 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[4]  
+10-06 00:24:56.517  2113  3782 I NetworkAccelerateSwitchService: EVENT_RSSI_POLL. mRssiPoll=true
+10-06 00:24:56.518  2113  3782 I NetworkAccelerateSwitchService: checkWifiRssiAndLinkSpeed rssi:33
+10-06 00:24:56.518  2113  3782 I NetworkAccelerateSwitchService: checkWifiRssiAndLinkSpeed mWifiFastFade:false mWifiFastFadeAdjustThreshold:false
+10-06 00:24:56.518  2113  3782 I NetworkAccelerateSwitchService: getAverageWifiRssi:32
+10-06 00:24:56.518  2113  3782 D NetworkAccelerateSwitchService: checkIntervalModeChange mMovementState:false mIntervalMode:0 mIsBadLinkLayerQoE:false mBadLinkLayerQoETimes = 0
+10-06 00:24:56.526  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.532  1524  1524 I BufferQueueProducer: [FramebufferSurface](this:0xb400007dd4216300,id:-1,api:1,p:1524,c:1524) queueBuffer: fps=0.40 dur=2510.81 max=2510.81 min=2510.81
+10-06 00:24:56.544  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.576  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:56.577  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8617.000000,R:4670.000000,G:3248.000000,B:1330.000000, lux: 523.410156
+10-06 00:24:56.579  5818 10649 W RenderInspector: DequeueBuffer time out on com.motorcycleverify.app/com.motorcycleverify.app.MainActivity, count=1, avg=10 ms, max=10 ms.
+10-06 00:24:56.605  3276 14898 E msys    : E[N mns:DGWClient]_LogError(394)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+10-06 00:24:56.651  2113  3245 D FileUtils: Rounded bytes from 11873615872 to 16000000000
+10-06 00:24:56.656  3276 14898 E msys    : E[N mns:DGWClient]_LogError(394)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+10-06 00:24:56.668  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.669  1383  2023 I android.hardware.graphics.composer@3.2-service: Sensor: notify citsensorservice to trigger cwb
+10-06 00:24:56.669  1947  2532 I libsensor-frameBufferManager: request dump start
+10-06 00:24:56.669  1947  2532 D libcomposer_ext: ClientImplAidl::getDispDump(), dpy 1, dst (160, 120), dump_point 1, release_fence -1
+10-06 00:24:56.670  1524  2041 W libc    : Access denied finding property "ro.vendor.display.max_hdr_luminance"
+10-06 00:24:56.670  1383  1383 D libcomposer_ext: DeviceImplAidl::syncPerform(14), client_handle: 1
+10-06 00:24:56.670  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::ParseGetDispDump()
+10-06 00:24:56.670  1383  1383 D libcomposer_ext: DeviceImplAidl::ParseGetDispDump(), dpy 1, dst (160, 120), dump_point 1
+10-06 00:24:56.670  1383  1383 I hwcomposer: [HWC] getDispDump(), dpy 1, (822,7,982,127), (160, 120), (1, 2), (-1), (-1), (0xb400007dfb4f5fd0)  
+10-06 00:24:56.670  1383  1383 I hwcomposer: [DRMDEV] isSupportWbParams(), id_crtc 103, id_connector 34, dump_point 1, src(160, 120), dst(160, 120), config 2  
+10-06 00:24:56.670  1383  1383 E hwcomposer: [DRMDEV] isSupportWbParams(), disp(1220, 2712)  
+10-06 00:24:56.670  1383  1383 I hwcomposer: [DISP_DUMP] setDumpBuf(), dpy(0), src(822, 7, 982, 127), dst(160, 120), (1, 2), -1, (-1), (0xb400007dfb4f5fd0)  
+10-06 00:24:56.670  1383  1383 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[9]  
+10-06 00:24:56.676  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.677  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::NotifyDispDumpReady()
+10-06 00:24:56.678  1947  2529 D libcomposer_ext: ClientCallbackAidl::asyncPerform(15)
+10-06 00:24:56.678  1947  2529 D libcomposer_ext: ClientImplAidl::ParseNotifyDispDumpReady()
+10-06 00:24:56.699  1947  2533 D libsensor-parseRGB: the value of RGB [23.614881 23.522355 23.037180]
+10-06 00:24:56.754  1800  2255 D ULogGuard: Monitoring: 25 threads, 0 requests, 0 time-bombs; 14 guards. ResetFlags = 0x7
+10-06 00:24:56.777  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:56.778  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8612.000000,R:4665.000000,G:3248.000000,B:1331.000000, lux: 523.109192
+10-06 00:24:56.778  1383  2028 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[4]  
+10-06 00:24:56.788  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.793  1524  1524 W surfaceflinger: type=1400 audit(0.0:183524): avc:  denied  { ioctl } for  path="/proc/perfmgr/perf_ioctl" dev="proc" ino=4026535392 ioctlcmd=0x671d scontext=u:r:surfaceflinger:s0 tcontext=u:object_r:proc_perfmgr:s0 tclass=file permissive=0
+10-06 00:24:56.881  2742  2742 D WifiHAL : WifiRequest::create vendor command to iface 37, vendor_id=0x1a11, subcmd=0x1200, res=0
+10-06 00:24:56.894  2742  2742 I WifiHAL : LLS RSP: data=0xb400007cbfc1cc00, len=5060
+10-06 00:24:56.894  2742  2742 I WifiHAL : LLS check_data_sanity: 1801: current_radio_stat->num_channels=36
+10-06 00:24:56.894  2742  2742 I WifiHAL : LLS check_data_sanity: 1801: current_radio_stat->num_channels=0
+10-06 00:24:56.894  2742  2742 I WifiHAL : LLS check_data_sanity: confirmed_size=5060, len=5060
+10-06 00:24:56.909  1411  1500 I libPerfCtl: xgfGetFPS pid:3176 fps:120
+10-06 00:24:56.910  1411  1500 I libPerfCtl: xgfGetFPS pid:5818 fps:-1
+10-06 00:24:56.932  3176  3176 D ControlCenterHeaderExpandController: onExpansionChanged: progress =  0.0
+10-06 00:24:56.933 15143 15525 D JavaheapMonitor: Java heap used=3M max=256M, proc: com.miui.misound
+10-06 00:24:56.934 15143 15525 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:56.935  3176  3176 D ControlCenterHeaderExpandController: onExpansionChanged: progress =  0.0
+10-06 00:24:56.935  3176  3176 D ControlCenterHeaderExpandController: onExpansionChanged: progress =  0.0
+10-06 00:24:56.946  1383  2023 I android.hardware.graphics.composer@3.2-service: Sensor: notify citsensorservice to trigger cwb
+10-06 00:24:56.947  1947  2532 I libsensor-frameBufferManager: request dump start
+10-06 00:24:56.947  1947  2532 D libcomposer_ext: ClientImplAidl::getDispDump(), dpy 1, dst (160, 120), dump_point 1, release_fence -1
+10-06 00:24:56.948  1383  1383 D libcomposer_ext: DeviceImplAidl::syncPerform(14), client_handle: 1
+10-06 00:24:56.948  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::ParseGetDispDump()
+10-06 00:24:56.948  1383  1383 D libcomposer_ext: DeviceImplAidl::ParseGetDispDump(), dpy 1, dst (160, 120), dump_point 1
+10-06 00:24:56.948  1383  1383 I hwcomposer: [HWC] getDispDump(), dpy 1, (822,7,982,127), (160, 120), (1, 2), (-1), (-1), (0xb400007dfb4f57f0)  
+10-06 00:24:56.948  1383  1383 I hwcomposer: [DRMDEV] isSupportWbParams(), id_crtc 103, id_connector 34, dump_point 1, src(160, 120), dst(160, 120), config 2  
+10-06 00:24:56.948  1383  1383 E hwcomposer: [DRMDEV] isSupportWbParams(), disp(1220, 2712)  
+10-06 00:24:56.948  1383  1383 I hwcomposer: [DISP_DUMP] setDumpBuf(), dpy(0), src(822, 7, 982, 127), dst(160, 120), (1, 2), -1, (-1), (0xb400007dfb4f57f0)  
+10-06 00:24:56.948  1383  1383 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[9]  
+10-06 00:24:56.949  1524  1524 I BufferQueueProducer: [StatusBar1#132](this:0xb400007da4582730,id:-1,api:0,p:-1,c:1524) queueBuffer: fps=0.33 dur=3029.36 max=3029.36 min=3029.36
+10-06 00:24:56.949  1524  1524 I BufferQueueProducer: [StatusBar#127](this:0xb400007da45a7780,id:-1,api:0,p:-1,c:1524) queueBuffer: fps=0.33 dur=3037.14 max=3037.14 min=3037.14
+10-06 00:24:56.950 26938 27077 E msgr.msys: E[N mns:DGWClient]_LogError(394)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+10-06 00:24:56.951 26938 27077 E msgr.msys: E[N mns:DGWClient]_LogError(394)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+10-06 00:24:56.952  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:56.952  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::NotifyDispDumpReady()
+10-06 00:24:56.953  1947  2529 D libcomposer_ext: ClientCallbackAidl::asyncPerform(15)
+10-06 00:24:56.953  1947  2529 D libcomposer_ext: ClientImplAidl::ParseNotifyDispDumpReady()
+10-06 00:24:56.953  1383  2023 I android.hardware.graphics.composer@3.2-service: Sensor: notify citsensorservice to trigger cwb
+10-06 00:24:56.953  1947  2532 I libsensor-frameBufferManager: request dump start
+10-06 00:24:56.953  1947  2532 D libcomposer_ext: ClientImplAidl::getDispDump(), dpy 1, dst (160, 120), dump_point 1, release_fence -1
+10-06 00:24:56.954  1383  1383 D libcomposer_ext: DeviceImplAidl::syncPerform(14), client_handle: 1
+10-06 00:24:56.954  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::ParseGetDispDump()
+10-06 00:24:56.954  1383  1383 D libcomposer_ext: DeviceImplAidl::ParseGetDispDump(), dpy 1, dst (160, 120), dump_point 1
+10-06 00:24:56.954  1383  1383 I hwcomposer: [HWC] getDispDump(), dpy 1, (822,7,982,127), (160, 120), (1, 2), (-1), (-1), (0xb400007dfb4f0270)  
+10-06 00:24:56.954  1383  1383 I hwcomposer: [DRMDEV] isSupportWbParams(), id_crtc 103, id_connector 34, dump_point 1, src(160, 120), dst(160, 120), config 2  
+10-06 00:24:56.954  1383  1383 E hwcomposer: [DRMDEV] isSupportWbParams(), disp(1220, 2712)  
+10-06 00:24:56.954  1383  1383 I hwcomposer: [DISP_DUMP] setDumpBuf(), dpy(0), src(822, 7, 982, 127), dst(160, 120), (1, 2), -1, (-1), (0xb400007dfb4f0270)  
+10-06 00:24:56.962  1383  1383 D libcomposer_ext: DeviceImplAidl::DeviceClientContextAidl::NotifyDispDumpReady()
+10-06 00:24:56.966  1524  2041 W libc    : Access denied finding property "ro.vendor.display.max_hdr_luminance"
+10-06 00:24:56.971  1947  2529 D libcomposer_ext: ClientCallbackAidl::asyncPerform(15)
+10-06 00:24:56.971  1947  2529 D libcomposer_ext: ClientImplAidl::ParseNotifyDispDumpReady()
+10-06 00:24:56.974  1947  2533 D libsensor-parseRGB: the value of RGB [23.614881 23.522355 23.037180]
+10-06 00:24:56.978  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:56.979  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8618.000000,R:4667.000000,G:3249.000000,B:1331.000000, lux: 523.689636
+10-06 00:24:56.983  1947  2533 D libsensor-parseRGB: the value of RGB [23.614881 23.522355 23.037180]
+10-06 00:24:57.042  3043  3587 D JavaheapMonitor: Java heap used=4M max=512M, proc: com.android.bluetooth
+10-06 00:24:57.042  3043  3587 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:57.074  1383  2028 I hwcomposer: [HWC] (0)fire a callback of refresh to SF[4]  
+10-06 00:24:57.083  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:57.083  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8625.000000,R:4676.000000,G:3250.000000,B:1332.000000, lux: 523.775757
+10-06 00:24:57.088  1524  1524 E HwcComposer: presentOrValidateDisplay 0 presentFence:-1
+10-06 00:24:57.248  2113  3473 D SLM-SRV-SLAService: checktemp temperature = 31844 temperature_average = 31811 isPerformanceMode = false thermal_enable_slm = true
+10-06 00:24:57.259  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@947bca7 callingPid=3682
+10-06 00:24:57.267  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@541b5c1 callingPid=3682
+10-06 00:24:57.337  3276  4916 I MediaCodec: [mId: 54] [video-debug-dec] Stats 5006ms:Client:com.instagram.android,Component:c2.mtk.avc.decoder,Qin:0,DQin:0/5,Render:0,Drop:0,DQout:0/0
+10-06 00:24:57.338  3276  4973 I MediaCodec: [mId: 55] [audio-debug-dec] Stats 5006ms:Client:com.instagram.android,Component:c2.android.aac.decoder,Qin:0,DQin:0/5,Render:0,Drop:0,DQout:0/0
+10-06 00:24:57.365  2113  2683 D SchedBoostThread: thread tid=5818, priority is set to -10
+10-06 00:24:57.366  2113  2683 D SchedBoostThread: thread tid=10649, priority is set to -10
+10-06 00:24:57.374  2113  3245 I mtkpower_client: perf_lock_acq, hdl:47779, dur:1, num:4, pid:2113, tid:3245
+10-06 00:24:57.378  2113  3245 I mtkpower_client: ret_hdl:47781
+10-06 00:24:57.379  1429  1496 I libPowerHal: cmdSetting - unknown cmd:340c300, scmd:(null) ,param_1:1
+10-06 00:24:57.379  1429  1496 I libPowerHal: [perfLockAcq] idx:11 hdl:47781 hint:-1 pid:2113 tid:3245 duration:1 lock_user:system_server => ret_hdl:47781
+10-06 00:24:57.379  5818 10824 I PowerHalMgrImpl: hdl:47781, pid:5818 
+10-06 00:24:57.379  1429  1496 I libPowerHal: [PE] system_server update ONESHOT(set) cmd:1444300 param:5818
+10-06 00:24:57.380  2113  3245 I mtkpower_client: perf_lock_rel, hdl:47781, pid: 2113, tid:3245
+10-06 00:24:57.381  1429  1496 I mtkpower@impl: [powerd_req] TIMER_MSG_PERF_LOCK_TIMEOUT hdl:47781
+10-06 00:24:57.381  1429  1496 I libPowerHal: [perfLockRel] hdl:47781, idx:11
+10-06 00:24:57.383  1429  1496 I libPowerHal: [PD] system_server update ONESHOT(unset) cmd:1444300 param:5818
+10-06 00:24:57.384  1429  1496 I libPowerHal: [perfLockRel] hdl:47781, idx:-1
+10-06 00:24:57.424  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@1dad8fa callingPid=3682
+10-06 00:24:57.426  2113  3245 I SmartPower: com.google.android.gms/10146(3682): idle->background(6995ms) R(service unbind com.google.android.gms/.chimera.PersistentApiService) adj=100.
+10-06 00:24:57.428  3682  3682 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.presencemanager.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-06 00:24:57.429  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@f597908 callingPid=3682
+10-06 00:24:57.432  3682  3682 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.presencemanager.service.INTERNAL_IDENTITY dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-06 00:24:57.478  1389  1490 E HfLooper: sensor type is 4 action is 2 data is 2513.000000 2228.000000 -3013.000000
+10-06 00:24:57.479  1389  1490 W AString : ctor got NULL, using empty string instead
+10-06 00:24:57.479  1389  1490 I SensorSavedChannel: [2513,2228,-3013]==>gyro_bias.json
+10-06 00:24:57.479  1389  1490 I SensorSavedChannel: Scp reboot count = 7339, reboot_flag = 0
+10-06 00:24:57.657  2113  3245 D FileUtils: Rounded bytes from 11873615872 to 16000000000
+10-06 00:24:57.739  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@230aec callingPid=6244
+10-06 00:24:57.778  2113  3245 I ActivityManager: unbindService com.android.server.am.ActiveServices@7503449 conn=android.os.BinderProxy@ce01cb2 callingPid=6276
+10-06 00:24:57.906  3635  5008 D JavaheapMonitor: Java heap used=5M max=256M, proc: com.xiaomi.mirror
+10-06 00:24:57.906  3635  5008 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:57.910  1411  1500 I libPerfCtl: xgfGetFPS pid:3176 fps:120
+10-06 00:24:57.910  1411  1500 I libPerfCtl: xgfGetFPS pid:5818 fps:-1
+10-06 00:24:58.082  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.082  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8691.000000,R:4706.000000,G:3280.000000,B:1339.000000, lux: 528.358093
+10-06 00:24:58.177  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.177  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8692.000000,R:4707.000000,G:3277.000000,B:1341.000000, lux: 528.418213
+10-06 00:24:58.229  2826  3371 D JavaheapMonitor: Java heap used=17M max=512M, proc: com.mi.android.globallauncher
+10-06 00:24:58.229  2826  3371 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:58.281  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.282  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8687.000000,R:4704.000000,G:3282.000000,B:1342.000000, lux: 527.752686
+10-06 00:24:58.329 15576  1072 D AudioTrackImpl: [audioTrackData][fine] 20s(f:20027 m:0 s:0 k:0 z:0) : pid 15576 uid 10291 sessionId 9289 sr 44100 ch 2 fmt 1 maxAmplitude 21466
+10-06 00:24:58.377  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.378  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8686.000000,R:4699.000000,G:3279.000000,B:1342.000000, lux: 528.150269
+10-06 00:24:58.385  3144  3322 D JavaheapMonitor: Java heap used=14M max=256M, proc: com.android.phone
+10-06 00:24:58.385  3144  3322 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:58.482  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.482  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8684.000000,R:4699.000000,G:3275.000000,B:1342.000000, lux: 528.050415
+10-06 00:24:58.566  2113  2594 D AmlWifiScoreReportInjector: isMobileDataSignalPoor cellLteSignalRsrp = -107
+10-06 00:24:58.568  2113  2594 D AmlWifiScoreReportInjector: getMaxRssiInWaeknet weaknetRssi = -72
+10-06 00:24:58.576  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.577  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8678.000000,R:4695.000000,G:3275.000000,B:1338.000000, lux: 527.812500
+10-06 00:24:58.661  2113  3245 D FileUtils: Rounded bytes from 11873615872 to 16000000000
+10-06 00:24:58.681  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.682  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8674.000000,R:4701.000000,G:3276.000000,B:1339.000000, lux: 526.706177
+10-06 00:24:58.777  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.778  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8682.000000,R:4703.000000,G:3277.000000,B:1339.000000, lux: 527.547913
+10-06 00:24:58.881  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.882  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8689.000000,R:4704.000000,G:3279.000000,B:1339.000000, lux: 528.300049
+10-06 00:24:58.907  2113  2676 I SmartPower: com.mgoogle.android.gms/10309(9608): background->idle(3003ms) R(alarm start) adj=200.
+10-06 00:24:58.908  2113  2676 I SmartPower: com.mgoogle.android.gms:persistent/10309(11071): background->idle(3002ms) R(alarm start) adj=200.
+10-06 00:24:58.911  1411  1500 I libPerfCtl: xgfGetFPS pid:3176 fps:120
+10-06 00:24:58.911  1411  1500 I libPerfCtl: xgfGetFPS pid:5818 fps:-1
+10-06 00:24:58.977  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:58.977  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8689.000000,R:4705.000000,G:3281.000000,B:1341.000000, lux: 528.027832
+10-06 00:24:59.081  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.082  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8690.000000,R:4706.000000,G:3276.000000,B:1340.000000, lux: 528.333801
+10-06 00:24:59.170  3059  4874 D JavaheapMonitor: Java heap used=4M max=256M, proc: com.mediatek.ims
+10-06 00:24:59.170  3059  4874 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:59.176  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.177  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8680.000000,R:4704.000000,G:3278.000000,B:1339.000000, lux: 527.164856
+10-06 00:24:59.186  3009  3037 D JavaheapMonitor: Java heap used=4M max=256M, proc: com.android.networkstack.process
+10-06 00:24:59.186  3009  3037 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:59.249  3098  6747 D JavaheapMonitor: Java heap used=4M max=256M, proc: com.xiaomi.hypercomm
+10-06 00:24:59.249  3098  6747 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:59.281  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.282  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8678.000000,R:4705.000000,G:3277.000000,B:1341.000000, lux: 526.752441
+10-06 00:24:59.330  2865  4790 D JavaheapMonitor: Java heap used=3M max=256M, proc: com.miui.miwallpaper
+10-06 00:24:59.330  2865  4790 V JavaheapMonitor: Check java heap usage finished! Next check delay: 300000
+10-06 00:24:59.341  3276  4912 D AudioTrackImpl: [audioTrackData][fine] 5s(f:5006 m:0 s:0 k:0 z:0) : pid 3276 uid 10345 sessionId 9313 sr 44100 ch 2 fmt 1 maxAmplitude 15368
+10-06 00:24:59.374  1389  1490 E HfLooper: sensor type is 4 action is 2 data is 2536.000000 2375.000000 -3060.000000
+10-06 00:24:59.377  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.378  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8666.000000,R:4697.000000,G:3271.000000,B:1338.000000, lux: 526.243652
+10-06 00:24:59.380  1389  1490 W AString : ctor got NULL, using empty string instead
+10-06 00:24:59.381  1389  1490 I SensorSavedChannel: [2536,2375,-3060]==>gyro_bias.json
+10-06 00:24:59.381  1389  1490 I SensorSavedChannel: Scp reboot count = 7340, reboot_flag = 0
+10-06 00:24:59.385  2113  2645 D PolicyMaker: fg uid=10436
+10-06 00:24:59.386  2113  2645 D PolicyMaker: HasForegroundService pkgName=com.sec.android.app.shealth uid:10436
+10-06 00:24:59.386  2113  2645 D PolicyMaker: uid =10436 pkg=com.sec.android.app.shealth reason=fgservice
+10-06 00:24:59.387  2113  2645 D ActionExecute: setPkgData uid = 10436 time=3000
+10-06 00:24:59.453  1205  1205 I adbd    : adbd service requested 'exec:screencap '-p''
+10-06 00:24:59.482  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.482  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8670.000000,R:4695.000000,G:3272.000000,B:1338.000000, lux: 526.888611
+10-06 00:24:59.522  2113  3782 I NetworkAccelerateSwitchService: EVENT_RSSI_POLL. mRssiPoll=true
+10-06 00:24:59.523  2113  3782 I NetworkAccelerateSwitchService: checkWifiRssiAndLinkSpeed rssi:34
+10-06 00:24:59.523  2113  3782 I NetworkAccelerateSwitchService: checkWifiRssiAndLinkSpeed mWifiFastFade:false mWifiFastFadeAdjustThreshold:false
+10-06 00:24:59.523  2113  3782 I NetworkAccelerateSwitchService: getAverageWifiRssi:32
+10-06 00:24:59.523  2113  3782 D NetworkAccelerateSwitchService: checkIntervalModeChange mMovementState:false mIntervalMode:0 mIsBadLinkLayerQoE:false mBadLinkLayerQoETimes = 0
+10-06 00:24:59.576  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.576  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8667.000000,R:4693.000000,G:3270.000000,B:1337.000000, lux: 526.795410
+10-06 00:24:59.578 12404 12404 W screencap: Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: SurfaceFlingerAIDL
+10-06 00:24:59.579 12404 12404 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+10-06 00:24:59.579 12404 12404 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerNames:(no_layer_names), blurRadius:0, scale:(1.000000,1.000000), blends:(no_color_mode)
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:com.motorcycleverify.app/com.motorcycleverify.app.MainActivity#22970
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:StatusBar1#132
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:Miui Bottom Caption of Task=3540#22968
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:GestureStubHome#68
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:GestureStubLeft#64
+10-06 00:24:59.581  1524  1524 I SurfaceFlinger: SF-MICapture: mode:0, layerName:GestureStubRight#69
+10-06 00:24:59.594  1524  4723 W libc    : Access denied finding property "ro.vendor.display.max_hdr_luminance"
+10-06 00:24:59.602 12404 12405 W ServiceManagerCppClient: Failed to get isDeclared for mapper/mediatek: Status(-1, EX_SECURITY): 'SELinux denied for service.'
+10-06 00:24:59.602 12404 12405 E Gralloc5: Failed to load mapper.mediatek.so
+10-06 00:24:59.637 12404 12404 I DMABUFHEAPS: Using DMA-BUF heap named: mtk_mm
+10-06 00:24:59.637 12404 12404 I DMABUFHEAPS: Using DMA-BUF heap named: mtk_mm-uncached
+10-06 00:24:59.637 12404 12404 I DMABUFHEAPS: Using DMA-BUF heap named: mtk_svp_page-uncached
+10-06 00:24:59.637 12404 12404 I DMABUFHEAPS: Using DMA-BUF heap named: mtk_prot_region
+10-06 00:24:59.637 12404 12404 I DMABUFHEAPS: Using DMA-BUF heap named: mtk_wfd_page-uncached
+10-06 00:24:59.666  2113  3245 D FileUtils: Rounded bytes from 11873615872 to 16000000000
+10-06 00:24:59.681  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.681  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8668.000000,R:4696.000000,G:3271.000000,B:1337.000000, lux: 526.641357
+10-06 00:24:59.755  1800  2255 D ULogGuard: Monitoring: 25 threads, 0 requests, 0 time-bombs; 14 guards. ResetFlags = 0x7
+10-06 00:24:59.776  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.777  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8687.000000,R:4696.000000,G:3274.000000,B:1338.000000, lux: 528.946960
+10-06 00:24:59.838 12404 12404 I screencap: hook_module_exit libgui_unisoc_utils.so over, handle:0x0
+10-06 00:24:59.838 12404 12404 W RefBase : RefBase: Explicit destruction, weak count = 0 (in 0x7d8c45bd48). Use sp<> to manage this object. Note - if weak count is 0, this leaks mRefs (weakref_impl).
+10-06 00:24:59.843 12404 12404 D RefBase :   #00 pc 0000000000073b50  /apex/com.android.runtime/lib64/bionic/libc.so (__cxa_finalize+224) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+10-06 00:24:59.843 12404 12404 D RefBase :   #01 pc 0000000000078a64  /apex/com.android.runtime/lib64/bionic/libc.so (exit+36) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+10-06 00:24:59.843 12404 12404 D RefBase :   #02 pc 000000000006c1ac  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+124) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+10-06 00:24:59.881  1947  2538 I libsensor-displayalgo: the value of channelCali C:297.277759,R:191.206239,G:95.481431,B:36.368638,scales C:1.134297,R:1.137683,G:1.148997,B:1.108839
+10-06 00:24:59.882  1947  2538 D libsensor-displayalgo: brightness:650.000000,flat_mode:0.000000,R1:1049.563421,G1:1040.537583,B1:993.904161,R2:985.094480,G2:977.704450,B2:937.376470,R3:1761.080927,G3:1734.921563,B3:1622.387060,R4:788.672716,G4:786.774888,B4:763.478327,EVENT C:8684.000000,R:4704.000000,G:3275.000000,B:1339.000000, lux: 527.808350
+10-06 00:24:59.895  1205  1205 I adbd    : adbd service requested 'shell,v2,TERM=xterm-256color:export ANDROID_LOG_TAGS="''"; exec logcat '-d''
+10-06 00:24:59.910  1411  1500 I libPerfCtl: xgfGetFPS pid:3176 fps:120
+10-06 00:24:59.911  1411  1500 I libPerfCtl: xgfGetFPS pid:5818 fps:-1
+10-06 00:24:59.914  2742  2742 D WifiHAL : WifiRequest::create vendor command to iface 37, vendor_id=0x1a11, subcmd=0x1200, res=0
+10-06 00:24:59.928  2742  2742 I WifiHAL : LLS RSP: data=0xb400007cbfc1cc00, len=5060
+10-06 00:24:59.928  2742  2742 I WifiHAL : LLS check_data_sanity: 1801: current_radio_stat->num_channels=36
+10-06 00:24:59.928  2742  2742 I WifiHAL : LLS check_data_sanity: 1801: current_radio_stat->num_channels=0
+10-06 00:24:59.928  2742  2742 I WifiHAL : LLS check_data_sanity: confirmed_size=5060, len=5060

@@ -2,7 +2,12 @@
 import { onMounted, ref } from 'vue'
 import { Star, Store } from 'lucide-vue-next'
 
-import { homeContentService } from '@/services/firebase/home-content.service'
+// 精選車商 — this whole component is temporarily disabled (not deleted, may
+// come back): nothing currently imports/renders it (see MarketplaceView.vue's
+// commented-out usage), and its data source (homeContentService
+// .listFeaturedDealers()) is itself commented out — see that file's own
+// note for the full list of matching spots to uncomment together.
+// import { homeContentService } from '@/services/firebase/home-content.service'
 import type { MockFeaturedDealer } from '@/data/home/featured-dealers-mock'
 
 const dealers = ref<MockFeaturedDealer[]>([])
@@ -15,7 +20,7 @@ function handleDealerClick(): void {
 }
 
 onMounted(async () => {
-  dealers.value = await homeContentService.listFeaturedDealers()
+  // dealers.value = await homeContentService.listFeaturedDealers()
 })
 </script>
 

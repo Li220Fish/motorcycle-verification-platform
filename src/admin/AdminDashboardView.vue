@@ -37,7 +37,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'App 功能管理',
     items: [
       { key: 'verify', label: '檢驗任務', badge: () => pendingVerifications.value },
-      { key: 'reports', label: '檢驗報告品質' },
       { key: 'market', label: '交易市場' },
       { key: 'messages', label: '訊息與檢舉', badge: () => pendingReports.value.user },
       { key: 'discussion', label: '討論中心', badge: () => pendingReports.value.post },
@@ -61,10 +60,10 @@ const TITLES: Record<string, [string, string]> = {
   users: ['使用者名冊', 'collection: users'],
   userdetail: ['使用者詳情', 'collection: users / vehicles / marketplaceListings / verifications'],
   verifydetail: ['檢驗詳情', 'collection: verifications/{id}/answers — 含 AI 回應'],
+  vehicledetail: ['車輛詳情', 'collection: vehicles/{id} / verifications'],
   behaviour: ['行為與興趣', '需要事件追蹤基礎建設'],
   garage: ['車庫與履歷', 'collection: vehicles'],
   verify: ['檢驗任務', 'collection: verifications'],
-  reports: ['檢驗報告品質', 'collection: verifications'],
   market: ['交易市場', 'collection: marketplaceListings'],
   messages: ['訊息與檢舉', 'collection: conversations / discussionReports'],
   discussion: ['討論中心', 'collection: discussionPosts'],
@@ -85,10 +84,10 @@ const SECTION_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {
   users: () => import('./sections/UsersSection.vue'),
   userdetail: () => import('./sections/UserDetailSection.vue'),
   verifydetail: () => import('./sections/VerifyDetailSection.vue'),
+  vehicledetail: () => import('./sections/VehicleDetailSection.vue'),
   behaviour: () => import('./sections/BehaviourSection.vue'),
   garage: () => import('./sections/GarageSection.vue'),
   verify: () => import('./sections/VerifySection.vue'),
-  reports: () => import('./sections/ReportsSection.vue'),
   market: () => import('./sections/MarketSection.vue'),
   messages: () => import('./sections/MessagesSection.vue'),
   discussion: () => import('./sections/DiscussionSection.vue'),
@@ -140,21 +139,28 @@ watch(activeKey, loadBadges)
       <nav class="admin-rail">
         <div class="admin-brand">
           <div class="admin-brand-mark">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              width="15"
-              height="15"
-            >
-              <path d="M12 2 4 5.5v6c0 5 3.4 9.2 8 10.5 4.6-1.3 8-5.5 8-10.5v-6z"></path>
+            <svg viewBox="0 0 618 618">
+              <rect width="618" height="618" fill="#2C4BEA" />
+              <g transform="translate(-28,-10)">
+                <path
+                  d="M295.2,327.7 A70,70 0 1 0 308.6,430"
+                  fill="none"
+                  stroke="#FFFFFF"
+                  stroke-width="50"
+                />
+                <path
+                  d="M155,158 H380 C437,158 482,200 482,252 C482,300 445,338 395,345 L520,472 L448,474 L265,380 L340,282 H378 C398,282 410,268 410,252 C410,236 398,220 378,220 H208 Z"
+                  fill="#FFFFFF"
+                  stroke="#2C4BEA"
+                  stroke-width="14"
+                  stroke-linejoin="miter"
+                  paint-order="stroke"
+                />
+              </g>
             </svg>
           </div>
           <div>
-            <div class="admin-brand-name">MotoVerify</div>
+            <div class="admin-brand-name">RiDE78</div>
             <div class="admin-brand-sub">營運後台</div>
           </div>
         </div>
@@ -186,7 +192,7 @@ watch(activeKey, loadBadges)
             <div class="admin-crumb">{{ crumb }}</div>
           </div>
           <div class="admin-topbar-spacer"></div>
-          <div class="admin-op">當班：<b>MotoVerify 管理員</b>，平台管理員</div>
+          <div class="admin-op">當班：<b>RiDE78 管理員</b>，平台管理員</div>
           <button class="admin-logout" @click="handleLogout">登出</button>
         </header>
 

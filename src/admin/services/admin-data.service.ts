@@ -3,12 +3,15 @@ import {
   collection,
   deleteDoc,
   doc,
+  DocumentReference,
   getDoc,
   getDocs,
+  increment,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 
@@ -47,9 +50,157 @@ export interface AdminUserProfile {
   displayName: string | null
   photoUrl: string | null
   accountTier: string
+  /** 交易評分 — everyone starts at 0 (user-profile.service.ts's
+   *  touchUserProfile), only ever moved by a Trusted Backend (see
+   *  functions/src/services/score.config.ts for the full mechanic — a
+   *  buyer/seller disclosure comparison, or a confirmed-kept appointment).
+   *  Locked against self-edit in firestore.rules; see listScoreEvents
+   *  below for this account's own per-delta audit trail. */
+  score: number
   createdAt: number
   updatedAt: number
   lastSeenAt: number
+}
+
+const CASCADE_BATCH_SIZE = 400
+
+async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
+  for (let i = 0; i < refs.length; i += CASCADE_BATCH_SIZE) {
+    const batch = writeBatch(db)
+    for (const ref of refs.slice(i, i + CASCADE_BATCH_SIZE)) batch.delete(ref)
+    await batch.commit()
+  }
+}
+
+export interface UserCascadeDeleteSummary {
+  vehicles: number
+  verifications: number
+  listings: number
+  posts: number
+  comments: number
+}
+
+/**
+ * Retires a user account AND every piece of content that only makes sense
+ * tied to it: vehicles (+ their fuelLogs/maintenanceLogs), verifications
+ * (+ answers/evidence) either performed by this uid or on one of its
+ * vehicles, marketplace listings, discussion posts (+ their comments/
+ * likes), and this uid's own comments left on OTHER people's surviving
+ * posts. Mirrors the vehicle/verification cascade already established in
+ * scripts/purge-fake-verification-data.mjs and scripts/cleanup-database.mjs,
+ * extended to listings/posts/comments per the same "leave nothing orphaned"
+ * rule. Does not touch the underlying Firebase Auth account — the client
+ * SDK has no "admin deletes another user's Auth account" API (self-delete
+ * only).
+ *
+ * This uid's comments on posts it didn't author are found by scanning every
+ * surviving post's own `comments` subcollection and filtering client-side,
+ * not a `collectionGroup` query — there's no collection-group index on
+ * `comments` in firestore.indexes.json, and this admin backend's existing
+ * convention throughout is "read the whole collection, filter client-side"
+ * rather than adding a new index for one admin action.
+ */
+export async function deleteUserCascade(uid: string): Promise<UserCascadeDeleteSummary> {
+  const [vehiclesSnap, verificationsSnap, listingsSnap, postsSnap] = await Promise.all([
+    getDocs(collection(db, 'vehicles')),
+    getDocs(collection(db, 'verifications')),
+    getDocs(collection(db, 'marketplaceListings')),
+    getDocs(collection(db, 'discussionPosts')),
+  ])
+
+  const ownedVehicleIds = new Set(
+    vehiclesSnap.docs.filter((d) => d.data().currentOwnerId === uid).map((d) => d.id),
+  )
+  const targetVerifications = verificationsSnap.docs.filter(
+    (d) => d.data().userId === uid || ownedVehicleIds.has(d.data().vehicleId),
+  )
+  const targetListings = listingsSnap.docs.filter(
+    (d) => d.data().sellerId === uid || ownedVehicleIds.has(d.data().vehicleId),
+  )
+  const targetPosts = postsSnap.docs.filter((d) => d.data().authorId === uid)
+  const targetPostIds = new Set(targetPosts.map((d) => d.id))
+
+  // Verification subcollections (answers/evidence) — deepest first.
+  const verificationSubRefs: DocumentReference[] = []
+  for (const v of targetVerifications) {
+    const [answers, evidence] = await Promise.all([
+      getDocs(collection(db, 'verifications', v.id, 'answers')),
+      getDocs(collection(db, 'verifications', v.id, 'evidence')),
+    ])
+    verificationSubRefs.push(...answers.docs.map((d) => d.ref), ...evidence.docs.map((d) => d.ref))
+  }
+  await deleteRefsInBatches(verificationSubRefs)
+  await deleteRefsInBatches(targetVerifications.map((d) => d.ref))
+
+  // Vehicle subcollections (fuelLogs/maintenanceLogs), then the vehicles.
+  const vehicleSubRefs: DocumentReference[] = []
+  for (const vehicleId of ownedVehicleIds) {
+    const [fuelLogs, maintenanceLogs] = await Promise.all([
+      getDocs(collection(db, 'vehicles', vehicleId, 'fuelLogs')),
+      getDocs(collection(db, 'vehicles', vehicleId, 'maintenanceLogs')),
+    ])
+    vehicleSubRefs.push(
+      ...fuelLogs.docs.map((d) => d.ref),
+      ...maintenanceLogs.docs.map((d) => d.ref),
+    )
+  }
+  await deleteRefsInBatches(vehicleSubRefs)
+  await deleteRefsInBatches([...ownedVehicleIds].map((id) => doc(db, 'vehicles', id)))
+
+  // Listing subcollection (appointments), then the listings themselves.
+  const listingSubRefs: DocumentReference[] = []
+  for (const listing of targetListings) {
+    const appointments = await getDocs(
+      collection(db, 'marketplaceListings', listing.id, 'appointments'),
+    )
+    listingSubRefs.push(...appointments.docs.map((d) => d.ref))
+  }
+  await deleteRefsInBatches(listingSubRefs)
+  await deleteRefsInBatches(targetListings.map((d) => d.ref))
+
+  // Posts authored by this uid: wipe their comments+likes, then the post.
+  const ownPostCommentRefs: DocumentReference[] = []
+  const ownPostLikeRefs: DocumentReference[] = []
+  for (const post of targetPosts) {
+    const [comments, likes] = await Promise.all([
+      getDocs(collection(db, 'discussionPosts', post.id, 'comments')),
+      getDocs(collection(db, 'discussionPosts', post.id, 'likes')),
+    ])
+    ownPostCommentRefs.push(...comments.docs.map((d) => d.ref))
+    ownPostLikeRefs.push(...likes.docs.map((d) => d.ref))
+  }
+  await deleteRefsInBatches(ownPostCommentRefs)
+  await deleteRefsInBatches(ownPostLikeRefs)
+  await deleteRefsInBatches(targetPosts.map((d) => d.ref))
+
+  // This uid's own comments on OTHER people's (surviving) posts — the
+  // isAdmin() bypass on discussionPosts/{id} allows setting commentCount to
+  // any value in one write, not just ±1, so a multi-comment decrement is one
+  // batch per post rather than one write per comment.
+  let strayCommentCount = 0
+  const survivingPosts = postsSnap.docs.filter((d) => !targetPostIds.has(d.id))
+  for (const post of survivingPosts) {
+    const commentsSnap = await getDocs(collection(db, 'discussionPosts', post.id, 'comments'))
+    const strayComments = commentsSnap.docs.filter((c) => c.data().authorId === uid)
+    if (strayComments.length === 0) continue
+    const batch = writeBatch(db)
+    for (const c of strayComments) batch.delete(c.ref)
+    batch.update(doc(db, 'discussionPosts', post.id), {
+      commentCount: increment(-strayComments.length),
+    })
+    await batch.commit()
+    strayCommentCount += strayComments.length
+  }
+
+  await deleteDoc(doc(db, 'users', uid))
+
+  return {
+    vehicles: ownedVehicleIds.size,
+    verifications: targetVerifications.length,
+    listings: targetListings.length,
+    posts: targetPosts.length,
+    comments: ownPostCommentRefs.length + strayCommentCount,
+  }
 }
 
 export async function listUserProfiles(): Promise<AdminUserProfile[]> {
@@ -62,9 +213,83 @@ export async function listUserProfiles(): Promise<AdminUserProfile[]> {
       displayName: data.displayName ?? null,
       photoUrl: data.photoUrl ?? null,
       accountTier: data.accountTier ?? 'standard',
+      score: data.score ?? 0,
       createdAt: toMillis(data.createdAt),
       updatedAt: toMillis(data.updatedAt),
       lastSeenAt: toMillis(data.lastSeenAt),
+    }
+  })
+}
+
+/**
+ * 使用者交易紀錄 — schema-only for now (see transactions/{id}'s own comment
+ * in firestore.rules): nothing writes one of these yet, since there's no
+ * "標記已售出" flow in the app and the score +/- mechanic itself is still
+ * being designed. Read-side exists now purely so UserDetailSection.vue has
+ * somewhere real to display them from the moment both those pieces land,
+ * without another round of plumbing.
+ */
+export interface AdminTransaction {
+  id: string
+  buyerId: string
+  sellerId: string
+  vehicleId: string | null
+  listingId: string | null
+  vehicleSnapshot: { brand: string; model: string } | null
+  priceTwd: number | null
+  completedAt: number
+  createdAt: number
+}
+
+/** One users/{uid}/scoreEvents/{id} doc — the audit trail behind
+ *  AdminUserProfile.score (see that field's own comment). Written only by
+ *  score.service.ts's recordScoreEvent (Admin SDK); this is read-only. */
+export interface AdminScoreEvent {
+  id: string
+  delta: number
+  reason: 'disclosure_comparison' | 'appointment_kept' | string
+  rulesVersion: string
+  verificationId?: string
+  relatedVerificationId?: string
+  listingId?: string
+  appointmentId?: string
+  createdAt: number
+}
+
+export async function listScoreEvents(uid: string): Promise<AdminScoreEvent[]> {
+  const snapshot = await getDocs(collection(db, 'users', uid, 'scoreEvents'))
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        delta: data.delta ?? 0,
+        reason: data.reason ?? '',
+        rulesVersion: data.rulesVersion ?? '',
+        verificationId: data.verificationId ?? undefined,
+        relatedVerificationId: data.relatedVerificationId ?? undefined,
+        listingId: data.listingId ?? undefined,
+        appointmentId: data.appointmentId ?? undefined,
+        createdAt: toMillis(data.createdAt),
+      }
+    })
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function listAllTransactions(): Promise<AdminTransaction[]> {
+  const snapshot = await getDocs(collection(db, 'transactions'))
+  return snapshot.docs.map((d) => {
+    const data = d.data()
+    return {
+      id: d.id,
+      buyerId: data.buyerId ?? '',
+      sellerId: data.sellerId ?? '',
+      vehicleId: data.vehicleId ?? null,
+      listingId: data.listingId ?? null,
+      vehicleSnapshot: data.vehicleSnapshot ?? null,
+      priceTwd: data.priceTwd ?? null,
+      completedAt: toMillis(data.completedAt),
+      createdAt: toMillis(data.createdAt),
     }
   })
 }
@@ -82,17 +307,23 @@ export async function listAllVehicles(): Promise<Vehicle[]> {
   })
 }
 
+/** Excludes `draft` verifications — an untouched draft isn't inspection work
+ * yet (no evidence, nothing for ops to review or report on), so it's noise
+ * in every admin list/stat that consumes this. `in_progress` and later
+ * statuses still show. */
 export async function listAllVerifications(): Promise<Verification[]> {
   const snapshot = await getDocs(collection(db, 'verifications'))
-  return snapshot.docs.map((d) => {
-    const data = d.data()
-    return {
-      ...data,
-      id: d.id,
-      createdAt: toMillis(data.createdAt),
-      completedAt: data.completedAt ? toMillis(data.completedAt) : undefined,
-    } as Verification
-  })
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data()
+      return {
+        ...data,
+        id: d.id,
+        createdAt: toMillis(data.createdAt),
+        completedAt: data.completedAt ? toMillis(data.completedAt) : undefined,
+      } as Verification
+    })
+    .filter((v) => v.status !== 'draft')
 }
 
 /** `Verification.environmentContext`/`coldStateContext` (Trusted Backend
@@ -249,6 +480,14 @@ export async function dismissReport(reportId: string): Promise<void> {
 
 export async function hidePost(postId: string): Promise<void> {
   await updateDoc(doc(db, 'discussionPosts', postId), { status: 'hidden' })
+}
+
+/** Reverses hidePost() — only ever 'hidden' -> 'active', never touches a
+ *  'deleted' post (no admin UI restores those; author-delete is intentional
+ *  and distinct from admin moderation). Same isAdmin() bypass covers this,
+ *  no new firestore.rules needed. */
+export async function restorePost(postId: string): Promise<void> {
+  await updateDoc(doc(db, 'discussionPosts', postId), { status: 'active' })
 }
 
 export async function listAllVehicleNews(): Promise<MockVehicleNews[]> {
@@ -436,6 +675,9 @@ export interface AdminVehicleModel {
    * Core Vision prompt as an explicit "reference only, not confirmed"
    * hint. */
   knownIssues: VehicleModelKnownIssue[]
+  /** 二手價區間 (TWD) — shown as the last section of a verification report
+   *  (useInspectionReportSections.ts) when set. null = admin hasn't set one. */
+  usedPriceRangeTwd: { min: number; max: number } | null
   coverImageUrl: string | null
   photos: string[]
   /** Per-item marker placement for 基本13項健檢 (BasicHealthCheck13.vue),
@@ -524,6 +766,7 @@ export async function listVehicleModels(): Promise<AdminVehicleModel[]> {
       hasChain: data.hasChain ?? false,
       synonyms: data.synonyms ?? [],
       knownIssues: data.knownIssues ?? [],
+      usedPriceRangeTwd: data.usedPriceRangeTwd ?? null,
       coverImageUrl: data.coverImageUrl ?? null,
       photos: data.photos ?? [],
       healthCheckAnchors: data.healthCheckAnchors ?? null,
@@ -548,6 +791,7 @@ export interface CreateVehicleModelInput {
   hasChain: boolean
   synonyms: string[]
   knownIssues: VehicleModelKnownIssue[]
+  usedPriceRangeTwd: { min: number; max: number } | null
   specs: {
     maxPowerHp: number | null
     maxTorqueKgm: number | null
@@ -595,6 +839,7 @@ export async function createVehicleModel(input: CreateVehicleModelInput): Promis
     hasChain: input.hasChain,
     synonyms: input.synonyms,
     knownIssues: input.knownIssues,
+    usedPriceRangeTwd: input.usedPriceRangeTwd,
     coverImageUrl: null,
     photos: [],
     healthCheckAnchors: null,
@@ -643,6 +888,7 @@ export async function updateVehicleModel(
     hasChain: input.hasChain,
     synonyms: input.synonyms,
     knownIssues: input.knownIssues,
+    usedPriceRangeTwd: input.usedPriceRangeTwd,
     specs,
   })
 }

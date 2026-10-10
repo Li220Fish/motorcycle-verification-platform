@@ -2,6 +2,7 @@ export type ConversationTag = '一般' | '買家詢問' | '交易中' | '系統'
 
 export interface MemberSnapshot {
   displayName: string
+  photoUrl?: string | null
 }
 
 export interface ConversationContext {

@@ -92,6 +92,17 @@ service cloud.firestore {
       allow create: if signedIn()
         && (request.resource.data.currentOwnerId == myUid() || isAdmin())
         && !('registrationVerification' in request.resource.data);
+      // `currentOwnerId` fixed on every non-admin CLIENT write — a real 車輛
+      // 過戶 (seller -> buyer, mid-ownership) only ever happens through
+      // transferVehicleOwnership (functions/src/functions/transfer-vehicle-
+      // ownership.ts), which uses the Admin SDK and so bypasses this rule
+      // entirely (same pattern as `score`'s guard below), gated on that
+      // Function's own two-sided confirmation check. The separate
+      // unconditional admin bypass directly below is NOT that path — it
+      // pre-dates this feature and stays, deliberately, for existing
+      // maintenance tooling that reassigns test fixtures
+      // (scripts/assign-vehicles-to-test-users.mjs's own doc comment), not
+      // a real buyer/seller transfer.
       allow update: if signedIn() && resource.data.currentOwnerId == myUid()
         && request.resource.data.currentOwnerId == resource.data.currentOwnerId
         && request.resource.data.get('registrationVerification', null) == resource.data.get('registrationVerification', null);
@@ -266,6 +277,41 @@ service cloud.firestore {
       }
     }
 
+    // --- transactions/{id} — 使用者交易紀錄（實際成交） ---
+    // 2026-10: has a real writer now — transferVehicleOwnership
+    // (functions/src/functions/transfer-vehicle-ownership.ts) creates one
+    // doc per completed 車輛過戶, via the Admin SDK (bypasses this rule
+    // entirely, same as every other Trusted-Backend write in this file).
+    // `allow write: if isAdmin()` below only governs a hypothetical direct
+    // CLIENT write (none exists) — never a buyer/seller's own client.
+    //
+    // NOT where 交易評分 (users/{uid}.score) comes from — that mechanic is
+    // now live (see users/{userId}'s own `score` guard below, and
+    // users/{uid}/scoreEvents for its audit trail) and deliberately does NOT
+    // write here: a disclosure-comparison score event fires whenever a buyer
+    // finishes re-verifying, which can happen even when they decide not to
+    // buy (Verification.transactionDecision: 'not_buying') — conflating
+    // that with "a sale happened" would misuse this collection's actual
+    // meaning (priceTwd and all). See functions/src/services/score.config.ts.
+    match /transactions/{transactionId} {
+      allow read: if signedIn()
+        && (resource.data.buyerId == myUid() || resource.data.sellerId == myUid() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // --- vehicleTransferInvites/{code} — 車輛轉移邀請碼 ---
+    // Entirely Trusted-Backend-owned (createVehicleTransferInvite/
+    // peekVehicleTransferInvite/redeemVehicleTransferInvite, functions/src/
+    // functions/vehicle-transfer-invite.ts) — the client never reads or
+    // writes these documents directly; every check (ownership to create,
+    // validity/expiry/engine-number match to redeem) happens inside those
+    // Functions via the Admin SDK, which bypasses this rule entirely.
+    // Denying all client access just closes off reading another vehicle's
+    // invite code / engine-number snapshot directly off this collection.
+    match /vehicleTransferInvites/{code} {
+      allow read, write: if false;
+    }
+
     // --- marketplaceListings/{id} (+ appointments) ---
     // get/list combined is safe here (unlike verifications) because every
     // real browse query already filters status=='published'
@@ -301,6 +347,16 @@ service cloud.firestore {
         && resource.data.status == 'draft'
         && request.resource.data.status == 'published'
         && request.resource.data.verificationIds.size() >= 1;
+      // Seller-driven take-down / re-list (listingService.delist()/
+      // relist()) — published <-> delisted only, status the sole field this
+      // write may touch. Never reachable from 'draft' (nothing to take
+      // down) or 'sold' (ownership already transferred — see
+      // transfer-vehicle-ownership.ts, the only writer of that status).
+      allow update: if signedIn() && resource.data.sellerId == myUid()
+        && resource.data.status in ['published', 'delisted']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['published', 'delisted']
+        && request.resource.data.status != resource.data.status;
       // The only remaining writers of these two counters are
       // listingService's transaction/batch (addFavorite/removeFavorite,
       // createAppointment/updateAppointmentStatus) — each ever moves its own
@@ -341,8 +397,37 @@ service cloud.firestore {
             || (get(/databases/$(database)/documents/marketplaceListings/$(listingId)).data.sellerId == myUid()
               && resource.data.status == 'pending'
               && request.resource.data.status in ['approved', 'declined'])
+            // 標記已完成看車 (MyListingManageView.vue) — only the seller, only
+            // from 'approved', only moving forward to 'completed'. Feeds
+            // the 交易評分 appointment-kept leg via a Firestore trigger (see
+            // functions/src/functions/score/on-appointment-completed.ts) —
+            // this rule only lets the APPOINTMENT's own status move; the
+            // score write itself still only ever happens Admin-SDK-side.
+            || (get(/databases/$(database)/documents/marketplaceListings/$(listingId)).data.sellerId == myUid()
+              && resource.data.status == 'approved'
+              && request.resource.data.status == 'completed')
             || isAdmin());
-        allow delete: if false;
+        // "有成交嗎？" (ChatRoomView.vue, once scheduledAt has passed) — each
+        // side may only ever write their OWN report field, only once
+        // (resource.data.get(...)==null guards against a later "change my
+        // mind" write), and only while the appointment is still 'approved'.
+        // onAppointmentDealConfirmed.ts (Admin SDK, bypasses this rule) is
+        // the only writer of transferInviteCode once both sides are in.
+        allow update: if signedIn() && resource.data.status == 'approved'
+          && resource.data.buyerId == myUid()
+          && resource.data.get('buyerDealReport', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['buyerDealReport']);
+        allow update: if signedIn() && resource.data.status == 'approved'
+          && get(/databases/$(database)/documents/marketplaceListings/$(listingId)).data.sellerId == myUid()
+          && resource.data.get('sellerDealReport', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sellerDealReport']);
+        // Admin-only, same reasoning as the parent listing's delete rule
+        // above — needed so deleteUserCascade() (admin-data.service.ts) can
+        // fully clean up a deleted account's listings without leaving their
+        // appointment subdocs behind as unreachable orphans. Still no
+        // self-delete for buyer/seller (cancel/decline already cover that
+        // via `update`).
+        allow delete: if isAdmin();
       }
     }
 
@@ -358,10 +443,16 @@ service cloud.firestore {
       // today — see the accountIds/publicProfiles block below) can still
       // update its own doc: null == null passes, only an actual change to
       // an existing accountId is blocked.
+      // `score` (交易評分 — see functions/src/services/score.config.ts for
+      // the full mechanic, and users/{uid}/scoreEvents below for its audit
+      // trail) is locked the same way as accountId: only a Trusted Backend /
+      // admin can ever move it, never the user themselves via their own
+      // profile write.
       allow update: if signedIn() && myUid() == userId
         && request.resource.data.accountTier == resource.data.accountTier
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.get('accountId', null) == resource.data.get('accountId', null);
+        && request.resource.data.get('accountId', null) == resource.data.get('accountId', null)
+        && request.resource.data.get('score', 0) == resource.data.get('score', 0);
       // Admin bypass — e.g. scripts/migrate-v1-schema.mjs backfilling
       // photoUrl/accountTier on every account from one signed-in session.
       allow update: if isAdmin();
@@ -401,6 +492,15 @@ service cloud.firestore {
         allow read, create, delete: if signedIn() && myUid() == userId;
       }
 
+      // Push notification device tokens (push.service.ts) — doc id is the
+      // FCM token itself, so re-registering the same device is a plain
+      // overwrite (needs `update` too, not just `create`). Read is
+      // Cloud-Functions-only in practice (Admin SDK bypasses rules when
+      // sending a push) — the owning client never needs to read these back.
+      match /fcmTokens/{token} {
+        allow create, update, delete: if signedIn() && myUid() == userId;
+      }
+
       // Written only by Cloud Functions Firestore triggers (Admin SDK,
       // bypasses these rules) — see functions/src/functions/notifications/.
       // The client may read its own feed, flip `read`, and delete its own
@@ -412,6 +512,41 @@ service cloud.firestore {
         allow delete: if signedIn() && myUid() == userId;
         allow create: if false;
       }
+
+      // 交易評分 (users/{uid}.score) audit trail — one doc per score delta,
+      // written only by the Trusted Backend (score.service.ts's
+      // recordScoreEvent, Admin SDK, bypasses this rule entirely — see
+      // score.config.ts for the full mechanic). Self can read own history
+      // so a score is always explainable, never an opaque number; never
+      // writable from the client, never editable/deletable by anyone but
+      // admin (an audit trail that can be edited by the person it scores
+      // is not an audit trail).
+      match /scoreEvents/{eventId} {
+        allow read: if signedIn() && (myUid() == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+    }
+
+    // Deliberately separate from users/{userId} (which only the owner/admin
+    // may read — email etc. lives there) so any signed-in viewer can resolve
+    // "what does this uid look like right now" without exposing the rest of
+    // that profile. Written by userProfileService.touchUserProfile()
+    // alongside users/{uid} on every avatar change and every sign-in, and
+    // subscribed to live (onSnapshot) by chat/discussion's Avatar rendering
+    // instead of the frozen authorSnapshot/memberSnapshots.photoUrl copy —
+    // see the useLiveAvatar composable. photoUrl only; no displayName (the
+    // frozen snapshot already covers that, and there was no reported need to
+    // make displayName changes retroactive too).
+    match /publicAvatars/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && myUid() == uid;
+      // Admin bypass — same reasoning as users/{userId}'s: a one-time
+      // backfill for every account that existed before this collection did,
+      // so an already-uploaded photoUrl becomes visible to other users
+      // immediately rather than only the next time each of them happens to
+      // sign in (touchUserProfile backfills it then too, this is just not
+      // instant on its own).
+      allow write: if isAdmin();
     }
 
     // --- accountIds/{accountId} + publicProfiles/{accountId} ---
@@ -568,17 +703,18 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Home page's Featured Dealers section — kept exactly as it was before
-    // this migration (a live, working feature; the target spec's removal of
-    // this collection was not applied — see docs/firestore-v1-implementation-report.md).
-    match /featuredDealers/{document=**} {
-      allow read, write: if signedIn();
-    }
-
     // voltageSessions/userPreferences/myListings were deleted in full
     // (scripts/delete-deprecated-collections.mjs) and have no rule here —
     // they now fall through to the default-deny match below, same as any
     // other nonexistent collection.
+
+    // 精選車商 (Featured Dealers) — temporarily disabled, not removed (see
+    // the matching commented-out code in home-content.service.ts/
+    // FeaturedDealersSection.vue/MarketplaceView.vue/seed-marketplace-mock.mjs).
+    // Uncomment this block (and deploy) together with those to bring it back.
+    // match /featuredDealers/{document=**} {
+    //   allow read, write: if signedIn();
+    // }
 
     // /dev-log is a link-open internal team tool with no auth screen —
     // intentionally world-writable, scoped to these collection names only.

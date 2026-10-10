@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -15,6 +16,20 @@ import { auth } from './firebase'
 
 export function onAuthChange(callback: (user: FirebaseUser | null) => void): () => void {
   return onAuthStateChanged(auth, callback)
+}
+
+/**
+ * SharedReportView.vue's one caller — lets a stranger who clicked a public
+ * report link satisfy firestore.rules' signedIn() (== request.auth != null)
+ * with zero friction (no form, no redirect), the same way every isPublic
+ * verification/answer/evidence read rule already only ever checks "signed
+ * in at all", never "owns an account for longer than this page load". Never
+ * called if there's already ANY session (anonymous or real) — see that
+ * view's own mount logic.
+ */
+export async function signInAnonymous(): Promise<FirebaseUser> {
+  const credential = await signInAnonymously(auth)
+  return credential.user
 }
 
 export async function register(

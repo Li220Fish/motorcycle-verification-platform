@@ -16,11 +16,25 @@ export interface DiagramRect {
  * The 車身外觀 photo checklist — Verification v2 (see
  * MotoVerify Verification v2 Migration spec §1/§2/§6). Steps 9/10/11/16/17/
  * 20/23 (車牌/前輪/後輪/引擎左側/引擎右側/排氣管/車身號碼) are fully removed —
- * not hidden, deleted from the registry — and steps 13/14/15/21/22 (後避震/
- * 前煞車/後煞車/三角台/坐墊外觀) are downgraded to Optional (`required:
- * false`): their AI checks are retired along with them (see
- * functions/src/services/core-vision-v2.service.ts), these slots now exist
- * purely as User-provided supporting evidence, never sent to Gemini.
+ * not hidden, deleted from the registry. Steps 13/14/15/21/22 (後避震/前煞車/
+ * 後煞車/三角台/坐墊外觀) went through the same two-stage retirement: first
+ * downgraded to Optional self-disclosure photo slots (their AI checks
+ * retired along with the old Group B/C pipeline — see
+ * functions/src/services/core-vision-v2.service.ts), then removed outright
+ * here once 基本12項健檢 (BasicHealthCheck13.vue, now wired into
+ * seller-verification.ts as its own tab) started covering exactly the same
+ * ground with its own tap markers — same reasoning ELEC-01..09 already went
+ * through (see seller-verification.ts's `electric` comment). 其他改裝品
+ * (`modifications`) is removed for the same reason: its `aiCheck:
+ * 'appearance'` was already vestigial (never in verification.store.ts's
+ * CORE_VISION_TRIGGER_GROUPS, a leftover from the retired Group A pipeline),
+ * so it was really just a photo-only Optional disclosure item — now
+ * superseded by 基本12項健檢's own 其他改裝品 note field.
+ * RETIRED_PHOTO_SLOT_LABELS below keeps each removed slot's Chinese label
+ * available for admin display of pre-existing historical answers under
+ * these now-gone item ids (see scripts/migrate-basic-health-check-answers.mjs
+ * and VerifyDetailSection.vue's itemTitle()) — this file only ever removes a
+ * slot from the live registry, never its label.
  */
 export interface PhotoSlot {
   id: string
@@ -94,29 +108,6 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
     highlight: { x: 225, y: 55, w: 35, h: 35 },
   },
   {
-    id: 'rear-suspension',
-    label: '後避震',
-    description: '車主提供之補充資訊，非 AI 核心判定項目。',
-    required: false,
-    lowLight: true,
-    highlight: { x: 75, y: 70, w: 35, h: 30 },
-  },
-  {
-    id: 'front-brake',
-    label: '前煞車',
-    description: '車主提供之補充資訊，非 AI 核心判定項目。',
-    required: false,
-    highlight: { x: 225, y: 95, w: 35, h: 35 },
-  },
-  {
-    id: 'rear-brake',
-    label: '後煞車',
-    description: '車主提供之補充資訊，非 AI 核心判定項目。',
-    required: false,
-    helpText: '依車型（碟煞／鼓煞）不同顯示拍攝提示。',
-    highlight: { x: 40, y: 95, w: 35, h: 35 },
-  },
-  {
     id: 'engine-bottom',
     label: '引擎底部',
     description: 'AI檢查：滲油、滲液、刮傷、護蓋及其他可見異常。',
@@ -137,31 +128,28 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
       '僅有外露鏈條的車輛需要本項目；速可達等無外露鏈條車輛由系統自動判定為不適用，不需拍攝。照片不判斷異音。',
     highlight: { x: 70, y: 100, w: 55, h: 20 },
   },
-  {
-    id: 'triple-clamp',
-    label: '三角台',
-    description: '車主提供之補充資訊，非 AI 核心判定項目。',
-    required: false,
-    highlight: { x: 215, y: 45, w: 35, h: 25 },
-  },
-  {
-    id: 'seat',
-    label: '坐墊外觀',
-    description: '車主提供之補充資訊，非 AI 核心判定項目。',
-    required: false,
-    helpText: '目前只拍坐墊外觀。',
-    highlight: { x: 85, y: 75, w: 130, h: 20 },
-  },
-  {
-    id: 'modifications',
-    label: '其他改裝品',
-    description: '拍攝所有可見改裝。AI描述改裝類型、位置及可見異常。',
-    required: false,
-    aiCheck: 'appearance',
-    helpText: '不讓 AI 猜測改裝原因。',
-    highlight: FULL_BODY,
-  },
 ]
+
+/** Chinese label for each item id removed from REQUIRED_PHOTO_SLOTS above —
+ *  keyed the same prefix-agnostic way as getPhotoSlotByItemId (matches on
+ *  the trailing `-${slot id}`) so admin can still show a real label instead
+ *  of a raw itemId string for a historical verification's pre-migration
+ *  answer under one of these ids (see this file's top comment). */
+const RETIRED_PHOTO_SLOTS: Record<string, string> = {
+  'rear-suspension': '後避震',
+  'front-brake': '前煞車',
+  'rear-brake': '後煞車',
+  'triple-clamp': '三角台',
+  seat: '坐墊外觀',
+  modifications: '其他改裝品',
+}
+
+export function getRetiredPhotoSlotLabel(itemId: string): string | undefined {
+  const match = Object.entries(RETIRED_PHOTO_SLOTS).find(([slotId]) =>
+    itemId.endsWith(`-${slotId}`),
+  )
+  return match ? `${match[1]}（舊版項目，已併入基本12項健檢）` : undefined
+}
 
 export function buildPhotoSlotItems(idPrefix: string): VerificationItem[] {
   return REQUIRED_PHOTO_SLOTS.map((slot) => ({

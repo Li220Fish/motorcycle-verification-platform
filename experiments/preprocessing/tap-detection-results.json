@@ -1,0 +1,396 @@
+{
+  "generatedAt": "2026-10-02T13:27:02.542Z",
+  "zThreshold": 3,
+  "tapCount": 12,
+  "severities": [
+    0.5,
+    1,
+    2
+  ],
+  "byRecording": {
+    "A": {
+      "file": "1789735537560-ENG-03.aac",
+      "idleBackgroundRms": 0.159,
+      "configs": {
+        "prod": {
+          "label": "現行設定：0–5 kHz 頻譜上限、250/125 ms 視窗",
+          "windowMs": 250,
+          "hopMs": 125,
+          "band": "0-5000Hz",
+          "cleanFalsePositives": 0,
+          "cleanFalsePositivesPerMin": 0,
+          "bySeverity": {
+            "1": {
+              "detected": 0,
+              "totalTaps": 12,
+              "recallPct": 0,
+              "falsePositives": 0,
+              "truePositives": 0
+            },
+            "2": {
+              "detected": 0,
+              "totalTaps": 12,
+              "recallPct": 0,
+              "falsePositives": 0,
+              "truePositives": 0
+            },
+            "0.5": {
+              "detected": 0,
+              "totalTaps": 12,
+              "recallPct": 0,
+              "falsePositives": 0,
+              "truePositives": 0
+            }
+          }
+        },
+        "prod_short": {
+          "label": "只縮短視窗：0–5 kHz、46/23 ms",
+          "windowMs": 46,
+          "hopMs": 23,
+          "band": "0-5000Hz",
+          "cleanFalsePositives": 24,
+          "cleanFalsePositivesPerMin": 160,
+          "bySeverity": {
+            "1": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 23,
+              "truePositives": 1
+            },
+            "2": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 23,
+              "truePositives": 1
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 23,
+              "truePositives": 1
+            }
+          }
+        },
+        "bp_long": {
+          "label": "只加帶通：2–8 kHz、250/125 ms",
+          "windowMs": 250,
+          "hopMs": 125,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 2,
+          "cleanFalsePositivesPerMin": 13.3,
+          "bySeverity": {
+            "1": {
+              "detected": 0,
+              "totalTaps": 12,
+              "recallPct": 0,
+              "falsePositives": 0,
+              "truePositives": 0
+            },
+            "2": {
+              "detected": 3,
+              "totalTaps": 12,
+              "recallPct": 25,
+              "falsePositives": 0,
+              "truePositives": 3
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 1,
+              "truePositives": 1
+            }
+          }
+        },
+        "bp_short": {
+          "label": "帶通＋短視窗：2–8 kHz、46/23 ms",
+          "windowMs": 46,
+          "hopMs": 23,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 15,
+          "cleanFalsePositivesPerMin": 100,
+          "bySeverity": {
+            "1": {
+              "detected": 2,
+              "totalTaps": 12,
+              "recallPct": 16.7,
+              "falsePositives": 12,
+              "truePositives": 2
+            },
+            "2": {
+              "detected": 11,
+              "totalTaps": 12,
+              "recallPct": 91.7,
+              "falsePositives": 12,
+              "truePositives": 11
+            },
+            "0.5": {
+              "detected": 2,
+              "totalTaps": 12,
+              "recallPct": 16.7,
+              "falsePositives": 12,
+              "truePositives": 2
+            }
+          }
+        },
+        "bp_vshort": {
+          "label": "帶通＋極短視窗：2–8 kHz、23/11 ms",
+          "windowMs": 23,
+          "hopMs": 11,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 17,
+          "cleanFalsePositivesPerMin": 113.3,
+          "bySeverity": {
+            "1": {
+              "detected": 6,
+              "totalTaps": 12,
+              "recallPct": 50,
+              "falsePositives": 16,
+              "truePositives": 6
+            },
+            "2": {
+              "detected": 12,
+              "totalTaps": 12,
+              "recallPct": 100,
+              "falsePositives": 16,
+              "truePositives": 12
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 15,
+              "truePositives": 1
+            }
+          }
+        },
+        "bp_knock": {
+          "label": "爆震帶：6–8 kHz、23/11 ms",
+          "windowMs": 23,
+          "hopMs": 11,
+          "band": "6000-8000Hz",
+          "cleanFalsePositives": 59,
+          "cleanFalsePositivesPerMin": 393.3,
+          "bySeverity": {
+            "1": {
+              "detected": 3,
+              "totalTaps": 12,
+              "recallPct": 25,
+              "falsePositives": 56,
+              "truePositives": 3
+            },
+            "2": {
+              "detected": 12,
+              "totalTaps": 12,
+              "recallPct": 100,
+              "falsePositives": 55,
+              "truePositives": 12
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 58,
+              "truePositives": 1
+            }
+          }
+        }
+      }
+    },
+    "B": {
+      "file": "1789277691470-ENG-03.aac",
+      "idleBackgroundRms": 0.1009,
+      "configs": {
+        "prod": {
+          "label": "現行設定：0–5 kHz 頻譜上限、250/125 ms 視窗",
+          "windowMs": 250,
+          "hopMs": 125,
+          "band": "0-5000Hz",
+          "cleanFalsePositives": 3,
+          "cleanFalsePositivesPerMin": 20,
+          "bySeverity": {
+            "1": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 2,
+              "truePositives": 1
+            },
+            "2": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 2,
+              "truePositives": 1
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 2,
+              "truePositives": 1
+            }
+          }
+        },
+        "prod_short": {
+          "label": "只縮短視窗：0–5 kHz、46/23 ms",
+          "windowMs": 46,
+          "hopMs": 23,
+          "band": "0-5000Hz",
+          "cleanFalsePositives": 50,
+          "cleanFalsePositivesPerMin": 333.3,
+          "bySeverity": {
+            "1": {
+              "detected": 5,
+              "totalTaps": 12,
+              "recallPct": 41.7,
+              "falsePositives": 45,
+              "truePositives": 5
+            },
+            "2": {
+              "detected": 5,
+              "totalTaps": 12,
+              "recallPct": 41.7,
+              "falsePositives": 45,
+              "truePositives": 5
+            },
+            "0.5": {
+              "detected": 5,
+              "totalTaps": 12,
+              "recallPct": 41.7,
+              "falsePositives": 45,
+              "truePositives": 5
+            }
+          }
+        },
+        "bp_long": {
+          "label": "只加帶通：2–8 kHz、250/125 ms",
+          "windowMs": 250,
+          "hopMs": 125,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 11,
+          "cleanFalsePositivesPerMin": 73.3,
+          "bySeverity": {
+            "1": {
+              "detected": 4,
+              "totalTaps": 12,
+              "recallPct": 33.3,
+              "falsePositives": 7,
+              "truePositives": 4
+            },
+            "2": {
+              "detected": 4,
+              "totalTaps": 12,
+              "recallPct": 33.3,
+              "falsePositives": 5,
+              "truePositives": 4
+            },
+            "0.5": {
+              "detected": 4,
+              "totalTaps": 12,
+              "recallPct": 33.3,
+              "falsePositives": 7,
+              "truePositives": 4
+            }
+          }
+        },
+        "bp_short": {
+          "label": "帶通＋短視窗：2–8 kHz、46/23 ms",
+          "windowMs": 46,
+          "hopMs": 23,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 57,
+          "cleanFalsePositivesPerMin": 380,
+          "bySeverity": {
+            "1": {
+              "detected": 4,
+              "totalTaps": 12,
+              "recallPct": 33.3,
+              "falsePositives": 49,
+              "truePositives": 4
+            },
+            "2": {
+              "detected": 10,
+              "totalTaps": 12,
+              "recallPct": 83.3,
+              "falsePositives": 51,
+              "truePositives": 10
+            },
+            "0.5": {
+              "detected": 3,
+              "totalTaps": 12,
+              "recallPct": 25,
+              "falsePositives": 54,
+              "truePositives": 3
+            }
+          }
+        },
+        "bp_vshort": {
+          "label": "帶通＋極短視窗：2–8 kHz、23/11 ms",
+          "windowMs": 23,
+          "hopMs": 11,
+          "band": "2000-8000Hz",
+          "cleanFalsePositives": 110,
+          "cleanFalsePositivesPerMin": 733.3,
+          "bySeverity": {
+            "1": {
+              "detected": 7,
+              "totalTaps": 12,
+              "recallPct": 58.3,
+              "falsePositives": 107,
+              "truePositives": 7
+            },
+            "2": {
+              "detected": 12,
+              "totalTaps": 12,
+              "recallPct": 100,
+              "falsePositives": 107,
+              "truePositives": 12
+            },
+            "0.5": {
+              "detected": 1,
+              "totalTaps": 12,
+              "recallPct": 8.3,
+              "falsePositives": 108,
+              "truePositives": 1
+            }
+          }
+        },
+        "bp_knock": {
+          "label": "爆震帶：6–8 kHz、23/11 ms",
+          "windowMs": 23,
+          "hopMs": 11,
+          "band": "6000-8000Hz",
+          "cleanFalsePositives": 122,
+          "cleanFalsePositivesPerMin": 813.3,
+          "bySeverity": {
+            "1": {
+              "detected": 7,
+              "totalTaps": 12,
+              "recallPct": 58.3,
+              "falsePositives": 115,
+              "truePositives": 7
+            },
+            "2": {
+              "detected": 12,
+              "totalTaps": 12,
+              "recallPct": 100,
+              "falsePositives": 115,
+              "truePositives": 12
+            },
+            "0.5": {
+              "detected": 2,
+              "totalTaps": 12,
+              "recallPct": 16.7,
+              "falsePositives": 115,
+              "truePositives": 2
+            }
+          }
+        }
+      }
+    }
+  }
+}

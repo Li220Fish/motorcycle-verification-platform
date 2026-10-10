@@ -1,10 +1,15 @@
 /**
  * Dev/QA-only seed script for the Home/Marketplace DEMO content — pushes
- * MOCK_MARKET_LISTINGS / MOCK_FEATURED_DEALERS / MOCK_VEHICLE_NEWS into their
- * own Firestore collections (marketplaceListings / featuredDealers /
- * vehicleNews) instead of leaving them as static arrays baked into the JS
- * bundle, so the app can read (and this content can be updated) without a
- * rebuild.
+ * MOCK_MARKET_LISTINGS / MOCK_VEHICLE_NEWS into their own Firestore
+ * collections (marketplaceListings / vehicleNews) instead of leaving them as
+ * static arrays baked into the JS bundle, so the app can read (and this
+ * content can be updated) without a rebuild.
+ *
+ * 精選車商 (Featured Dealers) is temporarily disabled, not removed — its
+ * FEATURED_DEALERS block below and the seedCollection() call for it are
+ * commented out, along with the matching code in
+ * FeaturedDealersSection.vue/home-content.service.ts/MarketplaceView.vue/
+ * firestore.rules. Uncomment all of them together to bring it back.
  *
  * "我的刊登" (My Listings) no longer has its own separate mock collection —
  * it's real user data now, scoped by `sellerId` on `marketplaceListings`
@@ -93,6 +98,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: 'CVT 無段變速',
       color: '曜石灰',
       modified: false,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Yamaha_nmax_cpd150_YCP.JPG/960px-Yamaha_nmax_cpd150_YCP.JPG',
       ],
@@ -120,6 +127,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: '6速手排',
       color: '珍珠白',
       modified: false,
+      bodyType: '街車',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/2022_Honda_CB300R.png/960px-2022_Honda_CB300R.png',
       ],
@@ -147,6 +156,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: 'CVT 無段變速',
       color: '琉璃藍',
       modified: true,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/2021_Kymco_KRV_Type_S.jpg/960px-2021_Kymco_KRV_Type_S.jpg',
       ],
@@ -174,6 +185,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: 'CVT 無段變速',
       color: '消光紅',
       modified: false,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/SYM_Jet_14_in_Avellino.jpg/960px-SYM_Jet_14_in_Avellino.jpg',
       ],
@@ -201,6 +214,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: 'CVT 無段變速',
       color: '競速藍',
       modified: true,
+      bodyType: '速可達',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Yamaha_CygnusX.jpg/960px-Yamaha_CygnusX.jpg',
       ],
@@ -228,6 +243,8 @@ const MARKETPLACE_LISTINGS = [
       transmission: '6速手排',
       color: '消光黑',
       modified: false,
+      bodyType: '街車',
+      powerType: 'gasoline',
       photos: [
         'https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Yamaha_MT-07.jpg/960px-Yamaha_MT-07.jpg',
       ],
@@ -242,12 +259,13 @@ const MARKETPLACE_LISTINGS = [
 ]
 
 // --- Mirrors src/data/home/featured-dealers-mock.ts ---
-const FEATURED_DEALERS = [
-  { id: 'dealer-1', name: '騎士車業', rating: 4.8, reviewCount: 128, region: '台北市' },
-  { id: 'dealer-2', name: '極速車行', rating: 4.6, reviewCount: 96, region: '新北市' },
-  { id: 'dealer-3', name: '安心車業', rating: 4.9, reviewCount: 64, region: '台中市' },
-  { id: 'dealer-4', name: '雙輪車坊', rating: 4.5, reviewCount: 42, region: '高雄市' },
-]
+// 精選車商 — temporarily disabled, see the file header comment above.
+// const FEATURED_DEALERS = [
+//   { id: 'dealer-1', name: '騎士車業', rating: 4.8, reviewCount: 128, region: '台北市' },
+//   { id: 'dealer-2', name: '極速車行', rating: 4.6, reviewCount: 96, region: '新北市' },
+//   { id: 'dealer-3', name: '安心車業', rating: 4.9, reviewCount: 64, region: '台中市' },
+//   { id: 'dealer-4', name: '雙輪車坊', rating: 4.5, reviewCount: 42, region: '高雄市' },
+// ]
 
 // --- Mirrors src/data/home/vehicle-news-mock.ts ---
 const HOUR_MS = 60 * 60 * 1000
@@ -323,8 +341,9 @@ async function main() {
   await seedCollection(db, 'marketplaceListings', MARKETPLACE_LISTINGS)
   console.log(`[seed-marketplace-mock] marketplaceListings: ${MARKETPLACE_LISTINGS.length} docs`)
 
-  await seedCollection(db, 'featuredDealers', FEATURED_DEALERS)
-  console.log(`[seed-marketplace-mock] featuredDealers: ${FEATURED_DEALERS.length} docs`)
+  // 精選車商 — temporarily disabled, see the file header comment above.
+  // await seedCollection(db, 'featuredDealers', FEATURED_DEALERS)
+  // console.log(`[seed-marketplace-mock] featuredDealers: ${FEATURED_DEALERS.length} docs`)
 
   await seedCollection(db, 'vehicleNews', VEHICLE_NEWS)
   console.log(`[seed-marketplace-mock] vehicleNews: ${VEHICLE_NEWS.length} docs`)

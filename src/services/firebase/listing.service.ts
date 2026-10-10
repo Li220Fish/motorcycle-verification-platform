@@ -28,6 +28,9 @@ const COLLECTION = 'marketplaceListings'
  * collects, reshaped into the nested doc internally. */
 export interface ListingDraft {
   vehicleId: string
+  /** Vehicle.modelId (types/vehicle.ts), if the backing vehicle is linked to
+   * a 車輛選單資訊 catalog entry — see VehicleSnapshot.modelId. */
+  modelId?: string | null
   verificationId: string
   brand: string
   model: string
@@ -40,6 +43,11 @@ export interface ListingDraft {
   transmission: string
   color: string
   modified: boolean
+  /** From the backing vehicleModels/{modelId} doc, if linked — see
+   * VehicleSnapshot.bodyType/powerType (marketplace-mock.ts). null when the
+   * vehicle has no modelId link. */
+  bodyType: string | null
+  powerType: 'gasoline' | 'electric' | null
   description: string
   photos: string[]
   sellerId: string
@@ -119,7 +127,10 @@ async function create(id: string, draft: ListingDraft): Promise<void> {
     transmission: draft.transmission,
     color: draft.color,
     modified: draft.modified,
+    bodyType: draft.bodyType ?? null,
+    powerType: draft.powerType ?? null,
     photos: draft.photos,
+    modelId: draft.modelId ?? null,
   }
   await setDoc(doc(db, COLLECTION, id), {
     status: 'draft',
@@ -151,6 +162,17 @@ async function create(id: string, draft: ListingDraft): Promise<void> {
  * (client-SDK-only throughout), so this batch — not a server function — is
  * what actually makes the invariant "published implies public report" hold;
  * the rules are what make it *safe* to do from the client.
+ *
+ * 2026-10: skips any verificationId that's ALREADY public (a re-list of the
+ * same vehicle after an earlier listing published the same seller
+ * verification — e.g. the previous listing was deleted/delisted and the
+ * seller created a new one) — a Firestore batch is all-or-nothing, so
+ * including even one already-public verification's now-redundant `isPublic:
+ * true` write got the WHOLE batch rejected by that rule's "only while still
+ * false" guard, which silently left the listing itself stuck at 'draft'
+ * forever (a real incident caught this way — see MyListingManageView.vue's
+ * lack of any "stuck draft" recovery path, which is why this is fixed here
+ * rather than relying on a retry UI).
  */
 async function publish(listingId: string, verificationIds: string[]): Promise<void> {
   const batch = writeBatch(db)
@@ -159,9 +181,36 @@ async function publish(listingId: string, verificationIds: string[]): Promise<vo
     publishedAt: serverTimestamp(),
   })
   for (const verificationId of verificationIds) {
-    batch.update(doc(db, 'verifications', verificationId), { isPublic: true })
+    const verificationRef = doc(db, 'verifications', verificationId)
+    const verificationSnap = await getDoc(verificationRef)
+    if (verificationSnap.data()?.isPublic === true) continue
+    batch.update(verificationRef, { isPublic: true })
   }
   await batch.commit()
+}
+
+/**
+ * Seller-driven take-down — `published` only (firestore.rules' matching
+ * clause doesn't allow this from 'draft' or 'sold'), pulled out of
+ * marketplace browse for free the same way `publish()`'s own status write
+ * put it there: homeContentService.listMarketplaceListings() only ever
+ * queries status=='published'.
+ *
+ * Deliberately does NOT touch the linked verification(s)' `isPublic` —
+ * once true it's a one-way, immutable guarantee enforced in firestore.rules
+ * (see that rule's own comment: "no further edits... even for admin"), not
+ * something a delist should try to revert. A delisted listing's report stays
+ * reachable by anyone who already has the /share/:id link; only the listing
+ * itself leaves the marketplace.
+ */
+async function delist(listingId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, listingId), { status: 'delisted' })
+}
+
+/** Reverses delist() — back to 'published', no re-stamped publishedAt (that
+ *  field means "first went live", not "most recently went live"). */
+async function relist(listingId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, listingId), { status: 'published' })
 }
 
 export interface ListingUpdate {
@@ -194,7 +243,11 @@ async function updatePhotos(id: string, photos: string[]): Promise<void> {
 // --- Viewing appointments: marketplaceListings/{id}/appointments/{id} —
 // see firestore.rules for the buyer/seller transition rules. ---
 
-interface AppointmentDoc extends Omit<
+/** Exported so listing-appointment-lookup.service.ts's collectionGroup
+ *  query (spans every listing's appointments subcollection at once, so it
+ *  can't go through any of this file's own per-listing functions) can map
+ *  raw docs the same way. */
+export interface AppointmentDoc extends Omit<
   ListingAppointment,
   'id' | 'createdAt' | 'scheduledAt' | 'status'
 > {
@@ -203,7 +256,7 @@ interface AppointmentDoc extends Omit<
   status?: ListingAppointment['status']
 }
 
-function toAppointment(id: string, data: AppointmentDoc): ListingAppointment {
+export function toAppointment(id: string, data: AppointmentDoc): ListingAppointment {
   return {
     id,
     listingId: data.listingId,
@@ -215,6 +268,9 @@ function toAppointment(id: string, data: AppointmentDoc): ListingAppointment {
     // `status` field — treat those as already-pending rather than crashing.
     status: data.status ?? 'pending',
     createdAt: data.createdAt?.toMillis() ?? Date.now(),
+    buyerDealReport: data.buyerDealReport,
+    sellerDealReport: data.sellerDealReport,
+    transferInviteCode: data.transferInviteCode,
   }
 }
 
@@ -246,14 +302,32 @@ async function updateAppointmentStatus(
 ): Promise<void> {
   const batch = writeBatch(db)
   batch.update(doc(db, COLLECTION, listingId, 'appointments', appointmentId), { status })
-  // 'declined' (seller) and 'cancelled' (buyer, Task C1 — firestore.rules
+  // 'declined' (seller), 'cancelled' (buyer, Task C1 — firestore.rules
   // already allowed this transition, but no client code ever produced it
-  // until now) both leave the pending+approved set spec §13's
+  // until now), and 'completed' (seller's 標記已完成看車, see
+  // listing-appointment.ts) all leave the pending+approved set spec §13's
   // appointmentCount tracks; 'approved' stays counted, so no change there.
-  if (status === 'declined' || status === 'cancelled') {
+  if (status === 'declined' || status === 'cancelled' || status === 'completed') {
     batch.update(doc(db, COLLECTION, listingId), { appointmentCount: increment(-1) })
   }
   await batch.commit()
+}
+
+/** "有成交嗎？" — each side's own one-time answer (ChatRoomView.vue, once
+ *  `scheduledAt` has passed on an 'approved' appointment). Writes only the
+ *  caller's own field (firestore.rules enforces buyer vs seller can only
+ *  ever touch their own); once both sides report dealConfirmed:true,
+ *  onAppointmentDealConfirmed.ts auto-generates a 轉移碼 and posts it into
+ *  this conversation. */
+async function submitDealReport(
+  listingId: string,
+  appointmentId: string,
+  side: 'buyer' | 'seller',
+  report: { dealConfirmed: boolean; priceTwd: number | null },
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, listingId, 'appointments', appointmentId), {
+    [`${side}DealReport`]: { ...report, respondedAt: Date.now() },
+  })
 }
 
 /** Live appointments subscription — replaces the one-time listAppointments()
@@ -316,9 +390,22 @@ function subscribeListing(
   id: string,
   onChange: (listing: MockMarketListing | null) => void,
 ): Unsubscribe {
-  return onSnapshot(doc(db, COLLECTION, id), (snapshot) => {
-    onChange(snapshot.exists() ? toListing(snapshot.id, snapshot.data()) : null)
-  })
+  return onSnapshot(
+    doc(db, COLLECTION, id),
+    (snapshot) => {
+      onChange(snapshot.exists() ? toListing(snapshot.id, snapshot.data()) : null)
+    },
+    // Without this, a denied read (status isn't 'published' and the viewer
+    // isn't the seller/admin — e.g. someone with an old link to a listing
+    // the seller has since delisted, or a draft) never calls `onChange` at
+    // all: no error handler here previously meant the caller's own
+    // `loading` state just stayed stuck forever instead of resolving to its
+    // existing "找不到這台車輛" empty state. Treated the same as "doesn't
+    // exist" — the viewer has no way to distinguish those cases anyway, and
+    // shouldn't (shows nothing more than a stranger gets for a genuinely
+    // missing id).
+    () => onChange(null),
+  )
 }
 
 // --- Favorites: users/{uid}/favoriteListings/{listingId} — mirrors the
@@ -362,6 +449,8 @@ export const listingService = {
   reserveListingId,
   create,
   publish,
+  delist,
+  relist,
   update,
   updatePhotos,
   get,
@@ -371,6 +460,7 @@ export const listingService = {
   subscribeAppointmentsForBuyer,
   createAppointment,
   updateAppointmentStatus,
+  submitDealReport,
   addFavorite,
   removeFavorite,
   listFavoriteIds,

@@ -1,0 +1,722 @@
+<title>行照 ROI 校正工具</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --surface-2: #1d212b;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f3f4f7;
+      --surface: #ffffff;
+      --surface-2: #f0f1f5;
+      --border: #dde0e7;
+      --text: #1a1d24;
+      --muted: #6b7280;
+      --accent: #2563eb;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f4f7;
+    --surface: #ffffff;
+    --surface-2: #f0f1f5;
+    --border: #dde0e7;
+    --text: #1a1d24;
+    --muted: #6b7280;
+    --accent: #2563eb;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    padding-inline: 16px;
+    padding-block: 20px 40px;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 2px;
+    letter-spacing: 0.01em;
+  }
+  .subtitle {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0 0 18px;
+    line-height: 1.6;
+  }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  .stage-panel {
+    flex: 1 1 520px;
+    min-width: 0;
+  }
+  .stage-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .toggle-btn {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .hint {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    touch-action: none;
+    user-select: none;
+  }
+  .stage img, .stage canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .stage canvas { position: absolute; inset: 0; }
+
+  .roi-box {
+    position: absolute;
+    border: 2px solid var(--box-color, var(--accent));
+    background: color-mix(in srgb, var(--box-color, var(--accent)) 18%, transparent);
+    cursor: move;
+  }
+  .roi-box.selected {
+    border-width: 2.5px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.5);
+  }
+  .roi-box .tag {
+    position: absolute;
+    top: -20px;
+    left: -2px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--box-color, var(--accent));
+    padding: 1px 6px;
+    border-radius: 4px 4px 0 0;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--box-color, var(--accent));
+    border: 2px solid #fff;
+    border-radius: 50%;
+    pointer-events: auto;
+  }
+  .handle.nw { top: -7px; left: -7px; cursor: nwse-resize; }
+  .handle.ne { top: -7px; right: -7px; cursor: nesw-resize; }
+  .handle.sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .handle.se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+  .side-panel {
+    flex: 1 1 360px;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .card h2 {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .field-row:hover { background: var(--surface-2); }
+  .field-row.selected {
+    background: var(--surface-2);
+    border-color: var(--border);
+  }
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .field-row .label {
+    font-size: 12.5px;
+    font-weight: 600;
+    flex: 1;
+  }
+  .field-row .kind {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .numbers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .num-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .num-field label {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .num-field input {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--text);
+    width: 100%;
+  }
+  .num-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .reset-btn {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 10px;
+  }
+  .reset-btn:hover { color: var(--text); }
+
+  .output-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .output-tabs button {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .output-tabs button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  pre#output {
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 12px;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre;
+  }
+  .copy-btn {
+    margin-top: 10px;
+    width: 100%;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 9px;
+    border-radius: 7px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  .copy-btn:active { opacity: 0.85; }
+  .copy-status {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 6px;
+    height: 14px;
+  }
+</style>
+
+<h1>行照 ROI 校正工具</h1>
+<p class="subtitle">
+  拖曳方框調整位置、拖角縮放，或直接輸入數字。框住的區域＝遮罩後會保留顯示、也是 OCR 裁切的範圍。
+  調好後複製貼回 <code>registration_ocr.py</code> 或 <code>registration-ocr.config.ts</code>。
+</p>
+
+<div class="layout">
+  <div class="stage-panel">
+    <div class="stage-toolbar">
+      <button class="toggle-btn active" id="viewPhotoBtn">原圖＋框</button>
+      <button class="toggle-btn" id="viewMaskBtn">遮罩預覽</button>
+      <span class="hint" id="imgSizeHint"></span>
+    </div>
+    <div class="stage" id="stage">
+      <img id="photo" src="warped.jpg" alt="warp 校正後的行照" />
+      <canvas id="maskCanvas" hidden></canvas>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="card">
+      <h2>欄位</h2>
+      <div id="fieldList"></div>
+
+      <div class="numbers">
+        <div class="num-field">
+          <label>X（%）</label>
+          <input type="number" id="numX" step="0.1" min="0" max="100" />
+        </div>
+        <div class="num-field">
+          <label>Y（%）</label>
+          <input type="number" id="numY" step="0.1" min="0" max="100" />
+        </div>
+        <div class="num-field">
+          <label>寬（%）</label>
+          <input type="number" id="numW" step="0.1" min="0" max="100" />
+        </div>
+        <div class="num-field">
+          <label>高（%）</label>
+          <input type="number" id="numH" step="0.1" min="0" max="100" />
+        </div>
+      </div>
+      <button class="reset-btn" id="resetBtn">重設成目前校正值</button>
+    </div>
+
+    <div class="card">
+      <h2>輸出</h2>
+      <div class="output-tabs">
+        <button class="active" data-fmt="python">Python</button>
+        <button data-fmt="ts">TypeScript</button>
+      </div>
+      <pre id="output"></pre>
+      <button class="copy-btn" id="copyBtn">複製到剪貼簿</button>
+      <div class="copy-status" id="copyStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // 跟 registration_ocr.py / registration-ocr.config.ts 目前的校正值一致 ——
+  // 這份清單是「唯一真相」的起點，調完框之後從這裡複製回那兩個檔案。
+  var DEFAULTS = [
+    { key: 'plateNumber', label: '牌照號碼', kind: 'alnum', color: '#4f8cff',
+      roi: { x: 0.160, y: 0.037, width: 0.792, height: 0.071 } },
+    { key: 'engineNumber', label: '引擎號碼', kind: 'alnum', color: '#34c759',
+      roi: { x: 0.173, y: 0.425, width: 0.778, height: 0.065 } },
+    { key: 'chassisNumber', label: '車身號碼', kind: 'alnum', color: '#ff9f0a',
+      roi: { x: 0.172, y: 0.488, width: 0.776, height: 0.066 } },
+    { key: 'color', label: '顏色', kind: 'alnum', color: '#bf5af2',
+      roi: { x: 0.172, y: 0.548, width: 0.36, height: 0.065 } },
+    { key: 'displacement', label: '排氣量', kind: 'digits', color: '#ff375f',
+      roi: { x: 0.653, y: 0.548, width: 0.239, height: 0.065 } },
+    { key: 'manufactureDate', label: '出廠年月', kind: 'date', color: '#64d2ff',
+      roi: { x: 0.652, y: 0.607, width: 0.298, height: 0.065 } }
+  ];
+
+  var fields = DEFAULTS.map(function (f) {
+    return { key: f.key, label: f.label, kind: f.kind, color: f.color, roi: Object.assign({}, f.roi) };
+  });
+  var selectedKey = fields[0].key;
+  var outputFormat = 'python';
+
+  var stage = document.getElementById('stage');
+  var photo = document.getElementById('photo');
+  var maskCanvas = document.getElementById('maskCanvas');
+  var fieldListEl = document.getElementById('fieldList');
+  var numX = document.getElementById('numX');
+  var numY = document.getElementById('numY');
+  var numW = document.getElementById('numW');
+  var numH = document.getElementById('numH');
+  var output = document.getElementById('output');
+  var imgSizeHint = document.getElementById('imgSizeHint');
+
+  var boxEls = {};
+
+  function fieldByKey(key) {
+    for (var i = 0; i < fields.length; i++) if (fields[i].key === key) return fields[i];
+    return null;
+  }
+
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+  // ---- 建立方框 DOM --------------------------------------------------
+  function buildBoxes() {
+    stage.querySelectorAll('.roi-box').forEach(function (el) { el.remove(); });
+    boxEls = {};
+    fields.forEach(function (f) {
+      var box = document.createElement('div');
+      box.className = 'roi-box';
+      box.style.setProperty('--box-color', f.color);
+      box.dataset.key = f.key;
+
+      var tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.textContent = f.label;
+      box.appendChild(tag);
+
+      ['nw', 'ne', 'sw', 'se'].forEach(function (corner) {
+        var h = document.createElement('div');
+        h.className = 'handle ' + corner;
+        h.dataset.corner = corner;
+        box.appendChild(h);
+      });
+
+      stage.appendChild(box);
+      boxEls[f.key] = box;
+
+      box.addEventListener('pointerdown', function (e) {
+        if (e.target.classList.contains('handle')) return;
+        startDrag(f.key, e);
+      });
+      box.querySelectorAll('.handle').forEach(function (h) {
+        h.addEventListener('pointerdown', function (e) {
+          e.stopPropagation();
+          startResize(f.key, h.dataset.corner, e);
+        });
+      });
+      box.addEventListener('pointerdown', function () { selectField(f.key); });
+    });
+    layoutBoxes();
+  }
+
+  function layoutBoxes() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    fields.forEach(function (f) {
+      var box = boxEls[f.key];
+      box.style.left = (f.roi.x * w) + 'px';
+      box.style.top = (f.roi.y * h) + 'px';
+      box.style.width = (f.roi.width * w) + 'px';
+      box.style.height = (f.roi.height * h) + 'px';
+      box.classList.toggle('selected', f.key === selectedKey);
+    });
+  }
+
+  // ---- 拖曳 / 縮放 -----------------------------------------------------
+  function startDrag(key, startEvent) {
+    selectField(key);
+    var f = fieldByKey(key);
+    var stageRect = stage.getBoundingClientRect();
+    var startX = startEvent.clientX, startY = startEvent.clientY;
+    var origin = { x: f.roi.x, y: f.roi.y };
+
+    function onMove(e) {
+      var dx = (e.clientX - startX) / stageRect.width;
+      var dy = (e.clientY - startY) / stageRect.height;
+      f.roi.x = clamp(origin.x + dx, 0, 1 - f.roi.width);
+      f.roi.y = clamp(origin.y + dy, 0, 1 - f.roi.height);
+      layoutBoxes();
+      syncNumbers();
+      renderMaskIfVisible();
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      updateOutput();
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  function startResize(key, corner, startEvent) {
+    selectField(key);
+    var f = fieldByKey(key);
+    var stageRect = stage.getBoundingClientRect();
+    var startX = startEvent.clientX, startY = startEvent.clientY;
+    var origin = { x: f.roi.x, y: f.roi.y, width: f.roi.width, height: f.roi.height };
+    var MIN = 0.015;
+
+    function onMove(e) {
+      var dx = (e.clientX - startX) / stageRect.width;
+      var dy = (e.clientY - startY) / stageRect.height;
+      var x = origin.x, y = origin.y, w = origin.width, h = origin.height;
+
+      if (corner === 'se') { w = origin.width + dx; h = origin.height + dy; }
+      if (corner === 'sw') { x = origin.x + dx; w = origin.width - dx; h = origin.height + dy; }
+      if (corner === 'ne') { y = origin.y + dy; w = origin.width + dx; h = origin.height - dy; }
+      if (corner === 'nw') { x = origin.x + dx; y = origin.y + dy; w = origin.width - dx; h = origin.height - dy; }
+
+      w = Math.max(MIN, w);
+      h = Math.max(MIN, h);
+      x = clamp(x, 0, 1 - w);
+      y = clamp(y, 0, 1 - h);
+
+      f.roi.x = x; f.roi.y = y; f.roi.width = w; f.roi.height = h;
+      layoutBoxes();
+      syncNumbers();
+      renderMaskIfVisible();
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      updateOutput();
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  // ---- 欄位清單／數字輸入 ------------------------------------------------
+  function buildFieldList() {
+    fieldListEl.innerHTML = '';
+    fields.forEach(function (f) {
+      var row = document.createElement('div');
+      row.className = 'field-row';
+      row.dataset.key = f.key;
+
+      var swatch = document.createElement('div');
+      swatch.className = 'swatch';
+      swatch.style.background = f.color;
+
+      var label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = f.label;
+
+      var kind = document.createElement('div');
+      kind.className = 'kind';
+      kind.textContent = f.kind;
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      row.appendChild(kind);
+      row.addEventListener('click', function () { selectField(f.key); });
+      fieldListEl.appendChild(row);
+    });
+    updateFieldListSelection();
+  }
+
+  function updateFieldListSelection() {
+    fieldListEl.querySelectorAll('.field-row').forEach(function (row) {
+      row.classList.toggle('selected', row.dataset.key === selectedKey);
+    });
+  }
+
+  function selectField(key) {
+    selectedKey = key;
+    layoutBoxes();
+    updateFieldListSelection();
+    syncNumbers();
+  }
+
+  function syncNumbers() {
+    var f = fieldByKey(selectedKey);
+    numX.value = (f.roi.x * 100).toFixed(1);
+    numY.value = (f.roi.y * 100).toFixed(1);
+    numW.value = (f.roi.width * 100).toFixed(1);
+    numH.value = (f.roi.height * 100).toFixed(1);
+  }
+
+  [numX, numY, numW, numH].forEach(function (input) {
+    input.addEventListener('input', function () {
+      var f = fieldByKey(selectedKey);
+      var x = parseFloat(numX.value) / 100;
+      var y = parseFloat(numY.value) / 100;
+      var w = parseFloat(numW.value) / 100;
+      var h = parseFloat(numH.value) / 100;
+      if ([x, y, w, h].some(isNaN)) return;
+      f.roi.x = clamp(x, 0, 1);
+      f.roi.y = clamp(y, 0, 1);
+      f.roi.width = clamp(w, 0.01, 1 - f.roi.x);
+      f.roi.height = clamp(h, 0.01, 1 - f.roi.y);
+      layoutBoxes();
+      renderMaskIfVisible();
+      updateOutput();
+    });
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    fields = DEFAULTS.map(function (f) {
+      return { key: f.key, label: f.label, kind: f.kind, color: f.color, roi: Object.assign({}, f.roi) };
+    });
+    layoutBoxes();
+    syncNumbers();
+    renderMaskIfVisible();
+    updateOutput();
+  });
+
+  // ---- 遮罩預覽 ---------------------------------------------------------
+  var viewPhotoBtn = document.getElementById('viewPhotoBtn');
+  var viewMaskBtn = document.getElementById('viewMaskBtn');
+  var maskVisible = false;
+
+  function renderMaskIfVisible() {
+    if (maskVisible) renderMask();
+  }
+
+  function renderMask() {
+    var w = photo.naturalWidth, h = photo.naturalHeight;
+    if (!w || !h) return;
+    maskCanvas.width = w;
+    maskCanvas.height = h;
+    var ctx = maskCanvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(photo, 0, 0, w, h);
+    ctx.fillStyle = 'rgba(230, 30, 30, 0.96)';
+    ctx.fillRect(0, 0, w, h);
+    fields.forEach(function (f) {
+      var x = f.roi.x * w, y = f.roi.y * h, bw = f.roi.width * w, bh = f.roi.height * h;
+      ctx.drawImage(photo, x, y, bw, bh, x, y, bw, bh);
+    });
+  }
+
+  viewPhotoBtn.addEventListener('click', function () {
+    maskVisible = false;
+    viewPhotoBtn.classList.add('active');
+    viewMaskBtn.classList.remove('active');
+    photo.hidden = false;
+    maskCanvas.hidden = true;
+    stage.querySelectorAll('.roi-box').forEach(function (el) { el.hidden = false; });
+  });
+  viewMaskBtn.addEventListener('click', function () {
+    maskVisible = true;
+    viewMaskBtn.classList.add('active');
+    viewPhotoBtn.classList.remove('active');
+    renderMask();
+    photo.hidden = true;
+    maskCanvas.hidden = false;
+    stage.querySelectorAll('.roi-box').forEach(function (el) { el.hidden = true; });
+  });
+
+  // ---- 輸出 (Python / TypeScript) ---------------------------------------
+  var outputTabs = document.querySelectorAll('.output-tabs button');
+  outputTabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      outputFormat = btn.dataset.fmt;
+      outputTabs.forEach(function (b) { b.classList.toggle('active', b === btn); });
+      updateOutput();
+    });
+  });
+
+  function fmt(n) { return n.toFixed(3); }
+
+  function buildPython() {
+    var lines = ['FIELD_ROIS: dict[str, FieldDef] = {'];
+    fields.forEach(function (f) {
+      lines.push(
+        '    "' + f.key + '": FieldDef(' +
+        fmt(f.roi.x) + ', ' + fmt(f.roi.y) + ', ' + fmt(f.roi.width) + ', ' + fmt(f.roi.height) +
+        ', "' + f.kind + '"),'
+      );
+    });
+    lines.push('}');
+    return lines.join('\n');
+  }
+
+  function buildTs() {
+    var lines = ['export const FIELD_ROIS: Record<string, FieldDefinition> = {'];
+    fields.forEach(function (f) {
+      lines.push(
+        '  ' + f.key + ': { roi: { x: ' + fmt(f.roi.x) + ', y: ' + fmt(f.roi.y) +
+        ', width: ' + fmt(f.roi.width) + ', height: ' + fmt(f.roi.height) +
+        ' }, kind: \'' + f.kind + '\' },'
+      );
+    });
+    lines.push('}');
+    return lines.join('\n');
+  }
+
+  function updateOutput() {
+    output.textContent = outputFormat === 'python' ? buildPython() : buildTs();
+  }
+
+  // ---- 複製 ---------------------------------------------------------
+  var copyBtn = document.getElementById('copyBtn');
+  var copyStatus = document.getElementById('copyStatus');
+  copyBtn.addEventListener('click', function () {
+    var text = output.textContent;
+    function done(ok) {
+      copyStatus.textContent = ok ? '已複製' : '複製失敗，請手動選取文字';
+      setTimeout(function () { copyStatus.textContent = ''; }, 1800);
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } catch (e) {
+      done(false);
+    }
+  });
+
+  // ---- 初始化 ---------------------------------------------------------
+  function init() {
+    buildFieldList();
+    buildBoxes();
+    syncNumbers();
+    updateOutput();
+  }
+
+  if (photo.complete && photo.naturalWidth) {
+    imgSizeHint.textContent = photo.naturalWidth + ' × ' + photo.naturalHeight;
+    init();
+  } else {
+    photo.addEventListener('load', function () {
+      imgSizeHint.textContent = photo.naturalWidth + ' × ' + photo.naturalHeight;
+      init();
+    });
+  }
+  window.addEventListener('resize', layoutBoxes);
+})();
+</script>

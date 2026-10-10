@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-10-02T14:21:02.389Z",
+  "note": "resolution can only be simulated downward from the delivered 480x640",
+  "targets": {
+    "odometer digits (42443)": {
+      "file": "1789735381731-APR-dashboard.jpg",
+      "region": {
+        "left": 228,
+        "top": 392,
+        "width": 120,
+        "height": 30
+      },
+      "byScale": {
+        "1": {
+          "simulatedFrameLongEdge": 640,
+          "regionPx": "120x30",
+          "strokeWidthPx": 4,
+          "michelsonContrast": 0.3666,
+          "edgeTransitionPx": 2.65,
+          "lapVar": 2478.1
+        },
+        "0.75": {
+          "simulatedFrameLongEdge": 480,
+          "regionPx": "90x23",
+          "strokeWidthPx": 3,
+          "michelsonContrast": 0.3709,
+          "edgeTransitionPx": 2.45,
+          "lapVar": 3765.5
+        },
+        "0.5": {
+          "simulatedFrameLongEdge": 320,
+          "regionPx": "60x15",
+          "strokeWidthPx": 2,
+          "michelsonContrast": 0.3614,
+          "edgeTransitionPx": 2.32,
+          "lapVar": 5915.5
+        },
+        "0.375": {
+          "simulatedFrameLongEdge": 240,
+          "regionPx": "45x11",
+          "strokeWidthPx": 2,
+          "michelsonContrast": 0.3477,
+          "edgeTransitionPx": 2.14,
+          "lapVar": 6892.3
+        }
+      }
+    },
+    "licence plate (NKZ-7323)": {
+      "file": "1789735392605-APR-rear.jpg",
+      "region": {
+        "left": 193,
+        "top": 352,
+        "width": 110,
+        "height": 32
+      },
+      "byScale": {
+        "1": {
+          "simulatedFrameLongEdge": 640,
+          "regionPx": "110x32",
+          "strokeWidthPx": 4,
+          "michelsonContrast": 0.821,
+          "edgeTransitionPx": 1.74,
+          "lapVar": 5117.1
+        },
+        "0.75": {
+          "simulatedFrameLongEdge": 480,
+          "regionPx": "83x24",
+          "strokeWidthPx": 3,
+          "michelsonContrast": 0.8359,
+          "edgeTransitionPx": 1.76,
+          "lapVar": 10213.1
+        },
+        "0.5": {
+          "simulatedFrameLongEdge": 320,
+          "regionPx": "55x16",
+          "strokeWidthPx": 2,
+          "michelsonContrast": 0.8217,
+          "edgeTransitionPx": 1.6,
+          "lapVar": 23759.9
+        },
+        "0.375": {
+          "simulatedFrameLongEdge": 240,
+          "regionPx": "41x12",
+          "strokeWidthPx": 2,
+          "michelsonContrast": 0.8425,
+          "edgeTransitionPx": 2.1,
+          "lapVar": 30179.9
+        }
+      }
+    }
+  }
+}

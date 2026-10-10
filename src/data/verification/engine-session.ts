@@ -105,3 +105,73 @@ export function engineSessionInstructionAt(elapsedSeconds: number): string {
   }
   return current
 }
+
+/** The 冷車＋引擎檢查 phase (seller-verification.ts's `seller-phase3-engine`)
+ *  — ENG-02 (冷車檢查) + ENG-03..08 (this engine session) together under one
+ *  lockedOrder gate: an all-or-nothing unit, once started it must be
+ *  finished in one sitting or every item in it is wiped and redone from
+ *  scratch (see verification.store.ts's resetLockedEngineSection). Exported
+ *  so the store and VerificationStepsView.vue's leave-confirmation guard
+ *  reference the exact same id instead of each hardcoding their own copy. */
+export const LOCKED_ENGINE_SECTION_ID = 'seller-phase3-engine'
+
+/**
+ * 熱車檢查 (buyer-verification.ts's `buyer-hot-check`, HOT-04..07) — Buyer-
+ * only, reached after 上路 (RIDE-01). Reuses EngineInspectionFlow.vue's exact
+ * consolidated single-recording UI (see that component's `mode` prop), just
+ * with a shorter 2-phase timeline: no Startup phase at all, since the engine
+ * is already running from the test ride by the time this begins — the rider
+ * never "starts" it here, only confirms idle sound/stability then revs it.
+ * HOT-01..03 (引擎底部/汽缸頭/排氣端 leak checks) are plain `type: 'check'`
+ * items, same as ENG-01, and render through the ordinary VerificationItem
+ * path — not part of this consolidated session.
+ */
+export const HOT_ENGINE_IDLE_ITEM_IDS = ['HOT-04', 'HOT-06'] as const
+export const HOT_ENGINE_REV_ITEM_IDS = ['HOT-05', 'HOT-07'] as const
+export const HOT_ENGINE_SESSION_ITEM_IDS: string[] = [
+  ...HOT_ENGINE_IDLE_ITEM_IDS,
+  ...HOT_ENGINE_REV_ITEM_IDS,
+]
+
+/** Fixed 18.0-second timeline — same "app alone drives an exact schedule"
+ *  discipline as ENGINE_SESSION_DURATION_MS, just 2 phases instead of 3
+ *  (5s shorter than the cold session's own idle+rev duration since there's
+ *  no ramp-up expected: the engine's already warm and idling steadily). */
+export const HOT_ENGINE_SESSION_DURATION_MS = 18000
+
+// Structurally the SAME 3-field shape as ENGINE_SESSION_PHASES (backend's
+// EngineSessionPhases type, engine-sensor-session.service.ts's
+// EngineSessionImuJson) — `startup` is a zero-width dummy rather than an
+// absent field, so the shared DSP pipeline types/functions never need a
+// second "startup is optional" shape; every stage that reads
+// `phases.startup` naturally computes an empty window set for it and moves
+// on (see engine-event-detector.ts's `assumeAlreadyRunning` for how the
+// backend actually skips startup DETECTION, as opposed to just feeding it
+// an empty phase).
+export const HOT_ENGINE_SESSION_PHASES: {
+  startup: EngineSessionPhaseBounds
+  idle: EngineSessionPhaseBounds
+  rev: EngineSessionPhaseBounds
+} = {
+  startup: { startMs: 0, endMs: 0 },
+  idle: { startMs: 0, endMs: 9000 },
+  rev: { startMs: 9000, endMs: 18000 },
+}
+
+export const HOT_ENGINE_SESSION_INSTRUCTION_SEQUENCE: EngineSessionInstructionStep[] = [
+  { atSeconds: 0, label: '請保持怠速' },
+  { atSeconds: 9, label: '請依提示拉動油門' },
+]
+
+export function hotEngineSessionInstructionAt(elapsedSeconds: number): string {
+  let current = HOT_ENGINE_SESSION_INSTRUCTION_SEQUENCE[0].label
+  for (const step of HOT_ENGINE_SESSION_INSTRUCTION_SEQUENCE) {
+    if (elapsedSeconds >= step.atSeconds) current = step.label
+  }
+  return current
+}
+
+/** Mirrors LOCKED_ENGINE_SECTION_ID's own doc comment — 熱車檢查 is also
+ *  `lockedOrder: true` (buyer-verification.ts) and gets the exact same
+ *  all-or-nothing leave-mid-way-wipes-it treatment. */
+export const LOCKED_HOT_ENGINE_SECTION_ID = 'buyer-hot-check'

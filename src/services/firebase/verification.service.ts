@@ -106,6 +106,8 @@ function toVerification(id: string, data: VerificationDoc): Verification {
     environmentContext: data.environmentContext,
     coldStateContext: data.coldStateContext,
     analysisStatus: data.analysisStatus,
+    vehicleSnapshot: data.vehicleSnapshot,
+    buyerKnownIssuesSnapshot: data.buyerKnownIssuesSnapshot,
   }
 }
 
@@ -207,6 +209,23 @@ async function saveTransactionDecision(
   await updateDoc(doc(db, COLLECTION, id), { transactionDecision })
 }
 
+/** BuyerYearGate.vue — only reached when vehicleSnapshot.manufactureYear was
+ *  null. Dot-notation path updates just this one nested field, leaving the
+ *  rest of vehicleSnapshot (brand/model/transmission/modelId) untouched. */
+async function saveBuyerVehicleYear(id: string, manufactureYear: number): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.manufactureYear': manufactureYear })
+}
+
+/** Taken once, right after BuyerYearGate.vue resolves — see
+ *  Verification['buyerKnownIssuesSnapshot']'s own doc comment for why this
+ *  is a snapshot rather than a live read. */
+async function saveBuyerKnownIssuesSnapshot(
+  id: string,
+  knownIssues: Verification['buyerKnownIssuesSnapshot'],
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, id), { buyerKnownIssuesSnapshot: knownIssues })
+}
+
 // --- Answers subcollection: verifications/{id}/answers/{itemId} ---
 
 interface AnswerDoc extends Omit<VerificationAnswer, 'updatedAt'> {
@@ -226,6 +245,16 @@ async function listAnswers(verificationId: string): Promise<VerificationAnswer[]
     const data = docSnapshot.data() as AnswerDoc
     return { ...data, updatedAt: toMillisOrNow(data.updatedAt) }
   })
+}
+
+/** A genuine delete, not a re-save with some "cleared" value — every other
+ * write path treats an Answer doc as append-only (saveAnswer only ever sets/
+ * overwrites), so this is the one place an item can go back to truly
+ * unanswered. Used by verification.store.ts's resetLockedEngineSection: a
+ * user abandoning 冷車＋引擎檢查 mid-way must actually restart from a blank
+ * ENG-02, not resume onto a stale placeholder. */
+async function deleteAnswer(verificationId: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTION, verificationId, 'answers', itemId))
 }
 
 // --- Evidence subcollection: verifications/{id}/evidence/{evidenceId} ---
@@ -289,8 +318,11 @@ export const verificationService = {
   remove,
   complete,
   saveTransactionDecision,
+  saveBuyerVehicleYear,
+  saveBuyerKnownIssuesSnapshot,
   saveAnswer,
   listAnswers,
+  deleteAnswer,
   saveEvidence,
   listEvidence,
   deleteEvidence,

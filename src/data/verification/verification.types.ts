@@ -133,6 +133,12 @@ export interface VerificationSection {
    *  no free jump between steps (e.g. 引擎狀況, where the checks are
    *  procedurally ordered: don't rev the engine before the cold check). */
   lockedOrder?: boolean
+  /** Hides VerificationCategoryNav.vue's per-item dropdown toggle entirely
+   *  for this section — for a section whose items never render one-at-a-time
+   *  (e.g. 基本12項健檢, always shown as one consolidated tap-on-photo
+   *  screen — see BasicHealthCheck13.vue), that per-item jump list has
+   *  nothing meaningful to jump TO. */
+  hideItemToggle?: boolean
 }
 
 export type VerificationFlowKind = 'seller' | 'buyer'

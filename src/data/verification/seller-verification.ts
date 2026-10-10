@@ -1,3 +1,5 @@
+import { buildBasicHealthCheckVerificationItems } from './basic-health-check-items'
+import { LOCKED_ENGINE_SECTION_ID } from './engine-session'
 import { buildPhotoSlotItems } from './photo-slots'
 import type { VerificationItem, VerificationSection } from './verification.types'
 
@@ -8,8 +10,11 @@ import type { VerificationItem, VerificationSection } from './verification.types
  * this app's stable business keys, never the old step numbers — see RULE 0),
  * but the flow is regrouped into 5 user-facing PHASEs, 8 low-value steps are
  * removed outright (車牌/前輪/後輪/引擎左側/引擎右側/排氣管/車身號碼, plus the
- * already-nonexistent "選擇拍車位置"), and 5 items become Optional
- * self-disclosure (see photo-slots.ts) plus ENG-01 (引擎觸感, spec item 38).
+ * already-nonexistent "選擇拍車位置"), and ENG-01 (引擎觸感, spec item 38)
+ * becomes Optional self-disclosure. 6 further items (後避震/前煞車/後煞車/
+ * 三角台/坐墊外觀/其他改裝品) briefly passed through the same Optional
+ * self-disclosure stage before being removed outright too, superseded by
+ * 基本12項健檢's own tap-to-check items — see photo-slots.ts's top comment.
  *
  * PREP-03 (驗車環境檢測) has been removed entirely per user instruction — it
  * predated the numbered 1–45 item table as calibration infrastructure and is
@@ -80,12 +85,12 @@ const prep: VerificationItem[] = [
   }),
 ]
 
-// --- 車身外觀 (20, all mandatory-photo items) ---
+// --- 車身外觀 (7, all mandatory-photo items) ---
 const appearance: VerificationItem[] = buildPhotoSlotItems('APR')
 
 // --- 電系狀況 (4) ---
 // ELEC-01..09 (the 9 individual "does it light up" checks — 日行燈/大燈近遠燈/
-// 尾燈/煞車燈/左右前後方向燈) were removed from here: 基本13項健檢's own tap
+// 尾燈/煞車燈/左右前後方向燈) were removed from here: 基本12項健檢's own tap
 // markers (大燈/尾燈/方向燈 on the reference photo) now cover this ground —
 // see basic-health-check-items.ts. Deliberately not renumbering ELEC-10..13
 // to keep their ids stable (see this file's top comment on why ids are
@@ -234,21 +239,13 @@ export const SELLER_ELECTRIC_LIGHT_ITEM_IDS: string[] = []
 
 // Verification v2's 5-Phase user-facing regrouping (spec §8) — pure
 // presentation/ordering, no item id is invented or renamed here. Steps 1/2/4
-// and the 5 now-optional photo slots + ENG-01 collapse into one PHASE 4
-// (其他主動揭露).
-const CORE_PHOTO_SLOT_IDS = new Set([
-  'APR-left-side',
-  'APR-right-side',
-  'APR-dashboard',
-  'APR-rear',
-  'APR-front-suspension',
-  'APR-engine-bottom',
-  'APR-transmission-chain',
-])
-const corePhotos = appearance.filter((it) => CORE_PHOTO_SLOT_IDS.has(it.id))
-const optionalPhotos = appearance.filter((it) => !CORE_PHOTO_SLOT_IDS.has(it.id))
+// + ENG-01 collapse into PHASE 4 (其他主動揭露). All 7 remaining
+// REQUIRED_PHOTO_SLOTS entries are Required core photos now (see
+// photo-slots.ts's top comment for where the other 6 went), so `appearance`
+// no longer needs splitting into core/optional subsets.
 const coldAndEngineSensorItems = engine.filter((it) => it.id !== 'ENG-01')
 const engineDisclosure = engine.filter((it) => it.id === 'ENG-01')
+const basicHealthCheckItems = buildBasicHealthCheckVerificationItems()
 
 export const SELLER_VERIFICATION_SECTIONS: VerificationSection[] = [
   {
@@ -256,15 +253,28 @@ export const SELLER_VERIFICATION_SECTIONS: VerificationSection[] = [
     title: '核心照片',
     shortDescription: '車輛關鍵部位拍攝，AI 會自動分析。',
     order: 0,
-    items: corePhotos,
+    items: appearance,
   },
   // 燈光電系 (原 seller-phase2-electric) 已移除 — 底下 9 項燈具檢查併入
-  // 基本13項健檢，不再是獨立分類，見 BasicHealthCheck13.vue。
+  // 基本12項健檢，不再是獨立分類，見 BasicHealthCheck13.vue。基本12項健檢本身
+  // 則升格為一個真正的分類／tab（原本只是驗車進度 Hub 上的一張獨立卡片），
+  // 位置沿用 Hub 先前把它插在索引 1 的安排 — 核心照片之後、冷車＋引擎檢查之前。
   {
-    id: 'seller-phase3-engine',
+    id: 'seller-phase2-basic-health',
+    title: '基本12項健檢',
+    shortDescription: '點擊車輛照片上的標記，快速標示外觀與燈光電系基本項目。',
+    order: 1,
+    items: basicHealthCheckItems,
+    // Always rendered as ONE consolidated tap-on-photo screen (see
+    // BasicHealthCheck13.vue), never one item at a time — the category
+    // nav's per-item dropdown jump list has nothing meaningful to jump to.
+    hideItemToggle: true,
+  },
+  {
+    id: LOCKED_ENGINE_SECTION_ID,
     title: '冷車＋引擎檢查',
     shortDescription: '冷車狀態確認、單次 23 秒發動＋怠速＋油門檢測，需依序完成。',
-    order: 1,
+    order: 2,
     items: coldAndEngineSensorItems,
     lockedOrder: true,
   },
@@ -272,7 +282,10 @@ export const SELLER_VERIFICATION_SECTIONS: VerificationSection[] = [
     id: 'seller-phase4-disclosure',
     title: '其他主動揭露',
     shortDescription: '車主自行提供的補充資訊，非 AI 核心判定，可全部略過。',
-    order: 2,
-    items: [...prep, ...optionalPhotos, ...electric, ...engineDisclosure],
+    order: 3,
+    // 後避震/前煞車/後煞車/三角台/坐墊外觀/其他改裝品 (6 個原本在此的 Optional
+    // 拍照項目) 已移除 — 跟基本12項健檢的對應打勾項目重複，見
+    // photo-slots.ts's top comment。
+    items: [...prep, ...electric, ...engineDisclosure],
   },
 ]

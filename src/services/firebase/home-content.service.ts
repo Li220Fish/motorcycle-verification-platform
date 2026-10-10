@@ -1,6 +1,11 @@
 import { collection, doc, getDoc, getDocs, query, Timestamp, where } from 'firebase/firestore'
 
-import type { MockFeaturedDealer } from '@/data/home/featured-dealers-mock'
+// 精選車商 — temporarily disabled (not deleted, may come back). Re-enable by
+// uncommenting this import, listFeaturedDealers() below, and its entry in
+// the exported homeContentService object — plus MarketplaceView.vue's own
+// commented-out <FeaturedDealersSection> usage and firestore.rules'
+// commented-out featuredDealers block.
+// import type { MockFeaturedDealer } from '@/data/home/featured-dealers-mock'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { MockVehicleNews } from '@/data/home/vehicle-news-mock'
 
@@ -9,11 +14,11 @@ import { db } from './firebase'
 /**
  * Read-only access to the Home/Marketplace DEMO content — seeded via
  * scripts/seed-marketplace-mock.mjs into its own Firestore collections
- * (marketplaceListings / featuredDealers / vehicleNews) rather than living
- * only as static arrays, so it can be updated (e.g. new mock photos) without
- * a rebuild. Every doc is written with an explicit id (demo-1, dealer-1, ...)
- * matching the original mock ids, so existing routes like /marketplace/demo-1
- * keep working unchanged.
+ * (marketplaceListings / vehicleNews) rather than living only as static
+ * arrays, so it can be updated (e.g. new mock photos) without a rebuild.
+ * Every doc is written with an explicit id (demo-1, ...) matching the
+ * original mock ids, so existing routes like /marketplace/demo-1 keep
+ * working unchanged.
  *
  * "我的刊登" is NOT here — it's real user data (create/update/list-by-seller)
  * served by listing.service.ts instead of this read-only DEMO-content module.
@@ -53,12 +58,13 @@ async function getMarketplaceListing(id: string): Promise<MockMarketListing | nu
   return toListing(snapshot.id, snapshot.data())
 }
 
-async function listFeaturedDealers(): Promise<MockFeaturedDealer[]> {
-  const snapshot = await getDocs(collection(db, 'featuredDealers'))
-  return snapshot.docs
-    .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }) as MockFeaturedDealer)
-    .sort(byId)
-}
+// 精選車商 — temporarily disabled, see the import comment above.
+// async function listFeaturedDealers(): Promise<MockFeaturedDealer[]> {
+//   const snapshot = await getDocs(collection(db, 'featuredDealers'))
+//   return snapshot.docs
+//     .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }) as MockFeaturedDealer)
+//     .sort(byId)
+// }
 
 /** `publishedAt` is a Firestore Timestamp on the wire — convert to millis
  * rather than spreading raw doc data, or the app receives a Timestamp object
@@ -94,7 +100,7 @@ async function getVehicleNews(id: string): Promise<MockVehicleNews | null> {
 export const homeContentService = {
   listMarketplaceListings,
   getMarketplaceListing,
-  listFeaturedDealers,
+  // listFeaturedDealers, // 精選車商 — temporarily disabled, see import comment above.
   listVehicleNews,
   getVehicleNews,
 }

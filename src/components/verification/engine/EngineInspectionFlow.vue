@@ -22,7 +22,7 @@
  * it lands — ONE Gemini audio call for all 4 audio items (spec §28), IMU
  * classification stays fully deterministic (spec §31-§33).
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Activity } from 'lucide-vue-next'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import EngineWaveform from './EngineWaveform.vue'
@@ -36,7 +36,10 @@ import {
 } from '@/services/motion/motion-capture.service'
 import type { MotionSample } from '@/services/motion/motion-capture.service'
 import { storageService } from '@/services/firebase/storage.service'
-import { analyzeEngineSensorSessionV2 } from '@/services/firebase/ai-analysis.service'
+import {
+  analyzeEngineSensorSessionV2,
+  analyzeHotEngineSensorSessionV2,
+} from '@/services/firebase/ai-analysis.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 import {
@@ -47,17 +50,66 @@ import {
   ENGINE_SESSION_PHASES,
   ENGINE_STARTUP_ITEM_IDS,
   engineSessionInstructionAt,
+  HOT_ENGINE_IDLE_ITEM_IDS,
+  HOT_ENGINE_REV_ITEM_IDS,
+  HOT_ENGINE_SESSION_DURATION_MS,
+  HOT_ENGINE_SESSION_ITEM_IDS,
+  HOT_ENGINE_SESSION_PHASES,
+  hotEngineSessionInstructionAt,
   inferTransmissionType,
   transmissionLabelFor,
 } from '@/data/verification/engine-session'
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
-const AUDIO_ITEM_IDS = [...ENGINE_STARTUP_ITEM_IDS, ENGINE_IDLE_ITEM_IDS[0], ENGINE_REV_ITEM_IDS[0]]
-const IMU_ITEM_IDS = [ENGINE_IDLE_ITEM_IDS[1], ENGINE_REV_ITEM_IDS[1]]
-
-const props = defineProps<{ verificationId: string }>()
+/** `mode: 'hot'` — 熱車檢查 (buyer-verification.ts's HOT-04..07, reached after
+ *  上路/RideTransition.vue): the exact same consolidated single-recording UI
+ *  as the cold 引擎檢測 pass below, just a shorter 2-phase (idle+rev, no
+ *  startup) timeline and pointed at HOT-* item ids / the hot AI-analysis
+ *  route instead of ENG-*. There's no "starting" to capture here — the
+ *  engine is already running from the ride by the time this screen opens. */
+const props = withDefaults(defineProps<{ verificationId: string; mode?: 'cold' | 'hot' }>(), {
+  mode: 'cold',
+})
 const emit = defineEmits<{ advance: []; recordingActive: [boolean] }>()
+
+const isHot = computed(() => props.mode === 'hot')
+
+const sessionItemIds = computed(() =>
+  isHot.value ? HOT_ENGINE_SESSION_ITEM_IDS : ENGINE_SESSION_ITEM_IDS,
+)
+const sessionDurationMs = computed(() =>
+  isHot.value ? HOT_ENGINE_SESSION_DURATION_MS : ENGINE_SESSION_DURATION_MS,
+)
+const sessionPhases = computed(() =>
+  isHot.value ? HOT_ENGINE_SESSION_PHASES : ENGINE_SESSION_PHASES,
+)
+const instructionAt = (elapsedSeconds: number): string =>
+  isHot.value
+    ? hotEngineSessionInstructionAt(elapsedSeconds)
+    : engineSessionInstructionAt(elapsedSeconds)
+const sessionDurationSeconds = computed(() => sessionDurationMs.value / 1000)
+const sessionDurationLabel = computed(
+  () => `00:${String(sessionDurationSeconds.value).padStart(2, '0')}`,
+)
+const screenTitle = computed(() => (isHot.value ? '熱車檢查' : '引擎檢測'))
+const readyCopy = computed(() =>
+  isHot.value
+    ? `依畫面提示保持怠速、再依提示拉動油門，系統會自動判斷各階段並在 ${sessionDurationSeconds.value} 秒後自動停止。`
+    : `依畫面提示發動引擎、保持怠速、再依提示拉動油門，系統會自動判斷各階段並在 ${sessionDurationSeconds.value} 秒後自動停止。`,
+)
+const startButtonLabel = computed(() => (isHot.value ? '開始熱車檢查' : '開始引擎檢測'))
+const finishButtonLabel = computed(() => (isHot.value ? '完成熱車檢查' : '完成引擎檢測'))
+const AUDIO_ITEM_IDS = computed(() =>
+  isHot.value
+    ? [HOT_ENGINE_IDLE_ITEM_IDS[0], HOT_ENGINE_REV_ITEM_IDS[0]]
+    : [...ENGINE_STARTUP_ITEM_IDS, ENGINE_IDLE_ITEM_IDS[0], ENGINE_REV_ITEM_IDS[0]],
+)
+const IMU_ITEM_IDS = computed(() =>
+  isHot.value
+    ? [HOT_ENGINE_IDLE_ITEM_IDS[1], HOT_ENGINE_REV_ITEM_IDS[1]]
+    : [ENGINE_IDLE_ITEM_IDS[1], ENGINE_REV_ITEM_IDS[1]],
+)
 
 const verificationStore = useVerificationStore()
 const vehicleStore = useVehicleStore()
@@ -72,7 +124,7 @@ type Phase =
   | 'capture-failed'
 
 function allDone(): boolean {
-  return ENGINE_SESSION_ITEM_IDS.every((id) => !!verificationStore.answers[id])
+  return sessionItemIds.value.every((id) => !!verificationStore.answers[id])
 }
 
 const phase = ref<Phase>(allDone() ? 'completed' : 'placement')
@@ -139,10 +191,18 @@ async function saveAudioEvidence(itemId: string, remoteUrl: string | undefined):
     createdAt: Date.now(),
     captureSource: 'camera',
     captureTimestamp: Date.now(),
-    metadata: { sessionType: 'engine-session-v2', durationMs: ENGINE_SESSION_DURATION_MS },
+    metadata: {
+      sessionType: isHot.value ? 'engine-session-hot-v1' : 'engine-session-v2',
+      durationMs: sessionDurationMs.value,
+    },
   }
   await verificationStore.addEvidence(evidence)
-  await verificationStore.saveAnswer(itemId, 'normal')
+  // 'unsure' (not 'normal') — placeholder until the Trusted Backend's real
+  // engine-audio verdict overwrites it. A "normal" default made an item
+  // whose analysis never actually ran (never triggered, or failed) look
+  // identical to a confirmed-normal result, both in the mobile report and in
+  // /admin's "人工判定項目，無 AI 回應" fallback.
+  await verificationStore.saveAnswer(itemId, 'unsure')
 }
 
 /** Uploads the FULL 0-23s sample array once, then a duplicate `imu`-typed
@@ -159,9 +219,9 @@ async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
   if (hasSamples) {
     const sessionJson = {
       schemaVersion: 2,
-      sessionType: 'engine-session-v2',
-      durationMs: ENGINE_SESSION_DURATION_MS,
-      phases: ENGINE_SESSION_PHASES,
+      sessionType: isHot.value ? 'engine-session-hot-v1' : 'engine-session-v2',
+      durationMs: sessionDurationMs.value,
+      phases: sessionPhases.value,
       placement: vehicleType.value === 'scooter' ? 'scooter_floorboard' : 'manual_front_seat',
       orientation: 'screen_up_top_toward_front',
       targetSampleRateHz: 100,
@@ -189,7 +249,7 @@ async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
     try {
       remoteUrl = await storageService.uploadEvidenceFile(
         props.verificationId,
-        IMU_ITEM_IDS[0],
+        IMU_ITEM_IDS.value[0],
         blob,
         'json',
       )
@@ -198,7 +258,7 @@ async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
     }
   }
 
-  for (const itemId of IMU_ITEM_IDS) {
+  for (const itemId of IMU_ITEM_IDS.value) {
     const evidence: VerificationEvidence = {
       id: crypto.randomUUID(),
       verificationId: props.verificationId,
@@ -211,7 +271,9 @@ async function saveMotionEvidence(samples: MotionSample[]): Promise<number> {
       metadata: hasSamples ? { ...summary } : { sampleCount: 0, unsupported: true },
     }
     await verificationStore.addEvidence(evidence)
-    await verificationStore.saveAnswer(itemId, 'normal')
+    // 'unsure' (not 'normal') — same reasoning as saveAudioEvidence above;
+    // the deterministic IMU classifier overwrites this once it runs.
+    await verificationStore.saveAnswer(itemId, 'unsure')
   }
   return sizeBytes
 }
@@ -239,15 +301,15 @@ async function finishRecording(): Promise<void> {
   liveMagnitude.value = null
   try {
     const result = await audioRecorderService.stop()
-    const remoteUrl = await uploadAudio(AUDIO_ITEM_IDS[0], result.blob)
-    for (const itemId of AUDIO_ITEM_IDS) {
+    const remoteUrl = await uploadAudio(AUDIO_ITEM_IDS.value[0], result.blob)
+    for (const itemId of AUDIO_ITEM_IDS.value) {
       await saveAudioEvidence(itemId, remoteUrl)
     }
     const imuSizeBytes = await saveMotionEvidence(motionSamples)
     sessionFiles.value = [
       {
         kind: 'audio',
-        label: '引擎音訊（啟動＋怠速＋油門）',
+        label: isHot.value ? '引擎音訊（怠速＋油門）' : '引擎音訊（啟動＋怠速＋油門）',
         filename: `engine_audio_${Date.now()}.aac`,
         durationSeconds: Math.round(result.durationMs / 1000),
         sizeBytes: result.blob.size,
@@ -265,8 +327,9 @@ async function finishRecording(): Promise<void> {
     // `normal` answers with the real Gemini-graded / IMU-classified result
     // once it lands. Not awaited — Gemini latency should never block the
     // capture flow from advancing.
-    analyzeEngineSensorSessionV2(props.verificationId).catch((error) =>
-      console.error('[AI analysis] analyzeEngineSensorSessionV2 trigger failed:', error),
+    const analyze = isHot.value ? analyzeHotEngineSensorSessionV2 : analyzeEngineSensorSessionV2
+    analyze(props.verificationId).catch((error) =>
+      console.error('[AI analysis] engine sensor session analysis trigger failed:', error),
     )
   } catch {
     await abortAsFailed()
@@ -309,7 +372,7 @@ async function handleRequestStart(): Promise<void> {
   phase.value = 'recording'
   timer = setInterval(() => {
     elapsedMs.value = Date.now() - recordingStartedAt
-    if (elapsedMs.value >= ENGINE_SESSION_DURATION_MS) {
+    if (elapsedMs.value >= sessionDurationMs.value) {
       clearTimer()
       void finishRecording()
     }
@@ -399,13 +462,11 @@ onBeforeUnmount(() => {
           <div class="icon-chip"><Activity :size="20" /></div>
           <div class="top-card-titles">
             <p class="eyebrow">目前檢測項目</p>
-            <h2>引擎檢測</h2>
+            <h2>{{ screenTitle }}</h2>
           </div>
         </div>
-        <p class="subhead">共 23 秒，時間由系統自動控制</p>
-        <p class="main-copy">
-          依畫面提示發動引擎、保持怠速、再依提示拉動油門，系統會自動判斷各階段並在 23 秒後自動停止。
-        </p>
+        <p class="subhead">共 {{ sessionDurationSeconds }} 秒，時間由系統自動控制</p>
+        <p class="main-copy">{{ readyCopy }}</p>
         <div class="tips-box">
           <ul class="tips">
             <li>手機放穩，不要手持或移動</li>
@@ -421,17 +482,17 @@ onBeforeUnmount(() => {
 
       <div class="panel-card">
         <template v-if="phase === 'ready'">
-          <PrimaryButton block @click="handleRequestStart">開始引擎檢測</PrimaryButton>
+          <PrimaryButton block @click="handleRequestStart">{{ startButtonLabel }}</PrimaryButton>
         </template>
 
         <template v-else-if="phase === 'recording'">
           <div class="recording-header">
             <span class="rec-dot" />
             <span class="rec-label">正在檢測中</span>
-            <span class="rec-elapsed">{{ formatElapsed() }} / 00:23</span>
+            <span class="rec-elapsed">{{ formatElapsed() }} / {{ sessionDurationLabel }}</span>
           </div>
           <EngineWaveform :active="true" :magnitude="liveMagnitude" />
-          <p class="live-instruction">{{ engineSessionInstructionAt(elapsedMs / 1000) }}</p>
+          <p class="live-instruction">{{ instructionAt(elapsedMs / 1000) }}</p>
           <button class="cancel-btn" @click="requestCancel">取消</button>
         </template>
 
@@ -447,14 +508,14 @@ onBeforeUnmount(() => {
               :size-bytes="file.sizeBytes"
             />
           </div>
-          <PrimaryButton block @click="emit('advance')">完成引擎檢測</PrimaryButton>
+          <PrimaryButton block @click="emit('advance')">{{ finishButtonLabel }}</PrimaryButton>
         </template>
       </div>
     </template>
 
     <template v-else-if="phase === 'permission-denied'">
       <h2>需要麥克風權限</h2>
-      <p class="main-copy">引擎檢測需要錄製聲音。請允許 MotoVerify 使用麥克風。</p>
+      <p class="main-copy">{{ screenTitle }}需要錄製聲音。請允許 RiDE78 使用麥克風。</p>
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <PrimaryButton block @click="phase = 'ready'">允許麥克風</PrimaryButton>
     </template>

@@ -1,0 +1,154 @@
+{
+  "generatedAt": "2026-10-02T14:19:13.539Z",
+  "dir": "D:/Downloads/暫存圖片/",
+  "serverStage": {
+    "SERVER_LONG_EDGE": 1280,
+    "SERVER_QUALITY": 78
+  },
+  "photos": {
+    "1789735356462-APR-left-side.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 45865,
+      "kb": 44.8,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 1958.4,
+      "sharpnessMedianTile": 369.9,
+      "meanLuma": 52.92,
+      "rmsContrast": 57.57,
+      "clippedHighlightPct": 0.258,
+      "clippedShadowPct": 7.731,
+      "entropyBits": 6.912,
+      "darkPixelPct": 58.59,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 43.6,
+        "ssimVsStored": 0.9971,
+        "psnrVsStored": 49.1
+      }
+    },
+    "1789735365277-APR-right-side.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 31559,
+      "kb": 30.8,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 399.2,
+      "sharpnessMedianTile": 100.7,
+      "meanLuma": 34.87,
+      "rmsContrast": 31.21,
+      "clippedHighlightPct": 0.198,
+      "clippedShadowPct": 0.615,
+      "entropyBits": 6.223,
+      "darkPixelPct": 73.55,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 29.8,
+        "ssimVsStored": 0.9971,
+        "psnrVsStored": 51.5
+      }
+    },
+    "1789735381731-APR-dashboard.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 47241,
+      "kb": 46.1,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 1588.9,
+      "sharpnessMedianTile": 635,
+      "meanLuma": 53.74,
+      "rmsContrast": 51.26,
+      "clippedHighlightPct": 0.254,
+      "clippedShadowPct": 7.052,
+      "entropyBits": 7.011,
+      "darkPixelPct": 57.81,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 45,
+        "ssimVsStored": 0.9973,
+        "psnrVsStored": 48.95
+      }
+    },
+    "1789735392605-APR-rear.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 44638,
+      "kb": 43.6,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 1620.3,
+      "sharpnessMedianTile": 292.9,
+      "meanLuma": 39.55,
+      "rmsContrast": 40.4,
+      "clippedHighlightPct": 0.155,
+      "clippedShadowPct": 0.972,
+      "entropyBits": 6.372,
+      "darkPixelPct": 74.3,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 42.5,
+        "ssimVsStored": 0.9968,
+        "psnrVsStored": 49.59
+      }
+    },
+    "1789735402234-APR-front-suspension.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 45518,
+      "kb": 44.5,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 843.6,
+      "sharpnessMedianTile": 339.9,
+      "meanLuma": 56.88,
+      "rmsContrast": 54.11,
+      "clippedHighlightPct": 0.159,
+      "clippedShadowPct": 3.81,
+      "entropyBits": 7.092,
+      "darkPixelPct": 57.13,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 43.3,
+        "ssimVsStored": 0.9976,
+        "psnrVsStored": 49.78
+      }
+    },
+    "1789735416810-APR-engine-bottom.jpg": {
+      "storedWidth": 480,
+      "storedHeight": 640,
+      "bytes": 28531,
+      "kb": 27.9,
+      "hasExif": false,
+      "orientation": null,
+      "sharpnessBestTile": 188.4,
+      "sharpnessMedianTile": 16.2,
+      "meanLuma": 73.32,
+      "rmsContrast": 38.78,
+      "clippedHighlightPct": 0,
+      "clippedShadowPct": 0,
+      "entropyBits": 6.964,
+      "darkPixelPct": 22.49,
+      "serverStage": {
+        "resized": false,
+        "outWidth": 480,
+        "outHeight": 640,
+        "outKb": 27.1,
+        "ssimVsStored": 0.9968,
+        "psnrVsStored": 52.36
+      }
+    }
+  }
+}

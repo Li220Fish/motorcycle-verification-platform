@@ -8,7 +8,8 @@ import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
 import { mockRecognitionService } from '@/services/recognition/mock-recognition.service'
 import type { RecognitionStatus } from '@/services/recognition/recognition.types'
 import { useVerificationStore } from '@/stores/verification.store'
-import { useUploadQueueStore } from '@/stores/upload-queue.store'
+import { imageCompressionService } from '@/services/media/image-compression.service'
+import { storageService } from '@/services/firebase/storage.service'
 import type { AiCheckKind } from '@/data/verification'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
@@ -36,7 +37,6 @@ const props = withDefaults(
 )
 
 const verificationStore = useVerificationStore()
-const uploadQueueStore = useUploadQueueStore()
 
 const previewUrl = ref('')
 const uploading = ref(false)
@@ -93,9 +93,18 @@ function handleMarkIssue(event: MouseEvent): void {
 }
 
 /**
- * Local-first: the evidence doc (with no remoteUrl yet) is saved and the UI
- * moves on immediately — the actual Firebase Storage upload happens in the
- * background via uploadQueueStore, so the user never waits on it here.
+ * Uploads to Firebase Storage BEFORE writing the evidence doc, and only
+ * writes it on success — matching EngineInspectionFlow.vue's audio capture.
+ * A prior "local-first" version wrote the evidence doc immediately with only
+ * a device-local `localUri`, and queued the actual Storage upload in the
+ * background (upload-queue.store.ts) — that queue's state lived entirely on
+ * the one device that captured it, so anything that disrupted it (app
+ * killed, a fresh APK install wiping local storage, a network drop past the
+ * retry window) permanently orphaned the evidence doc with no remoteUrl and
+ * no way to notice or recover server-side. Found via a real admin report of
+ * "can't view any core photos" — every core photo item across several
+ * verifications had exactly this shape. Trade-off: the user now waits for
+ * the actual upload here, same as they already do for audio/video.
  */
 async function handleConfirm(): Promise<void> {
   if (!previewUrl.value) return
@@ -103,6 +112,13 @@ async function handleConfirm(): Promise<void> {
   errorMessage.value = ''
   try {
     const blob = await fetch(previewUrl.value).then((response) => response.blob())
+    const compressed = await imageCompressionService.compressImage(blob)
+    const remoteUrl = await storageService.uploadEvidenceFile(
+      props.verificationId,
+      props.itemId,
+      compressed.blob,
+      'jpg',
+    )
     const evidenceId = crypto.randomUUID()
 
     const evidence: VerificationEvidence = {
@@ -111,6 +127,7 @@ async function handleConfirm(): Promise<void> {
       itemId: props.itemId,
       type: 'photo',
       localUri: previewUrl.value,
+      remoteUrl,
       createdAt: Date.now(),
       captureSource: 'camera',
       captureTimestamp: Date.now(),
@@ -124,19 +141,13 @@ async function handleConfirm(): Promise<void> {
     // component only ever holds one photo per itemId at a time. Runs AFTER
     // the new evidence is recorded, so the item is never briefly empty.
     void verificationStore.discardOtherEvidence(props.itemId, evidenceId)
-    void uploadQueueStore.enqueue({
-      localId: evidenceId,
-      verificationId: props.verificationId,
-      itemId: props.itemId,
-      type: 'photo',
-      blob,
-      extension: 'jpg',
-    })
 
     previewUrl.value = ''
     issuePosition.value = null
     recognitionStatus.value = 'idle'
     recognitionFindings.value = []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '上傳失敗，請重試'
   } finally {
     uploading.value = false
   }
@@ -180,7 +191,12 @@ async function handleConfirm(): Promise<void> {
         </div>
       </template>
 
-      <p v-if="autoConfirm" class="uploading-hint">{{ uploading ? '儲存中...' : '' }}</p>
+      <template v-if="autoConfirm">
+        <p v-if="uploading" class="uploading-hint">上傳中...</p>
+        <button v-else-if="errorMessage" class="primary retry-btn" @click="handleConfirm">
+          重新上傳
+        </button>
+      </template>
       <div v-else class="preview-actions">
         <button class="secondary" :disabled="uploading" @click="handleRetake">重新拍攝</button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
@@ -312,6 +328,12 @@ async function handleConfirm(): Promise<void> {
   border: none;
   background: var(--color-primary);
   color: #fff;
+}
+
+.retry-btn {
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
 }
 
 .error {

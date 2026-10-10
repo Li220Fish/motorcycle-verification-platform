@@ -52,6 +52,14 @@ function clearTimer(): void {
 }
 
 async function handleStart(): Promise<void> {
+  // Re-entrancy guard: PrimaryButton isn't disabled synchronously on click,
+  // so a fast double-tap on 開始冷車檢測/允許相機與麥克風 before Vue re-renders
+  // past `phase.value = 'checking'` below could otherwise start two
+  // concurrent recordings — each eventually calling finish() and racing to
+  // write/discard ENG-02's evidence doc. Checked BEFORE that assignment, not
+  // after, so the second call bails out here instead of re-running the whole
+  // start sequence.
+  if (phase.value !== 'intro' && phase.value !== 'permission-denied') return
   phase.value = 'checking'
   errorMessage.value = ''
   try {
@@ -112,8 +120,9 @@ async function finish(): Promise<void> {
       result.blob,
       'webm',
     )
+    const evidenceId = crypto.randomUUID()
     const evidence: VerificationEvidence = {
-      id: crypto.randomUUID(),
+      id: evidenceId,
       verificationId: props.verificationId,
       itemId: 'ENG-02',
       type: 'video',
@@ -130,7 +139,19 @@ async function finish(): Promise<void> {
       },
     }
     await verificationStore.addEvidence(evidence)
-    await verificationStore.saveAnswer('ENG-02', 'normal')
+    // "↻ 重新測量" lets the user redo this recording from scratch — without
+    // this, every re-measure left the OLD video evidence doc behind instead
+    // of replacing it, so a verification could end up with several duplicate
+    // ENG-02 videos (found live via a real admin report). Same
+    // capture-replaces-not-accumulates rule every photo item already
+    // follows (see CorePhotoCaptureFlow.vue/PhotoEvidenceCapture.vue).
+    void verificationStore.discardOtherEvidence('ENG-02', evidenceId)
+    // 'unsure' (not 'normal') — this is a placeholder until the Trusted
+    // Backend's real AI verdict lands (see below); a "normal" default made an
+    // item whose analysis never actually ran (never triggered, or failed)
+    // look identical to a confirmed-normal result, both in the mobile report
+    // and in /admin's "人工判定項目，無 AI 回應" fallback.
+    await verificationStore.saveAnswer('ENG-02', 'unsure')
     phase.value = 'done'
     // Fire-and-forget, same convention as every other capture step — the
     // Trusted Backend overwrites this placeholder with the real verified
@@ -225,7 +246,7 @@ onBeforeUnmount(() => {
     <template v-else-if="phase === 'permission-denied'">
       <div class="panel-card">
         <h2>需要相機與麥克風權限</h2>
-        <p class="main-copy">冷車狀態確認需要錄影。請允許 MotoVerify 使用相機與麥克風。</p>
+        <p class="main-copy">冷車狀態確認需要錄影。請允許 RiDE78 使用相機與麥克風。</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
         <PrimaryButton block @click="handleStart">允許相機與麥克風</PrimaryButton>
       </div>

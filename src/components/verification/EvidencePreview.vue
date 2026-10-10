@@ -244,7 +244,7 @@ function closeZoom(): void {
 
 .zoom-close {
   position: absolute;
-  top: max(var(--space-md), env(safe-area-inset-top));
+  top: max(var(--space-md), var(--safe-area-inset-top, env(safe-area-inset-top)));
   right: var(--space-md);
   width: 36px;
   height: 36px;

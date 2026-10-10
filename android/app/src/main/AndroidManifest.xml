@@ -59,5 +59,14 @@
          normal (not dangerous) permission — declaring it is enough, no
          runtime prompt needed for it specifically. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- @capawesome/capacitor-torch (native flashlight control) — required
+         per the plugin's own install docs; a normal (not dangerous)
+         permission, no runtime prompt needed. -->
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <!-- @capacitor/push-notifications — runtime-requested (POST_NOTIFICATIONS
+         is a dangerous permission since Android 13/API 33) via
+         push-notification.service.ts's requestPermissions() call; declaring
+         it here is what makes that grantable at all. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

@@ -87,6 +87,20 @@ export async function analyzeEngineSensorSessionV2(verificationId: string): Prom
   return response.data
 }
 
+/** 熱車檢查 (buyer-verification.ts's HOT-04..07, reached after 上路) — same
+ *  single-call shape as analyzeEngineSensorSessionV2 above, just against the
+ *  hot-session Cloud Function (a shorter 2-phase idle+rev recording, no
+ *  startup phase — see engine-sensor-session.service.ts's
+ *  analyzeHotEngineSensorSessionV2). */
+export async function analyzeHotEngineSensorSessionV2(verificationId: string): Promise<unknown> {
+  const call = httpsCallable<{ verificationId: string }, unknown>(
+    functions,
+    'analyzeHotEngineSensorSessionV2',
+  )
+  const response = await call({ verificationId })
+  return response.data
+}
+
 export async function analyzeColdEngineTouchCheck(
   verificationId: string,
 ): Promise<GeminiItemResultDto> {
@@ -111,16 +125,19 @@ export async function retryColdEngineTouchCheck(params: {
 }
 
 export interface VehicleRegistrationVerificationDto {
-  status: 'unverified' | 'passed'
+  status: 'unverified' | 'passed' | 'failed'
   ocrEngineNumber: string | null
   confidence: number | null
   note: string | null
   verifiedAt: number | null
+  method?: 'local' | 'gemini'
 }
 
-/** 行照驗證 — 使用者只需上傳行照照片，不用輸入任何文字。Gemini 仍會真的
- * OCR 讀取引擎號碼供顯示，但通過與否不取決於 OCR 結果——上傳照片即算
- * 通過，見 functions/src/services/vehicle-registration.service.ts。 */
+/** 行照驗證 — 使用者只需拍攝行照照片，不用輸入任何文字。後端會先跑本機
+ * OpenCV.js 角點偵測+遮罩，再用 Gemini 讀取遮罩後圖片的文字（正式辨識引
+ * 擎，本機 Tesseract 只在 Gemini 呼叫本身失敗時當備援）；通過與否確實取決
+ * 於 OCR 結果，不是上傳即過，見
+ * functions/src/services/vehicle-registration.service.ts。 */
 export async function verifyVehicleRegistrationDocument(params: {
   vehicleId: string
   documentUrl: string

@@ -85,6 +85,8 @@ const draft = reactive({
   hasChain: false,
   synonymsText: '',
   knownIssues: [] as VehicleModelKnownIssue[],
+  usedPriceRangeMin: '',
+  usedPriceRangeMax: '',
   maxPowerHp: '',
   maxTorqueKgm: '',
   fuelTankCapacityL: '',
@@ -158,6 +160,8 @@ function resetDraft(): void {
   draft.hasChain = false
   draft.synonymsText = ''
   draft.knownIssues = []
+  draft.usedPriceRangeMin = ''
+  draft.usedPriceRangeMax = ''
   draft.maxPowerHp = ''
   draft.maxTorqueKgm = ''
   draft.fuelTankCapacityL = ''
@@ -202,6 +206,10 @@ function openEditForm(model: AdminVehicleModel): void {
   // Deep-copy so editing/removing a row in the form doesn't mutate the
   // list still shown in the table behind it until Save is actually pressed.
   draft.knownIssues = model.knownIssues.map((issue) => ({ ...issue }))
+  draft.usedPriceRangeMin =
+    model.usedPriceRangeTwd?.min != null ? String(model.usedPriceRangeTwd.min) : ''
+  draft.usedPriceRangeMax =
+    model.usedPriceRangeTwd?.max != null ? String(model.usedPriceRangeTwd.max) : ''
   draft.maxPowerHp =
     model.specs.engine.maxPowerHp != null ? String(model.specs.engine.maxPowerHp) : ''
   draft.maxTorqueKgm =
@@ -273,6 +281,14 @@ async function handleSubmit(): Promise<void> {
       knownIssues: draft.knownIssues
         .map((issue) => ({ ...issue, description: issue.description.trim() }))
         .filter((issue) => issue.description.length > 0),
+      usedPriceRangeTwd:
+        numberOrNull(draft.usedPriceRangeMin) != null &&
+        numberOrNull(draft.usedPriceRangeMax) != null
+          ? {
+              min: numberOrNull(draft.usedPriceRangeMin)!,
+              max: numberOrNull(draft.usedPriceRangeMax)!,
+            }
+          : null,
       specs: {
         maxPowerHp: numberOrNull(draft.maxPowerHp),
         maxTorqueKgm: numberOrNull(draft.maxTorqueKgm),
@@ -472,6 +488,19 @@ onMounted(async () => {
           + 新增通病
         </button>
 
+        <p class="admin-form-subhead">二手價區間（選填）</p>
+        <p class="admin-field-hint">
+          會顯示在這個車款對應驗證報告的最下方，供使用者參考。兩個欄位都填才會顯示。
+        </p>
+        <div class="admin-form-row">
+          <label class="admin-field"
+            ><span>下限 (TWD)</span><input v-model="draft.usedPriceRangeMin" type="number"
+          /></label>
+          <label class="admin-field"
+            ><span>上限 (TWD)</span><input v-model="draft.usedPriceRangeMax" type="number"
+          /></label>
+        </div>
+
         <p class="admin-form-subhead">規格（選填）</p>
         <div class="admin-form-row">
           <label class="admin-field"
@@ -529,12 +558,13 @@ onMounted(async () => {
               <th class="num">排氣量</th>
               <th class="num">馬力</th>
               <th class="num">通病</th>
+              <th class="num">二手價</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!loading && filteredModels.length === 0">
-              <td class="admin-empty-cell" colspan="7">尚無資料</td>
+              <td class="admin-empty-cell" colspan="8">尚無資料</td>
             </tr>
             <tr v-for="m in filteredModels" :key="m.id">
               <td class="strong">
@@ -554,6 +584,13 @@ onMounted(async () => {
                 "
               >
                 {{ m.knownIssues.length > 0 ? m.knownIssues.length : '—' }}
+              </td>
+              <td class="num dim">
+                {{
+                  m.usedPriceRangeTwd
+                    ? `${m.usedPriceRangeTwd.min.toLocaleString()}~${m.usedPriceRangeTwd.max.toLocaleString()}`
+                    : '—'
+                }}
               </td>
               <td class="admin-row-actions">
                 <button class="admin-btn sm" @click="openEditForm(m)">編輯</button>

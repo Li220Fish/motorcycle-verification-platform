@@ -1,26 +1,35 @@
 <script setup lang="ts">
 /**
- * 基本13項健檢 — a lightweight point-and-tap checklist over a reference
+ * 基本12項健檢 — a lightweight point-and-tap checklist over a reference
  * motorcycle photo (front 3/4 view page 1, the same photo mirrored for the
  * rear-facing items on page 2). Ported from a standalone HTML prototype;
- * this first pass is deliberately self-contained (in-memory state only, no
- * Firestore/AI wiring) so it can be reached from 驗車進度 without touching
- * the deep per-item evidence/answer pipeline the rest of verification.store.ts
- * drives — that wiring is a separate follow-up once this UI is confirmed.
+ * originally self-contained (in-memory state only, no Firestore wiring),
+ * reachable only from a dedicated 驗車進度 Hub card outside the normal
+ * per-item flow. Now a real VerificationSection/tab (seller-verification.ts's
+ * seller-phase2-basic-health) like everything else — VerificationStepsView.vue
+ * swaps this component in whenever the current item id is one of
+ * BASIC_HEALTH_CHECK_ITEM_IDS, same pattern as CorePhotoCaptureFlow.vue /
+ * EngineInspectionFlow.vue. Each item's tap result is saved immediately via
+ * verificationStore.saveAnswer (pass -> 'normal', fail -> 'attention') under
+ * `BASIC-${key}`, hydrated back from verificationStore.answers on mount so
+ * revisiting the tab shows prior taps instead of resetting.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Check, X } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useTapConfirmItem } from '@/composables/useTapConfirmItem'
 import { BIKE_REFERENCE_PHOTO } from './basic-health-check-photo'
 import {
   BASIC_HEALTH_CHECK_BASE_ITEMS,
   BASIC_HEALTH_CHECK_CHAIN_ITEM,
+  basicHealthCheckItemId,
   basicHealthCheckItemsFor,
   type HealthCheckAnchor,
 } from '@/data/verification/basic-health-check-items'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
+import { useVerificationStore } from '@/stores/verification.store'
 
 const props = defineProps<{
   hasChain?: boolean | null
@@ -38,10 +47,30 @@ const props = defineProps<{
   /** Admin preview mode (HealthCheckAnnotationPreview.vue): hides the bottom
    *  "完成" bar and the header's back-navigation affordance, since this
    *  isn't a real verification flow — just a live render of the in-progress
-   *  anchor data. */
+   *  anchor data. Also skips the verificationStore wiring entirely (there is
+   *  no active verification in this context). */
   previewMode?: boolean
+  /** VerificationStepsView.vue renders this INSIDE VerificationLayout's own
+   *  content area, below its own sticky AppHeader (z-index 10) and the
+   *  category tabs (VerificationCategoryNav.vue, sticky, z-index 5) — this
+   *  component's own AppHeader is *also* `position: sticky; top: 0; z-index:
+   *  10`, so once scrolled it stuck to the very top of the screen and,
+   *  sharing the outer header's z-index, painted over the tabs underneath
+   *  it (found live: "往下滑上方的app-header會覆蓋掉tabs"). Set true to skip
+   *  rendering it entirely — the outer layout already shows a back button
+   *  and this section's title (as the active tab), so it's pure duplication
+   *  once embedded rather than shown as its own standalone screen. Defaults
+   *  false so HealthCheckAnnotationPreview.vue (no competing outer chrome)
+   *  is untouched. */
+  embedded?: boolean
 }>()
-const emit = defineEmits<{ back: [] }>()
+/** `back` exits the whole consolidated screen early (mirrors
+ *  CorePhotoCaptureFlow.vue's own back arrow) — VerificationStepsView.vue
+ *  sends both back to the Hub. `advance` fires once the user taps through
+ *  the post-完成 confirmation, continuing the flow past this whole section,
+ *  same as every other consolidated capture group. */
+const emit = defineEmits<{ back: []; advance: [] }>()
+const verificationStore = useVerificationStore()
 
 interface ChecklistItem {
   key: string
@@ -133,15 +162,58 @@ const NOTE_ITEMS: NoteItem[] = [
 ]
 const NOTE_BY_KEY = new Map(NOTE_ITEMS.map((n) => [n.key, n]))
 
-/** undefined = 尚未確認；'pass' = 打勾（正常）；'fail' = 打叉（異常）。 */
-type CheckResult = 'pass' | 'fail' | undefined
-
-const state = reactive<Record<string, CheckResult>>(
-  Object.fromEntries(ALL_ITEM_KEYS.map((key) => [key, undefined])),
-)
 const notes = reactive<Record<string, string>>(
   Object.fromEntries(NOTE_ITEMS.map((n) => [n.key, ''])),
 )
+
+/** Persists one item's tap immediately, same "answer saved on interaction"
+ *  pattern as every other checklist item — pass/fail map onto the normal
+ *  AnswerResultValue vocabulary (正常/須注意) everything else already uses,
+ *  so scoring/report/admin need no special case for this checklist. */
+function saveResult(key: string, value: 'pass' | 'fail'): void {
+  if (props.previewMode) return
+  void verificationStore.saveAnswer(
+    basicHealthCheckItemId(key),
+    value === 'pass' ? 'normal' : 'attention',
+    NOTE_BY_KEY.has(key) ? notes[key] || undefined : undefined,
+  )
+}
+
+// Tap/long-press gesture + state (useTapConfirmItem.ts — shared with
+// BuyerDisclosureCheck.vue's own dynamic item list).
+const {
+  state,
+  pickerKey,
+  handlePointerDown,
+  handlePointerUpOrLeave,
+  handleClick,
+  pick,
+  closePicker,
+} = useTapConfirmItem(saveResult)
+
+// Hydrate from whatever this verification already has saved (revisiting the
+// tab, or resuming a draft) — without this, reopening the tab would silently
+// wipe every prior tap back to 尚未確認 even though it's already persisted.
+// Skipped entirely in previewMode (HealthCheckAnnotationPreview.vue), which
+// has no real verification/answers to read.
+if (!props.previewMode) {
+  for (const key of ALL_ITEM_KEYS) {
+    const existing = verificationStore.answers[basicHealthCheckItemId(key)]
+    if (!existing) continue
+    if (existing.result === 'normal') state[key] = 'pass'
+    else if (existing.result === 'attention') state[key] = 'fail'
+    if (NOTE_BY_KEY.has(key) && existing.note) notes[key] = existing.note
+  }
+}
+
+/** Re-saves 其他改裝品's note against whatever result is already on file —
+ *  called on textarea blur rather than every keystroke. No-op while
+ *  unanswered (the textarea itself is hidden until then — see the
+ *  note-card's v-if below). */
+function saveNote(key: string): void {
+  const current = state[key]
+  if (current) saveResult(key, current)
+}
 
 const PAGE_COUNT = 2
 const currentPage = ref<1 | 2>(1)
@@ -171,50 +243,6 @@ function finish(): void {
   finished.value = true
 }
 
-// ---------- long-press to choose 打勾／打叉（像 FB 長按讚可以選表情符號）----------
-const LONG_PRESS_MS = 450
-let longPressTimer: ReturnType<typeof setTimeout> | undefined
-let longPressTriggered = false
-/** Which item's 打勾/打叉 picker is currently open (anchored over its marker
- *  on the photo), or null when closed. */
-const pickerKey = ref<string | null>(null)
-
-function clearLongPressTimer(): void {
-  if (longPressTimer) {
-    clearTimeout(longPressTimer)
-    longPressTimer = undefined
-  }
-}
-function handlePointerDown(key: string): void {
-  longPressTriggered = false
-  clearLongPressTimer()
-  longPressTimer = setTimeout(() => {
-    longPressTriggered = true
-    pickerKey.value = key
-    navigator.vibrate?.(15)
-  }, LONG_PRESS_MS)
-}
-function handlePointerUpOrLeave(): void {
-  clearLongPressTimer()
-}
-/** Quick tap (short press, no picker shown): first tap marks 打勾／正常
- *  directly — the common case, same idea as FB's default "讚". Tapping
- *  again clears it back to unanswered. Long-press (handlePointerDown above)
- *  is the only way to explicitly pick 打叉／異常. */
-function handleClick(key: string): void {
-  if (longPressTriggered) {
-    longPressTriggered = false
-    return
-  }
-  state[key] = state[key] === undefined ? 'pass' : undefined
-}
-function pick(key: string, value: 'pass' | 'fail'): void {
-  state[key] = value
-  pickerKey.value = null
-}
-function closePicker(): void {
-  pickerKey.value = null
-}
 const pickerAnchor = computed<[number, number]>(() => {
   const found = pageItems.value.find((it) => it.key === pickerKey.value)
   return found ? found.anchor : [50, 50]
@@ -223,7 +251,13 @@ const pickerAnchor = computed<[number, number]>(() => {
 
 <template>
   <div>
-    <AppHeader title="基本12項健檢" :back="!previewMode" custom-back @back="emit('back')" />
+    <AppHeader
+      v-if="!embedded"
+      title="基本12項健檢"
+      :back="!previewMode"
+      custom-back
+      @back="emit('back')"
+    />
 
     <div v-if="loadingModel" class="content">
       <p class="intro">載入中...</p>
@@ -336,6 +370,7 @@ const pickerAnchor = computed<[number, number]>(() => {
                 <textarea
                   v-model="notes[it.key]"
                   :placeholder="NOTE_BY_KEY.get(it.key)!.placeholder"
+                  @blur="saveNote(it.key)"
                 />
               </div>
             </Transition>
@@ -362,7 +397,7 @@ const pickerAnchor = computed<[number, number]>(() => {
       </PrimaryButton>
       <template v-else>
         <p class="done-message">已完成基本12項健檢 ✓</p>
-        <PrimaryButton block @click="emit('back')">回到驗車進度</PrimaryButton>
+        <PrimaryButton block @click="emit('advance')">下一步</PrimaryButton>
       </template>
     </div>
   </div>
@@ -725,7 +760,9 @@ const pickerAnchor = computed<[number, number]>(() => {
   right: 0;
   bottom: 0;
   padding: var(--space-md);
-  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--space-md) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))
+  );
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   display: flex;

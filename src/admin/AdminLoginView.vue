@@ -31,21 +31,28 @@ async function handleSubmit(): Promise<void> {
     <form class="admin-login-card" @submit.prevent="handleSubmit">
       <div class="admin-login-brand">
         <div class="admin-brand-mark">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            width="15"
-            height="15"
-          >
-            <path d="M12 2 4 5.5v6c0 5 3.4 9.2 8 10.5 4.6-1.3 8-5.5 8-10.5v-6z"></path>
+          <svg viewBox="0 0 618 618">
+            <rect width="618" height="618" fill="#2C4BEA" />
+            <g transform="translate(-28,-10)">
+              <path
+                d="M295.2,327.7 A70,70 0 1 0 308.6,430"
+                fill="none"
+                stroke="#FFFFFF"
+                stroke-width="50"
+              />
+              <path
+                d="M155,158 H380 C437,158 482,200 482,252 C482,300 445,338 395,345 L520,472 L448,474 L265,380 L340,282 H378 C398,282 410,268 410,252 C410,236 398,220 378,220 H208 Z"
+                fill="#FFFFFF"
+                stroke="#2C4BEA"
+                stroke-width="14"
+                stroke-linejoin="miter"
+                paint-order="stroke"
+              />
+            </g>
           </svg>
         </div>
         <div>
-          <div class="admin-login-name">MotoVerify</div>
+          <div class="admin-login-name">RiDE78</div>
           <div class="admin-login-sub">營運後台</div>
         </div>
       </div>

@@ -94,6 +94,17 @@ export async function callGeminiJson<T>(options: GeminiJsonCallOptions): Promise
     mime_type?: string
   }
   const input: InteractionContentPart[] = [{ type: 'text', text: options.promptText }]
+  if ((options.images?.length ?? 0) + (options.audio?.length ?? 0) > 0) {
+    // Every evidenceIds/problematicEvidenceIds citation is checked verbatim
+    // against the real id server-side (validator.ts) — an unrequested
+    // paraphrase, truncation, or appended annotation is rejected outright,
+    // so the model must be told explicitly to copy the marker rather than
+    // just seeing an opaquely-named schema field and guessing.
+    input.push({
+      type: 'text',
+      text: 'Each EVIDENCE_ID=... marker below is the exact identifier for the media that immediately follows it. When citing that media in evidenceIds or problematicEvidenceIds, copy the id after EVIDENCE_ID= exactly, character for character — never translate, abbreviate, reformat, or append anything to it.',
+    })
+  }
   for (const image of options.images ?? []) {
     input.push({ type: 'text', text: `EVIDENCE_ID=${image.evidenceId}; VIEW=${image.view}` })
     input.push({ type: 'image', data: image.base64, mime_type: image.mimeType })

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "232449828934",
+    "project_id": "motorcycle-verification",
+    "storage_bucket": "motorcycle-verification.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:232449828934:android:cae09568ba5195b9bb8247",
+        "android_client_info": {
+          "package_name": "com.motorcycleverify.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "232449828934-rsr64a9933nsm8bk3h3o3bpjuasil1h1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.motorcycleverify.app",
+            "certificate_hash": "29a84c650dbbaf65429f685f2ad0fe9fd5e741bc"
+          }
+        },
+        {
+          "client_id": "232449828934-ochoqn0u1n7d392598pf6iuqc2oqtvn1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1jS6uXnUu-jQcpKnTu1aQKFaH4uBCpXg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "232449828934-ochoqn0u1n7d392598pf6iuqc2oqtvn1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

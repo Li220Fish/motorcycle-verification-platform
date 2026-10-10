@@ -74,7 +74,7 @@ watch(() => props.message.id, loadRichContent)
       >
         <span class="rich-icon"><ShieldCheck :size="18" /></span>
         <span class="rich-body">
-          <span class="rich-title">MotoVerify 驗證報告</span>
+          <span class="rich-title">RiDE78 驗證報告</span>
           <span class="rich-sub">{{
             verification?.status === 'completed' ? '已完成 · 點擊查看' : '點擊查看報告'
           }}</span>
@@ -141,8 +141,12 @@ watch(() => props.message.id, loadRichContent)
 .image-bubble img {
   max-width: 220px;
   max-height: 260px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   border-radius: 12px;
   display: block;
+  background: var(--color-background);
 }
 
 .rich-card {

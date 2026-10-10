@@ -1,0 +1,32 @@
+{
+  "plateNumber": {
+    "text": null,
+    "raw_text": "4",
+    "confidence": 0.07
+  },
+  "engineNumber": {
+    "text": "UR-301092",
+    "raw_text": "UR-301092",
+    "confidence": 0.85
+  },
+  "chassisNumber": {
+    "text": "AAE7SEPWWA",
+    "raw_text": "aa =e 7= Sep > Ww) ; a —",
+    "confidence": 0.23
+  },
+  "color": {
+    "text": null,
+    "raw_text": "",
+    "confidence": 0.0
+  },
+  "displacement": {
+    "text": "147",
+    "raw_text": "147",
+    "confidence": 0.95
+  },
+  "manufactureDate": {
+    "text": "1993.03",
+    "raw_text": "1993.03",
+    "confidence": 0.31
+  }
+}

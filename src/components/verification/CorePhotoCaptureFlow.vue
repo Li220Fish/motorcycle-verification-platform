@@ -14,14 +14,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Check, ChevronLeft, Flashlight, MessageSquare, X } from 'lucide-vue-next'
 
-import {
-  liveCameraService,
-  type CameraFacing,
-  type TorchCapabilities,
-  type TorchConstraintSet,
-} from '@/services/media/live-camera.service'
+import { liveCameraService, type CameraFacing } from '@/services/media/live-camera.service'
 import { storageService } from '@/services/firebase/storage.service'
-import { useUploadQueueStore } from '@/stores/upload-queue.store'
+import { imageCompressionService } from '@/services/media/image-compression.service'
+import {
+  photoQualityService,
+  type PhotoQualityReport,
+} from '@/services/media/photo-quality.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
@@ -29,7 +28,6 @@ const props = defineProps<{ verificationId: string; initialItemId?: string }>()
 defineEmits<{ advance: []; back: [] }>()
 
 const verificationStore = useVerificationStore()
-const uploadQueueStore = useUploadQueueStore()
 
 // 引擎底部通常要把手機塞到車身底下拍，用前鏡頭（螢幕同側）比較好對準——目前
 // 唯一需要跟其他 6 項核心照片（後鏡頭）不同鏡頭的項目。Hardcoded to this one
@@ -57,10 +55,20 @@ function firstEvidenceFor(itemId: string): VerificationEvidence | undefined {
   return verificationStore.evidenceByItem[itemId]?.[0]
 }
 
-// Older evidence (loaded from Firestore across sessions, no localUri left)
-// only has `remoteUrl` — a Storage object PATH, not a directly-usable URL
-// (see storage.service.ts's uploadPrivateFile doc comment) — resolve it the
-// same way EvidencePreview.vue already does for its own thumbnail tiles.
+// `localUri` is a `URL.createObjectURL()` blob: reference — only valid
+// within the browser session/page-load that created it, but it's still
+// persisted on the evidence doc forever (never cleared post-upload). Once
+// the app restarts (even a normal force-close + reopen, not just a fresh
+// install), that blob is gone and the <img> silently fails to load — this
+// was found live: a core photo captured in an earlier session showed no
+// thumbnail on resume. `remoteUrl` is the one value that's actually durable
+// across sessions — a Storage object PATH, not a directly-usable URL (see
+// storage.service.ts's uploadPrivateFile doc comment) — resolve it
+// regardless of whether `localUri` is present, the same way
+// EvidencePreview.vue already does for its own thumbnail tiles.
+// thumbnailFor() below still prefers the resolved URL once available but
+// falls back to `localUri` for the brief window right after a fresh
+// capture in the CURRENT session, before this resolve completes.
 const resolvedThumbUrls = reactive<Record<string, string>>({})
 watch(
   () => verificationStore.evidenceByItem,
@@ -70,7 +78,6 @@ watch(
         if (
           evidence.type === 'photo' &&
           evidence.remoteUrl &&
-          !evidence.localUri &&
           !(evidence.id in resolvedThumbUrls)
         ) {
           storageService
@@ -131,18 +138,14 @@ const flashing = ref(false)
 const torchSupported = ref(false)
 const torchOn = ref(false)
 const currentFacingMode = ref<CameraFacing>('environment')
-
-function checkTorchSupport(track: MediaStreamTrack): boolean {
-  const capabilities = track.getCapabilities?.() as TorchCapabilities | undefined
-  return !!capabilities?.torch
-}
+/** True when this device's camera stream is below the resolution the analysis
+ *  pipeline needs — shown once per stream, not per photo. */
+const lowResolutionCamera = ref(false)
 
 async function setTorch(on: boolean): Promise<void> {
-  const track = liveCameraService.getVideoTrack()
-  if (!track || !torchSupported.value) return
+  if (!torchSupported.value) return
   try {
-    const constraint: TorchConstraintSet = { torch: on }
-    await track.applyConstraints({ advanced: [constraint] })
+    await liveCameraService.setTorch(on)
     torchOn.value = on
   } catch (error) {
     console.error('[CorePhotoCaptureFlow] torch toggle failed:', error)
@@ -158,11 +161,15 @@ async function startCamera(facingMode: CameraFacing = currentFacingMode.value): 
     phase.value = 'live'
     await nextTick()
     if (previewEl.value) previewEl.value.srcObject = stream
-    const track = liveCameraService.getVideoTrack()
     torchOn.value = false
-    torchSupported.value = !!track && checkTorchSupport(track)
+    torchSupported.value = await liveCameraService.isTorchSupported()
     // 進入相機時預設閃光燈（手電筒）常亮，不用每次手動點。
     if (torchSupported.value) void setTorch(true)
+    // Checked once per stream rather than per photo: this is a property of
+    // the camera, so warning on every shutter press would just be noise.
+    lowResolutionCamera.value = photoQualityService.isCaptureResolutionLow(
+      liveCameraService.getAchievedResolution(),
+    )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : ''
     phase.value = 'denied'
@@ -189,36 +196,39 @@ function sleep(ms: number): Promise<void> {
 // 照到拍攝物再擷取影格，不然拍下的畫面根本還沒變亮，這段白屏就只是好看而已。
 const FRONT_FLASH_MS = 250
 const frontFlashActive = ref(false)
+const uploading = ref(false)
+const uploadErrorMessage = ref('')
 
-async function capturePhoto(): Promise<void> {
-  if (phase.value !== 'live' || !previewEl.value || !selectedItemId.value) return
-  const targetItemId = selectedItemId.value
-  const video = previewEl.value
+/** A shot the quality gate judged unusable, held until the user chooses to
+ *  retake it or keep it anyway. Never auto-discarded — see capturePhoto(). */
+const pendingReview = ref<{ blob: Blob; quality: PhotoQualityReport; itemId: string } | null>(null)
+/** Non-blocking note for a shot that was accepted but is not great. */
+const qualityWarning = ref('')
 
-  const usingFrontCamera = currentFacingMode.value === 'user'
-  if (usingFrontCamera) {
-    frontFlashActive.value = true
-    await sleep(FRONT_FLASH_MS)
-  }
-
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    frontFlashActive.value = false
-    return
-  }
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', 0.92)
-  })
-  frontFlashActive.value = false
-  if (!blob) return
-  // The front camera's sustained white screen already reads as its own
-  // flash — the normal brief blink is for the back camera's physical torch
-  // shots and would just look like a redundant double-flash here.
-  if (!usingFrontCamera) flashShutter()
+/**
+ * Uploads the frame, records the evidence doc, and advances the selection.
+ *
+ * The measured quality metrics ride along in `metadata`, including the
+ * resolution the camera actually delivered. That detail is not cosmetic: a
+ * real verification's Core Vision photos were all stored at 480x640 — far
+ * below what imageUpload.config.ts intends — and nothing in the system could
+ * tell, because no capture ever recorded what it got. Persisting it means the
+ * next occurrence is visible in the data instead of only findable by
+ * downloading a photo and checking its dimensions by hand.
+ */
+async function uploadCapturedPhoto(
+  blob: Blob,
+  quality: PhotoQualityReport,
+  targetItemId: string,
+): Promise<void> {
+  uploadErrorMessage.value = ''
+  const compressed = await imageCompressionService.compressImage(blob)
+  const remoteUrl = await storageService.uploadEvidenceFile(
+    props.verificationId,
+    targetItemId,
+    compressed.blob,
+    'jpg',
+  )
 
   const evidenceId = crypto.randomUUID()
   const evidence: VerificationEvidence = {
@@ -227,9 +237,34 @@ async function capturePhoto(): Promise<void> {
     itemId: targetItemId,
     type: 'photo',
     localUri: URL.createObjectURL(blob),
+    remoteUrl,
     createdAt: Date.now(),
     captureSource: 'camera',
     captureTimestamp: Date.now(),
+    metadata: {
+      captureQuality: {
+        level: quality.level,
+        issues: quality.issues,
+        ...quality.metrics,
+        storedWidth: compressed.width,
+        storedHeight: compressed.height,
+        cameraResolution: liveCameraService.getAchievedResolution(),
+        facingMode: currentFacingMode.value,
+        // Recorded to diagnose a known open defect: two of six Core Vision
+        // photos in a real verification came out rotated 90 degrees, and
+        // both were the ones framed in landscape. A getUserMedia frame
+        // carries no EXIF, so whether the fix belongs here depends on
+        // whether the track rotates with the device or stays in the sensor's
+        // own orientation — which this pair of values answers directly, and
+        // which cannot be determined without a real device. Until then no
+        // rotation is applied, because guessing wrong would corrupt the four
+        // photos that currently come out correct.
+        screenOrientationAngle:
+          typeof screen !== 'undefined' ? (screen.orientation?.angle ?? null) : null,
+        screenOrientationType:
+          typeof screen !== 'undefined' ? (screen.orientation?.type ?? null) : null,
+      },
+    },
   }
   await verificationStore.addEvidence(evidence)
   // Retaking an already-captured item replaces it in place — only ever one
@@ -237,15 +272,12 @@ async function capturePhoto(): Promise<void> {
   // AFTER the new evidence is safely recorded (never before), so a retake
   // never leaves the item with zero evidence even for a moment.
   void verificationStore.discardOtherEvidence(targetItemId, evidenceId)
-  void uploadQueueStore.enqueue({
-    localId: evidenceId,
-    verificationId: props.verificationId,
-    itemId: targetItemId,
-    type: 'photo',
-    blob,
-    extension: 'jpg',
-  })
-  void verificationStore.saveAnswer(targetItemId, 'normal')
+  // 'unsure' (not 'normal') — placeholder until Core Vision's real verdict
+  // overwrites it. A "normal" default made an item whose analysis never
+  // actually ran (never triggered, or failed) look identical to a
+  // confirmed-normal result, both in the mobile report and in /admin's
+  // "人工判定項目，無 AI 回應" fallback.
+  void verificationStore.saveAnswer(targetItemId, 'unsure')
 
   // Camera stays open — just move the selection on to whatever's still
   // missing, if anything. Once every item has a photo the 完成 button
@@ -259,6 +291,107 @@ async function capturePhoto(): Promise<void> {
   // switch — so it could silently get shot with the wrong camera.
   const next = firstUncapturedItemId()
   if (next) selectItem(next)
+}
+
+/**
+ * Uploads to Firebase Storage BEFORE writing the evidence doc, and only
+ * writes it (and advances to the next item) on success — matching
+ * EngineInspectionFlow.vue's audio capture. A prior "local-first" version
+ * wrote the evidence doc immediately with only a device-local blob URI and
+ * queued the actual Storage upload in the background (upload-queue.store.ts,
+ * now removed for photos) — that queue's state lived entirely on the one
+ * device that captured it, so anything that disrupted it (app killed, a
+ * fresh APK install wiping local storage, a network drop past the retry
+ * window) permanently orphaned the evidence doc with no remoteUrl and no way
+ * to notice or recover server-side. Found via a real admin report of "can't
+ * view any core photos" — every core photo item across several verifications
+ * had exactly this shape. Trade-off: capturing the next item now waits for
+ * the previous one's upload, same as this app already does for audio/video.
+ */
+async function capturePhoto(): Promise<void> {
+  if (phase.value !== 'live' || !previewEl.value || !selectedItemId.value || uploading.value) {
+    return
+  }
+  // Set synchronously, before any `await` — the shutter button's :disabled
+  // only reflects `uploading` once Vue re-renders, which is too late to stop
+  // a fast double-tap from also passing the guard above (canvas.toBlob below
+  // is itself async, widening the window). Without this, two taps on the
+  // same item could each create their own evidence doc and race calling
+  // discardOtherEvidence, sometimes leaving the item with zero photos
+  // instead of exactly one.
+  uploading.value = true
+  const targetItemId = selectedItemId.value
+  const video = previewEl.value
+
+  try {
+    const usingFrontCamera = currentFacingMode.value === 'user'
+    if (usingFrontCamera) {
+      frontFlashActive.value = true
+      await sleep(FRONT_FLASH_MS)
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      frontFlashActive.value = false
+      return
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.92)
+    })
+    frontFlashActive.value = false
+    if (!blob) return
+    // The front camera's sustained white screen already reads as its own
+    // flash — the normal brief blink is for the back camera's physical torch
+    // shots and would just look like a redundant double-flash here.
+    if (!usingFrontCamera) flashShutter()
+
+    // Quality is judged BEFORE the upload, not after: underexposure and glare
+    // destroy detail that no later processing recovers, so the only moment
+    // this is fixable is while the rider is still in front of the bike. A
+    // 'reject' parks the photo for the user to decide on rather than
+    // discarding it — the gate is uncalibrated (see photoQuality.config.ts),
+    // so it must never be able to throw away a shot on its own.
+    const quality = await photoQualityService.assess(blob)
+    if (quality.level === 'reject') {
+      pendingReview.value = { blob, quality, itemId: targetItemId }
+      return
+    }
+    qualityWarning.value = quality.level === 'warn' ? quality.message : ''
+    await uploadCapturedPhoto(blob, quality, targetItemId)
+  } catch (error) {
+    uploadErrorMessage.value =
+      error instanceof Error ? error.message : '上傳失敗，請重新拍攝這張照片'
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** Keeps the photo the quality gate flagged, as captured. */
+async function keepPendingPhoto(): Promise<void> {
+  const pending = pendingReview.value
+  if (!pending) return
+  pendingReview.value = null
+  uploading.value = true
+  qualityWarning.value = pending.quality.message
+  try {
+    await uploadCapturedPhoto(pending.blob, pending.quality, pending.itemId)
+  } catch (error) {
+    uploadErrorMessage.value =
+      error instanceof Error ? error.message : '上傳失敗，請重新拍攝這張照片'
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** Discards it and leaves the same item selected so the next shutter tap
+ *  retakes it rather than advancing. */
+function retakePendingPhoto(): void {
+  pendingReview.value = null
+  qualityWarning.value = ''
 }
 
 // 長按底下的小照片可以幫該項目加備註——用 pointerdown/up 手動計時，而不是
@@ -357,12 +490,19 @@ onBeforeUnmount(() => {
         </button>
         <div class="top-titles">
           <p class="top-title">{{ selectedItem?.title ?? '核心照片' }}</p>
-          <p class="top-subtitle">請讓{{ selectedItem?.title }}完整入框</p>
+          <p v-if="uploading" class="top-subtitle">上傳中...</p>
+          <p v-else class="top-subtitle">請讓{{ selectedItem?.title }}完整入框</p>
         </div>
         <button v-if="allCaptured" class="done-btn" @click="$emit('advance')">
           <Check :size="16" /> 完成
         </button>
       </div>
+
+      <p v-if="uploadErrorMessage" class="upload-error-banner">{{ uploadErrorMessage }}</p>
+      <p v-else-if="qualityWarning" class="quality-warn-banner">{{ qualityWarning }}，建議重拍</p>
+      <p v-else-if="lowResolutionCamera" class="quality-warn-banner">
+        這台裝置的相機解析度偏低，判讀精細度會受影響
+      </p>
 
       <div class="bottom-overlay">
         <div class="filmstrip">
@@ -402,13 +542,29 @@ onBeforeUnmount(() => {
           </button>
           <button
             class="shutter-btn"
-            :disabled="phase !== 'live'"
+            :disabled="phase !== 'live' || uploading || !!pendingReview"
             aria-label="拍照"
             @click="capturePhoto"
           >
             <span class="shutter-inner" />
           </button>
           <div class="shutter-spacer"></div>
+        </div>
+      </div>
+
+      <div v-if="pendingReview" class="note-overlay">
+        <div class="note-card">
+          <div class="note-header">
+            <p class="note-title">這張可能無法判讀</p>
+          </div>
+          <p class="quality-reason">{{ pendingReview.quality.message }}</p>
+          <p class="quality-hint">
+            光線不足或失焦造成的細節損失沒辦法事後補救，重拍一張會讓檢測結果可靠很多。
+          </p>
+          <div class="note-actions">
+            <button class="note-cancel-btn" @click="keepPendingPhoto">仍要使用</button>
+            <button class="note-save-btn" @click="retakePendingPhoto">重拍</button>
+          </div>
         </div>
       </div>
 
@@ -521,7 +677,8 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   right: 0;
-  padding: calc(var(--space-md) + env(safe-area-inset-top)) var(--space-md) var(--space-lg);
+  padding: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)))
+    var(--space-md) var(--space-lg);
   background: linear-gradient(rgba(0, 0, 0, 0.55), transparent);
   display: flex;
   align-items: flex-start;
@@ -560,6 +717,53 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+.upload-error-banner {
+  position: absolute;
+  top: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)) + 52px);
+  left: var(--space-md);
+  right: var(--space-md);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  z-index: 5;
+}
+
+.quality-warn-banner {
+  position: absolute;
+  top: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)) + 52px);
+  left: var(--space-md);
+  right: var(--space-md);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--color-warning, #e0a106);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  z-index: 5;
+}
+
+.quality-reason {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-danger);
+}
+
+.quality-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
 .done-btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -579,7 +783,8 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: var(--space-md) var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom));
+  padding: var(--space-md) var(--space-md)
+    calc(var(--space-lg) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
   display: flex;
   flex-direction: column;
