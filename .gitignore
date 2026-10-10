@@ -42,6 +42,9 @@ playwright-report/
 # only grant camera access to secure origins, even on the LAN
 capture-app/.cert/
 
+# capture-app/ build output (its own Hosting site, see capture-app/firebase.json)
+capture-app/dist/
+
 # capture-app/ios xcodebuild output
 capture-app/ios/build/
 capture-app/ios/RiDECapture.xcodeproj/xcuserdata/

@@ -54,7 +54,7 @@ struct CaptureWebView: UIViewRepresentable {
             type: WKMediaCaptureType,
             decisionHandler: @escaping (WKPermissionDecision) -> Void
         ) {
-            decisionHandler(origin.host == "motorcycle-verification--tools-4olk1pkz.web.app" ? .grant : .prompt)
+            decisionHandler(origin.host == "motorcycle-verification-capture.web.app" ? .grant : .prompt)
         }
 
         // DeviceMotionEvent.requestPermission() — drives the level line.
@@ -65,7 +65,7 @@ struct CaptureWebView: UIViewRepresentable {
             initiatedByFrame frame: WKFrameInfo,
             decisionHandler: @escaping (WKPermissionDecision) -> Void
         ) {
-            decisionHandler(origin.host == "motorcycle-verification--tools-4olk1pkz.web.app" ? .grant : .prompt)
+            decisionHandler(origin.host == "motorcycle-verification-capture.web.app" ? .grant : .prompt)
         }
 
         // window.confirm() — used before leaving with photos still uploading.

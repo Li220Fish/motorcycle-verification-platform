@@ -1,0 +1,9 @@
+{
+  "hosting": {
+    "site": "motorcycle-verification-capture",
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [{ "source": "/", "destination": "/capture/", "type": 302 }],
+    "rewrites": [{ "source": "/capture/**", "destination": "/capture/index.html" }]
+  }
+}
