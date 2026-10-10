@@ -134,8 +134,14 @@ watch(() => props.message.id, loadRichContent)
   max-width: 40vw;
 }
 
-.image-bubble {
+/* `.bubble.image-bubble` (not just `.image-bubble`) to out-specificity
+   `.bubble.mine`'s solid blue fill — otherwise the 4px padding below shows
+   that color through as an unintended frame around the photo, worst on
+   `mine` (bright blue) since `them`'s background happens to be close to the
+   page background already. */
+.bubble.image-bubble {
   padding: 4px;
+  background: transparent;
 }
 
 .image-bubble img {
