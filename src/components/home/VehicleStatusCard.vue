@@ -2,6 +2,7 @@
 import { Bike } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useI18n } from '@/composables/useI18n'
 import type { Vehicle } from '@/types/vehicle'
 
 // `vehicle: null` renders the empty-garage state — this card IS the Home
@@ -10,28 +11,24 @@ import type { Vehicle } from '@/types/vehicle'
 const props = defineProps<{
   vehicle: Vehicle | null
   statusLabel?: string
-  vehicleCount?: number
   /** No longer stored on the Vehicle doc — computed by the caller from
    * fuelLogs (see HomeContent.vue), same calc VehicleDetailView.vue uses. */
   avgFuelConsumption?: number | null
 }>()
 
 const router = useRouter()
+const { t } = useI18n()
 
 // The whole card is the tap target now (no separate "查看車輛" button) —
-// one vehicle opens straight to its detail, multiple route to the full
-// garage list to pick which one (same idea as tapping into Marketplace to
-// choose a listing), and no vehicle yet starts the create flow.
+// always routes to the full garage list (/vehicles), same for one vehicle
+// or many, and no vehicle yet starts the create flow from there too. Used
+// to jump straight to the single vehicle's own detail page when there was
+// only one — dropped (2026-10) because that skipped past /vehicles
+// entirely, which is where the "+" button's 新增車輛/車輛轉移 menu lives;
+// an owner with exactly one vehicle had no way to reach 車輛轉移 to redeem
+// an invite code.
 function handleClick(): void {
-  if (!props.vehicle) {
-    router.push('/vehicles')
-    return
-  }
-  if ((props.vehicleCount ?? 1) > 1) {
-    router.push('/vehicles')
-  } else {
-    router.push(`/vehicles/${props.vehicle.id}`)
-  }
+  router.push('/vehicles')
 }
 </script>
 
@@ -49,7 +46,7 @@ function handleClick(): void {
     @click="handleClick"
   >
     <Bike v-if="!props.vehicle?.photos[0]" class="bg-icon" :size="120" />
-    <p class="label">我的車輛</p>
+    <p class="label">{{ t('home', 'myVehicle') }}</p>
     <template v-if="props.vehicle">
       <p class="title">
         {{ props.vehicle.manufactureYear ? `${props.vehicle.manufactureYear} ` : ''
@@ -58,17 +55,17 @@ function handleClick(): void {
       <div class="stats-row">
         <div class="stat">
           <span class="stat-value">{{ props.vehicle.mileage?.toLocaleString() ?? '—' }}</span>
-          <span class="stat-label">總里程 km</span>
+          <span class="stat-label">{{ t('home', 'totalMileage') }} km</span>
         </div>
         <div class="stat">
           <span class="stat-value">{{ props.avgFuelConsumption ?? '—' }}</span>
-          <span class="stat-label">平均油耗</span>
+          <span class="stat-label">{{ t('home', 'avgFuelEfficiency') }}</span>
         </div>
       </div>
     </template>
     <template v-else>
-      <p class="title">尚未新增車輛</p>
-      <p class="empty-desc">新增第一台車，開始記錄車況與驗證紀錄。</p>
+      <p class="title">{{ t('home', 'noVehicleTitle') }}</p>
+      <p class="empty-desc">{{ t('home', 'noVehicleDesc') }}</p>
     </template>
   </button>
 </template>

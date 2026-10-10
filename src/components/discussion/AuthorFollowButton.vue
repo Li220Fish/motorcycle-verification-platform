@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 
+import { useI18n } from '@/composables/useI18n'
 import { discussionService } from '@/services/discussion/discussion.service'
 
 const props = defineProps<{ currentUid: string; targetUid: string }>()
+const { t } = useI18n()
 
 const following = ref(false)
 const loaded = ref(false)
@@ -35,7 +37,7 @@ watch(() => props.targetUid, load)
     :class="{ active: following }"
     @click="toggle"
   >
-    {{ following ? '追蹤中' : '＋ 追蹤' }}
+    {{ following ? t('discussionPost', 'following') : t('discussionPost', 'follow') }}
   </button>
 </template>
 

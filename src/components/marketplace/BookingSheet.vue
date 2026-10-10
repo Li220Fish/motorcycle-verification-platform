@@ -4,6 +4,9 @@ import { X } from 'lucide-vue-next'
 
 import MonthCalendar from './MonthCalendar.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -23,6 +26,12 @@ const emit = defineEmits<{ close: []; submit: [{ scheduledAt: number }] }>()
 
 const selectedDate = ref<string | null>(null)
 const selectedTime = ref<string | null>(null)
+/** Free-pick time input, only used when the seller has no configured slots
+ *  at all (availableDates.length === 0) — see the template's v-else branch.
+ *  Kept separate from `selectedTime` (which is constrained to one of the
+ *  seller's own slot buttons) since this one comes straight from a native
+ *  <input type="time">, not a slot-grid button click. */
+const freeTime = ref('')
 
 // Reset each time the sheet reopens, so a previous booking's picks don't
 // linger into the next one.
@@ -32,6 +41,7 @@ watch(
     if (open) {
       selectedDate.value = null
       selectedTime.value = null
+      freeTime.value = ''
     }
   },
 )
@@ -48,7 +58,7 @@ function pad(value: number): string {
 const formattedSelectedDate = computed(() => {
   if (!selectedDate.value) return ''
   const [, month, day] = selectedDate.value.split('-').map(Number)
-  return `${month}月${day}日`
+  return t('booking', 'monthDay', { month, day })
 })
 
 const bookedTimesForSelectedDate = computed(() => {
@@ -73,6 +83,12 @@ function handleSubmit(): void {
   const scheduledAt = new Date(`${selectedDate.value}T${selectedTime.value}`).getTime()
   emit('submit', { scheduledAt })
 }
+
+function handleFreeSubmit(): void {
+  if (!selectedDate.value || !freeTime.value) return
+  const scheduledAt = new Date(`${selectedDate.value}T${freeTime.value}`).getTime()
+  emit('submit', { scheduledAt })
+}
 </script>
 
 <template>
@@ -81,15 +97,33 @@ function handleSubmit(): void {
       <div class="sheet">
         <div class="handle" />
         <div class="sheet-head">
-          <h3>選擇賞車時段</h3>
-          <button class="close-btn" aria-label="關閉" @click="$emit('close')">
+          <h3>{{ t('booking', 'title') }}</h3>
+          <button class="close-btn" :aria-label="t('booking', 'close')" @click="$emit('close')">
             <X :size="16" />
           </button>
         </div>
 
-        <p v-if="availableDates.length === 0" class="empty-hint">
-          賣家尚未開放預約時段，請透過「聊聊」直接詢問賞車時間。
-        </p>
+        <template v-if="availableDates.length === 0">
+          <p class="empty-hint">{{ t('booking', 'noSlotsHint') }}</p>
+          <MonthCalendar
+            :highlighted-dates="[]"
+            :selected-date="selectedDate"
+            @select-date="handleSelectDate"
+          />
+
+          <template v-if="selectedDate">
+            <p class="slots-title">{{ formattedSelectedDate }}・{{ t('booking', 'chooseTime') }}</p>
+            <input v-model="freeTime" type="time" class="free-time-input" />
+          </template>
+
+          <PrimaryButton
+            block
+            :disabled="!selectedDate || !freeTime || submitting"
+            @click="handleFreeSubmit"
+          >
+            {{ submitting ? t('booking', 'sending') : t('booking', 'submitRequest') }}
+          </PrimaryButton>
+        </template>
         <template v-else>
           <MonthCalendar
             :highlighted-dates="availableDates"
@@ -98,7 +132,9 @@ function handleSubmit(): void {
           />
 
           <template v-if="selectedDate">
-            <p class="slots-title">{{ formattedSelectedDate }}・可預約時段</p>
+            <p class="slots-title">
+              {{ formattedSelectedDate }}・{{ t('booking', 'availableSlots') }}
+            </p>
             <div v-if="availableTimesForDate.length > 0" class="slot-grid">
               <button
                 v-for="time in availableTimesForDate"
@@ -110,7 +146,7 @@ function handleSubmit(): void {
                 {{ time }}
               </button>
             </div>
-            <p v-else class="empty-hint">這天的時段都被預約了，換一天試試。</p>
+            <p v-else class="empty-hint">{{ t('booking', 'noSlotsThisDay') }}</p>
           </template>
 
           <PrimaryButton
@@ -118,7 +154,7 @@ function handleSubmit(): void {
             :disabled="!selectedDate || !selectedTime || submitting"
             @click="handleSubmit"
           >
-            {{ submitting ? '送出中...' : '確認預約' }}
+            {{ submitting ? t('booking', 'sending') : t('booking', 'confirmBooking') }}
           </PrimaryButton>
         </template>
       </div>
@@ -142,7 +178,7 @@ function handleSubmit(): void {
   overflow-y: auto;
   background: var(--color-surface);
   border-radius: 20px 20px 0 0;
-  padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+  padding: 14px 18px calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -215,5 +251,16 @@ function handleSubmit(): void {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
+}
+
+.free-time-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-size: 15px;
 }
 </style>

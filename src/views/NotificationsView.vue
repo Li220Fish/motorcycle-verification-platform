@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import {
+  ArrowRightLeft,
   Bell,
   Calendar,
   CalendarCheck,
@@ -17,12 +18,14 @@ import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useNotificationStore } from '@/stores/notification.store'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { AppNotification, NotificationType } from '@/types/notification'
 
 const router = useRouter()
 const notificationStore = useNotificationStore()
+const { t } = useI18n()
 
 const ICONS: Record<NotificationType, LucideIcon> = {
   chat_message: MessageCircle,
@@ -37,6 +40,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   discussion_comment: MessageCircle,
   discussion_like: Heart,
   discussion_reply: MessageCircle,
+  vehicle_transferred: ArrowRightLeft,
 }
 
 interface DisplayGroup {
@@ -88,7 +92,7 @@ async function handleMarkAllRead(): Promise<void> {
 
 async function handleClearAll(): Promise<void> {
   if (groups.value.length === 0) return
-  if (!window.confirm('清除全部通知？此操作無法復原。')) return
+  if (!window.confirm(t('notificationsList', 'confirmClearAll'))) return
   await notificationStore.clearAll()
 }
 
@@ -149,7 +153,7 @@ async function handleDelete(group: DisplayGroup): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="通知" back>
+    <AppHeader :title="t('notificationsList', 'title')" back>
       <template #right>
         <div class="header-actions">
           <button
@@ -157,26 +161,32 @@ async function handleDelete(group: DisplayGroup): Promise<void> {
             class="text-btn"
             @click="handleMarkAllRead"
           >
-            全部已讀
+            {{ t('notificationsList', 'markAllRead') }}
           </button>
           <button v-if="groups.length > 0" class="text-btn danger" @click="handleClearAll">
-            清除全部
+            {{ t('notificationsList', 'clearAll') }}
           </button>
         </div>
       </template>
     </AppHeader>
 
     <div class="content">
-      <p v-if="!notificationStore.loaded" class="state-text">載入中...</p>
+      <p v-if="!notificationStore.loaded" class="state-text">
+        {{ t('notificationsList', 'loading') }}
+      </p>
       <EmptyState
         v-else-if="groups.length === 0"
         :icon="Bell"
-        title="還沒有通知"
-        description="有新的訊息、收藏、留言或系統公告時，會顯示在這裡。"
+        :title="t('notificationsList', 'emptyTitle')"
+        :description="t('notificationsList', 'emptyDesc')"
       />
       <div v-else class="list">
         <div v-for="group in groups" :key="group.key" class="swipe-wrap">
-          <button class="delete-action" aria-label="刪除通知" @click="handleDelete(group)">
+          <button
+            class="delete-action"
+            :aria-label="t('notificationsList', 'deleteNotification')"
+            @click="handleDelete(group)"
+          >
             <Trash2 :size="18" color="#fff" />
           </button>
           <button

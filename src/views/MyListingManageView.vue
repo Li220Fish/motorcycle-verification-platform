@@ -1,26 +1,36 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Bike, MessageCircle, Plus, Star, X } from 'lucide-vue-next'
+import { Bike, Copy, KeyRound, MessageCircle, Plus, Star, X } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import MonthCalendar from '@/components/marketplace/MonthCalendar.vue'
+import PhotoGalleryLightbox from '@/components/marketplace/PhotoGalleryLightbox.vue'
+import { useI18n } from '@/composables/useI18n'
+import { useVerificationCorePhotos } from '@/composables/useVerificationCorePhotos'
 import { listingService } from '@/services/firebase/listing.service'
 import { storageService } from '@/services/firebase/storage.service'
+import { verificationService } from '@/services/firebase/verification.service'
+import {
+  createVehicleTransferInvite,
+  transferVehicleOwnership,
+} from '@/services/firebase/vehicle-transfer.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { resolveAvailableSlots } from '@/data/home/marketplace-mock'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { ListingAppointment } from '@/types/listing-appointment'
+import type { Verification } from '@/types/verification'
 import type { Unsubscribe } from 'firebase/firestore'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const { t } = useI18n()
 
 const listing = ref<MockMarketListing | null>(null)
 const loading = ref(true)
@@ -37,6 +47,16 @@ const activePhotoUrl = ref<string | null>(null)
 // identical comment (cover ~16:9, gallery thumbnails 1:1 squares).
 const activePhotoAspect = ref(1)
 const replacingPhoto = ref(false)
+
+// 驗證車輛照片 — the 6 core appearance photos from this listing's own
+// verification report, read-only (verification evidence is immutable once
+// its verification is public — see firestore.rules). Viewed through
+// PhotoGalleryLightbox, which is where manual 90°-rotate lives; unlike the
+// vehicleSnapshot gallery above, these can never be replaced/cropped here —
+// only the capture flow itself produces new verification evidence.
+const verificationId = computed(() => listing.value?.verificationIds[0])
+const verificationPhotos = useVerificationCorePhotos(verificationId)
+const galleryLightboxIndex = ref<number | null>(null)
 
 const appointments = ref<ListingAppointment[]>([])
 const loadingAppointments = ref(true)
@@ -60,6 +80,132 @@ async function loadListing(): Promise<void> {
   loading.value = false
 }
 
+// 車輛過戶 — eligible buyers are whoever has a COMPLETED 買家複驗 on this
+// vehicle with transactionDecision === 'purchased'
+// (VerificationComparisonView.vue's "已完成購買"). listByVehicle() returns
+// every verification for the vehicle regardless of owner — allowed for the
+// seller specifically because firestore.rules' list rule grants
+// ownsVehicle(vehicleId) read access, not just "my own verifications".
+const eligibleBuyerVerifications = ref<Verification[]>([])
+const loadingEligibleBuyers = ref(false)
+
+async function loadEligibleBuyers(): Promise<void> {
+  const vehicleId = listing.value?.vehicleId
+  if (!vehicleId || listing.value?.status === 'sold') {
+    eligibleBuyerVerifications.value = []
+    return
+  }
+  loadingEligibleBuyers.value = true
+  try {
+    const all = await verificationService.listByVehicle(vehicleId)
+    eligibleBuyerVerifications.value = all.filter(
+      (v) =>
+        v.type === 'buyer' && v.status === 'completed' && v.transactionDecision === 'purchased',
+    )
+  } finally {
+    loadingEligibleBuyers.value = false
+  }
+}
+
+const transferringVerificationId = ref<string | null>(null)
+const transferError = ref('')
+const transferSuccessMessage = ref('')
+
+function formatBuyerLabel(verification: Verification): string {
+  const date = new Date(verification.completedAt ?? verification.createdAt).toLocaleDateString(
+    'zh-TW',
+  )
+  return t('listingManage', 'buyerLabel', { uid: verification.userId.slice(0, 8), date })
+}
+
+async function confirmTransfer(verification: Verification): Promise<void> {
+  const vehicleId = listing.value?.vehicleId
+  if (!vehicleId) return
+  transferError.value = ''
+  transferringVerificationId.value = verification.id
+  try {
+    await transferVehicleOwnership({ vehicleId, buyerVerificationId: verification.id })
+    transferSuccessMessage.value = t('listingManage', 'transferCompleted')
+    eligibleBuyerVerifications.value = []
+    await loadListing()
+  } catch (error) {
+    transferError.value =
+      error instanceof Error ? error.message : t('listingManage', 'transferFailed')
+  } finally {
+    transferringVerificationId.value = null
+  }
+}
+
+// 刊登上下架 — delist pulls it out of marketplace browse immediately
+// (homeContentService.listMarketplaceListings() only queries
+// status=='published'); relist puts it straight back, no re-approval step.
+// Both are plain status flips (listingService.delist()/relist()), separate
+// from 確認交易過戶 above (that one is one-way and moves real ownership —
+// this one the seller can toggle freely).
+const delistingListing = ref(false)
+
+async function handleDelist(): Promise<void> {
+  if (!listing.value) return
+  if (!window.confirm(t('listingManage', 'confirmDelist'))) return
+  delistingListing.value = true
+  try {
+    await listingService.delist(listing.value.id)
+    await loadListing()
+  } finally {
+    delistingListing.value = false
+  }
+}
+
+async function handleRelist(): Promise<void> {
+  if (!listing.value) return
+  delistingListing.value = true
+  try {
+    await listingService.relist(listing.value.id)
+    await loadListing()
+  } finally {
+    delistingListing.value = false
+  }
+}
+
+// 轉移號碼 — same underlying vehicleTransferInvites mechanism as
+// VehicleDetailView.vue's "產生轉移邀請碼" menu item (functions/src/
+// functions/vehicle-transfer-invite.ts), just a second, more convenient
+// entry point from right where the seller is already managing this
+// transaction. 6 碼、0-9/A-Z 各自獨立隨機（可重複）、48 小時後失效 — the
+// exact format/TTL live server-side in createVehicleTransferInvite.
+const generatingTransferCode = ref(false)
+const transferCode = ref<string | null>(null)
+const transferCodeError = ref('')
+const transferCodeCopied = ref(false)
+
+async function handleGenerateTransferCode(): Promise<void> {
+  const vehicleId = listing.value?.vehicleId
+  if (!vehicleId) return
+  transferCodeError.value = ''
+  transferCodeCopied.value = false
+  generatingTransferCode.value = true
+  try {
+    const result = await createVehicleTransferInvite(vehicleId)
+    transferCode.value = result.code
+  } catch (error) {
+    transferCodeError.value =
+      error instanceof Error ? error.message : t('listingManage', 'generateCodeFailed')
+  } finally {
+    generatingTransferCode.value = false
+  }
+}
+
+async function copyTransferCode(): Promise<void> {
+  if (!transferCode.value) return
+  await navigator.clipboard.writeText(transferCode.value)
+  transferCodeCopied.value = true
+}
+
+function dismissTransferCode(): void {
+  transferCode.value = null
+  transferCodeError.value = ''
+}
+
 function subscribeAppointments(): void {
   loadingAppointments.value = true
   unsubscribeAppointments?.()
@@ -72,6 +218,7 @@ function subscribeAppointments(): void {
 onMounted(async () => {
   await loadListing()
   subscribeAppointments()
+  await loadEligibleBuyers()
 })
 
 onUnmounted(() => unsubscribeAppointments?.())
@@ -95,9 +242,9 @@ async function handleSave(): Promise<void> {
     }
     await listingService.update(listing.value.id, changes)
     listing.value = { ...listing.value, ...changes }
-    saveMessage.value = '已儲存變更'
+    saveMessage.value = t('listingManage', 'saved')
   } catch {
-    saveMessage.value = '儲存失敗，請稍後再試'
+    saveMessage.value = t('listingManage', 'saveFailed')
   } finally {
     saving.value = false
     setTimeout(() => {
@@ -150,6 +297,53 @@ async function handleSetCover(url: string): Promise<void> {
     ...currentListing,
     vehicleSnapshot: { ...currentListing.vehicleSnapshot, photos: reordered },
   }
+}
+
+// 長按刪除 — same pointerdown/up timing as CorePhotoCaptureFlow.vue's
+// filmstrip long-press (native contextmenu/長按 triggers the browser's own
+// selection/menu instead of a clean custom event on mobile). Deliberately
+// gallery photos only, not the cover slot — swapping which photo is the
+// cover already has its own explicit action (設為封面照); deleting today's
+// cover would need to decide what becomes the new one, which isn't part of
+// this request.
+const LONG_PRESS_MS = 500
+let longPressTimer: ReturnType<typeof setTimeout> | undefined
+let longPressTriggered = false
+
+function handleGalleryPointerDown(url: string): void {
+  longPressTriggered = false
+  longPressTimer = setTimeout(() => {
+    longPressTriggered = true
+    void handleDeletePhoto(url)
+  }, LONG_PRESS_MS)
+}
+
+function clearLongPressTimer(): void {
+  if (longPressTimer !== undefined) {
+    clearTimeout(longPressTimer)
+    longPressTimer = undefined
+  }
+}
+
+function handleGalleryClick(url: string, aspect: number): void {
+  if (longPressTriggered) {
+    longPressTriggered = false
+    return
+  }
+  openPhoto(url, aspect)
+}
+
+async function handleDeletePhoto(url: string): Promise<void> {
+  if (!listing.value) return
+  if (!window.confirm(t('listingManage', 'deletePhotoConfirm'))) return
+  const currentListing = listing.value
+  const nextPhotos = currentListing.vehicleSnapshot.photos.filter((photo) => photo !== url)
+  await listingService.updatePhotos(currentListing.id, nextPhotos)
+  listing.value = {
+    ...currentListing,
+    vehicleSnapshot: { ...currentListing.vehicleSnapshot, photos: nextPhotos },
+  }
+  await storageService.deleteFileAtUrl(url)
 }
 
 function openPhoto(url: string, aspect: number): void {
@@ -347,10 +541,10 @@ async function saveRule(): Promise<void> {
       else delete next[date]
     }
     await persistWorkingSlots(next)
-    ruleMessage.value = '已更新可預約時段'
+    ruleMessage.value = t('listingManage', 'slotsUpdated')
     closeEditor()
   } catch {
-    ruleMessage.value = '更新失敗，請稍後再試'
+    ruleMessage.value = t('listingManage', 'slotsUpdateFailed')
   } finally {
     savingRule.value = false
     setTimeout(() => {
@@ -376,7 +570,8 @@ const inquiries = computed(() =>
 
 function inquiryOtherName(conversation: (typeof inquiries.value)[number]): string {
   const otherId = conversation.memberIds.find((memberId) => memberId !== authStore.user?.id)
-  return otherId ? (conversation.memberSnapshots[otherId]?.displayName ?? '買家') : '買家'
+  const fallback = t('listingManage', 'defaultBuyer')
+  return otherId ? (conversation.memberSnapshots[otherId]?.displayName ?? fallback) : fallback
 }
 
 function formatDateTime(timestamp: number): string {
@@ -392,19 +587,43 @@ function formatDateTime(timestamp: number): string {
 // ChatRoomView.vue's existing decline button/system-message wording, kept
 // consistent here.
 function appointmentStatusLabel(status: ListingAppointment['status']): string {
-  if (status === 'approved') return '已確認'
-  if (status === 'declined') return '已婉拒'
-  if (status === 'cancelled') return '買家已取消'
-  return '待確認'
+  if (status === 'approved') return t('listingManage', 'statusApproved')
+  if (status === 'completed') return t('listingManage', 'statusCompleted')
+  if (status === 'declined') return t('listingManage', 'statusDeclined')
+  if (status === 'cancelled') return t('listingManage', 'statusCancelled')
+  return t('listingManage', 'statusPending')
+}
+
+// 標記已完成看車 — only offered once the confirmed time has actually
+// passed (marking a future appointment "completed" early would be a false
+// confirmation), and only from 'approved' (matches firestore.rules' own
+// approved -> completed transition guard). This is the seller's own
+// honor-system confirmation, not a verified check-in — it feeds the 交易
+// evaluation's small appointment-kept bonus for both sides, see
+// functions/src/functions/score/on-appointment-completed.ts.
+function canMarkAppointmentCompleted(appointment: ListingAppointment): boolean {
+  return appointment.status === 'approved' && appointment.scheduledAt <= Date.now()
+}
+
+const markingCompleteId = ref<string | null>(null)
+
+async function markAppointmentCompleted(appointment: ListingAppointment): Promise<void> {
+  if (!listing.value) return
+  markingCompleteId.value = appointment.id
+  try {
+    await listingService.updateAppointmentStatus(listing.value.id, appointment.id, 'completed')
+  } finally {
+    markingCompleteId.value = null
+  }
 }
 </script>
 
 <template>
   <div>
-    <AppHeader title="刊登管理" back />
+    <AppHeader :title="t('listingManage', 'title')" back />
 
-    <p v-if="loading" class="state-text">載入中...</p>
-    <p v-else-if="!listing" class="state-text">找不到這筆刊登。</p>
+    <p v-if="loading" class="state-text">{{ t('common', 'loading') }}</p>
+    <p v-else-if="!listing" class="state-text">{{ t('listingManage', 'notFound') }}</p>
     <div v-else class="content">
       <div class="photo-section">
         <div class="cover">
@@ -416,20 +635,37 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
           />
           <Bike v-else :size="48" color="var(--color-text-disabled)" />
         </div>
+        <p v-if="listing.vehicleSnapshot.photos.length > 1" class="hint">
+          {{ t('listingManage', 'photoHint') }}
+        </p>
         <div v-if="listing.vehicleSnapshot.photos.length > 1" class="gallery">
           <div
             v-for="photo in listing.vehicleSnapshot.photos.slice(1)"
             :key="photo"
             class="gallery-item"
           >
-            <img :src="photo" alt="" @click="openPhoto(photo, 1)" />
-            <button class="gallery-cover-btn" title="設為封面照" @click="handleSetCover(photo)">
+            <img
+              :src="photo"
+              alt=""
+              :aria-label="t('listingManage', 'viewPhotoHint')"
+              @pointerdown="handleGalleryPointerDown(photo)"
+              @pointerup="clearLongPressTimer"
+              @pointerleave="clearLongPressTimer"
+              @pointercancel="clearLongPressTimer"
+              @click="handleGalleryClick(photo, 1)"
+            />
+            <button
+              class="gallery-cover-btn"
+              :title="t('listingManage', 'setCover')"
+              @click="handleSetCover(photo)"
+            >
               <Star :size="11" />
             </button>
           </div>
         </div>
         <button class="add-photo-btn" :disabled="uploadingPhoto" @click="triggerPhotoUpload">
-          <Plus :size="16" /> {{ uploadingPhoto ? '上傳中...' : '新增照片' }}
+          <Plus :size="16" />
+          {{ uploadingPhoto ? t('listingManage', 'uploading') : t('listingManage', 'addPhoto') }}
         </button>
         <input
           ref="fileInput"
@@ -441,6 +677,16 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
         />
       </div>
 
+      <div v-if="verificationPhotos.length > 0" class="section">
+        <h3 class="section-title">{{ t('listingManage', 'verificationPhotosTitle') }}</h3>
+        <p class="hint">{{ t('listingManage', 'verificationPhotosHint') }}</p>
+        <div class="gallery">
+          <div v-for="(photo, index) in verificationPhotos" :key="photo" class="gallery-item">
+            <img :src="photo" alt="" @click="galleryLightboxIndex = index" />
+          </div>
+        </div>
+      </div>
+
       <div class="edit-card">
         <h3 class="card-title">
           {{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
@@ -448,31 +694,28 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
         </h3>
 
         <label class="field">
-          <span>售價 (NT$)</span>
+          <span>{{ t('listingManage', 'price') }}</span>
           <input v-model.number="priceInput" type="number" min="0" />
         </label>
 
         <label class="field">
-          <span>車輛描述</span>
+          <span>{{ t('listingManage', 'description') }}</span>
           <textarea
             v-model="descriptionInput"
             rows="4"
-            placeholder="跟買家說說這台車的狀況、保養紀錄..."
+            :placeholder="t('listingManage', 'descriptionPlaceholder')"
           />
         </label>
 
         <PrimaryButton block :disabled="!canSave || saving" @click="handleSave">
-          {{ saving ? '儲存中...' : '儲存變更' }}
+          {{ saving ? t('listingManage', 'saving') : t('listingManage', 'saveChanges') }}
         </PrimaryButton>
         <p v-if="saveMessage" class="feedback">{{ saveMessage }}</p>
       </div>
 
       <div class="section">
-        <h3 class="section-title">設定可預約時段</h3>
-        <p class="hint">
-          先設定一組時段，再選擇這組時段適用的日期——不同日期可以各自設定完全不同的時段組合（例如明天
-          15:00-18:00、後天卻是 12:00-16:00），新增規則後可以再新增下一組。
-        </p>
+        <h3 class="section-title">{{ t('listingManage', 'slotsTitle') }}</h3>
+        <p class="hint">{{ t('listingManage', 'slotsHint') }}</p>
 
         <div v-if="rules.length > 0" class="rule-list">
           <div v-for="rule in rules" :key="rule.key" class="rule-card">
@@ -483,12 +726,16 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
             </div>
             <p class="rule-dates">{{ formatRuleDates(rule.dates) }}</p>
             <div class="rule-actions">
-              <button type="button" class="rule-edit-btn" @click="openEditRule(rule)">編輯</button>
-              <button type="button" class="rule-delete-btn" @click="deleteRule(rule)">刪除</button>
+              <button type="button" class="rule-edit-btn" @click="openEditRule(rule)">
+                {{ t('listingManage', 'editRule') }}
+              </button>
+              <button type="button" class="rule-delete-btn" @click="deleteRule(rule)">
+                {{ t('listingManage', 'deleteRule') }}
+              </button>
             </div>
           </div>
         </div>
-        <p v-else class="empty-hint">還沒有設定任何可預約時段。</p>
+        <p v-else class="empty-hint">{{ t('listingManage', 'noSlotsYet') }}</p>
 
         <button
           v-if="!isEditorOpen"
@@ -497,22 +744,26 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
           style="margin-top: var(--space-sm)"
           @click="openNewRule"
         >
-          <Plus :size="14" /> 新增時段規則
+          <Plus :size="14" /> {{ t('listingManage', 'addRule') }}
         </button>
 
         <div v-if="isEditorOpen" class="rule-editor">
-          <p class="sub-title">Step 1・設定時段</p>
+          <p class="sub-title">{{ t('listingManage', 'step1') }}</p>
           <div v-if="draftTimes.length > 0" class="time-chip-row">
             <span v-for="time in draftTimes" :key="time" class="time-chip">
               {{ time }}
-              <button type="button" aria-label="移除此時段" @click="removeDraftTime(time)">
+              <button
+                type="button"
+                :aria-label="t('listingManage', 'removeTime')"
+                @click="removeDraftTime(time)"
+              >
                 <X :size="12" />
               </button>
             </span>
           </div>
-          <p v-else class="empty-hint">還沒有設定任何時段。</p>
+          <p v-else class="empty-hint">{{ t('listingManage', 'noTimesYet') }}</p>
           <div v-if="recentTimes.length > 0" class="recent-time-row">
-            <span class="recent-time-label">最近使用</span>
+            <span class="recent-time-label">{{ t('listingManage', 'recentlyUsed') }}</span>
             <button
               v-for="time in recentTimes"
               :key="time"
@@ -525,19 +776,25 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
             </button>
           </div>
           <div class="add-time-row">
-            <input v-model="newTimeInput" type="time" aria-label="新增時段" />
+            <input
+              v-model="newTimeInput"
+              type="time"
+              :aria-label="t('listingManage', 'newTimeAria')"
+            />
             <button
               type="button"
               class="add-time-btn"
               :disabled="!newTimeInput"
               @click="addDraftTime()"
             >
-              新增時段
+              {{ t('listingManage', 'addTime') }}
             </button>
           </div>
 
-          <p class="sub-title" style="margin-top: var(--space-md)">Step 2・選擇適用日期</p>
-          <p class="hint">點選日曆上的日期（可複選），這些日期都會套用上方這組時段。</p>
+          <p class="sub-title" style="margin-top: var(--space-md)">
+            {{ t('listingManage', 'step2') }}
+          </p>
+          <p class="hint">{{ t('listingManage', 'step2Hint') }}</p>
           <div class="calendar-card">
             <MonthCalendar
               :highlighted-dates="highlightedDates"
@@ -547,9 +804,11 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
           </div>
 
           <div class="rule-editor-actions">
-            <button type="button" class="rule-cancel-btn" @click="closeEditor">取消</button>
+            <button type="button" class="rule-cancel-btn" @click="closeEditor">
+              {{ t('listingManage', 'cancel') }}
+            </button>
             <PrimaryButton :disabled="savingRule" @click="saveRule">
-              {{ savingRule ? '儲存中...' : '儲存這組時段' }}
+              {{ savingRule ? t('listingManage', 'saving') : t('listingManage', 'saveThisRule') }}
             </PrimaryButton>
           </div>
         </div>
@@ -557,8 +816,12 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
       </div>
 
       <div class="section">
-        <h3 class="section-title">目前詢問（{{ inquiries.length }}）</h3>
-        <p v-if="inquiries.length === 0" class="empty-hint">目前還沒有人詢問這筆刊登。</p>
+        <h3 class="section-title">
+          {{ t('listingManage', 'inquiriesTitle', { count: inquiries.length }) }}
+        </h3>
+        <p v-if="inquiries.length === 0" class="empty-hint">
+          {{ t('listingManage', 'noInquiries') }}
+        </p>
         <div v-else class="inquiry-list">
           <button
             v-for="conversation in inquiries"
@@ -569,7 +832,7 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
             <span class="inquiry-info">
               <span class="inquiry-name">{{ inquiryOtherName(conversation) }}</span>
               <span class="inquiry-preview">{{
-                conversation.lastMessage?.text || '尚無訊息'
+                conversation.lastMessage?.text || t('listingManage', 'noMessageYet')
               }}</span>
             </span>
             <MessageCircle :size="16" color="var(--color-text-disabled)" />
@@ -578,9 +841,11 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
       </div>
 
       <div class="section">
-        <h3 class="section-title">已預約看車時間</h3>
-        <p v-if="loadingAppointments" class="empty-hint">載入中...</p>
-        <p v-else-if="appointments.length === 0" class="empty-hint">目前還沒有人預約看車。</p>
+        <h3 class="section-title">{{ t('listingManage', 'appointmentsTitle') }}</h3>
+        <p v-if="loadingAppointments" class="empty-hint">{{ t('common', 'loading') }}</p>
+        <p v-else-if="appointments.length === 0" class="empty-hint">
+          {{ t('listingManage', 'noAppointments') }}
+        </p>
         <div v-else class="appointment-list">
           <div
             v-for="appointment in appointments"
@@ -592,8 +857,107 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
             <span class="appointment-buyer">{{ appointment.buyerName }}</span>
             <span v-if="appointment.note" class="appointment-note">{{ appointment.note }}</span>
             <span class="appointment-status">{{ appointmentStatusLabel(appointment.status) }}</span>
+            <button
+              v-if="canMarkAppointmentCompleted(appointment)"
+              class="appointment-complete-btn"
+              :disabled="markingCompleteId === appointment.id"
+              @click="markAppointmentCompleted(appointment)"
+            >
+              {{ t('listingManage', 'markCompleted') }}
+            </button>
           </div>
         </div>
+      </div>
+
+      <div
+        v-if="listing && (listing.status === 'published' || listing.status === 'delisted')"
+        class="section"
+      >
+        <h3 class="section-title">{{ t('listingManage', 'listingStatusTitle') }}</h3>
+        <p v-if="listing.status === 'delisted'" class="hint">
+          {{ t('listingManage', 'delistedHint') }}
+        </p>
+        <PrimaryButton
+          v-if="listing.status === 'published'"
+          variant="secondary"
+          :disabled="delistingListing"
+          @click="handleDelist"
+        >
+          {{
+            delistingListing ? t('listingManage', 'delisting') : t('listingManage', 'delistButton')
+          }}
+        </PrimaryButton>
+        <PrimaryButton v-else :disabled="delistingListing" @click="handleRelist">
+          {{
+            delistingListing ? t('listingManage', 'relisting') : t('listingManage', 'relistButton')
+          }}
+        </PrimaryButton>
+
+        <div class="transfer-code-block">
+          <h4 class="subsection-title">{{ t('listingManage', 'transferCodeTitle') }}</h4>
+          <template v-if="transferCode">
+            <p class="hint">{{ t('listingManage', 'transferCodeHint') }}</p>
+            <p class="transfer-code">{{ transferCode }}</p>
+            <PrimaryButton block variant="secondary" @click="copyTransferCode">
+              <Copy :size="15" />{{
+                transferCodeCopied ? t('listingManage', 'copied') : t('listingManage', 'copyCode')
+              }}
+            </PrimaryButton>
+            <button class="text-btn" @click="dismissTransferCode">
+              {{ t('listingManage', 'close') }}
+            </button>
+          </template>
+          <template v-else>
+            <p class="hint">{{ t('listingManage', 'transferCodeIntro') }}</p>
+            <p v-if="transferCodeError" class="error">{{ transferCodeError }}</p>
+            <PrimaryButton
+              block
+              variant="secondary"
+              :disabled="generatingTransferCode"
+              @click="handleGenerateTransferCode"
+            >
+              <KeyRound :size="15" />{{
+                generatingTransferCode
+                  ? t('listingManage', 'generating')
+                  : t('listingManage', 'generateCode')
+              }}
+            </PrimaryButton>
+          </template>
+        </div>
+      </div>
+
+      <div v-if="listing?.status === 'sold'" class="section">
+        <h3 class="section-title">{{ t('listingManage', 'ownershipTitle') }}</h3>
+        <p class="sold-banner">{{ t('listingManage', 'soldBanner') }}</p>
+      </div>
+      <div v-else class="section">
+        <h3 class="section-title">{{ t('listingManage', 'confirmTransferTitle') }}</h3>
+        <p class="hint">{{ t('listingManage', 'confirmTransferHint') }}</p>
+        <p v-if="loadingEligibleBuyers" class="empty-hint">{{ t('common', 'loading') }}</p>
+        <p v-else-if="eligibleBuyerVerifications.length === 0" class="empty-hint">
+          {{ t('listingManage', 'noEligibleBuyers') }}
+        </p>
+        <div v-else class="transfer-list">
+          <div
+            v-for="verification in eligibleBuyerVerifications"
+            :key="verification.id"
+            class="transfer-row"
+          >
+            <span>{{ formatBuyerLabel(verification) }}</span>
+            <PrimaryButton
+              :disabled="transferringVerificationId === verification.id"
+              @click="confirmTransfer(verification)"
+            >
+              {{
+                transferringVerificationId === verification.id
+                  ? t('listingManage', 'transferring')
+                  : t('listingManage', 'confirmTransferButton')
+              }}
+            </PrimaryButton>
+          </div>
+        </div>
+        <p v-if="transferError" class="feedback">{{ transferError }}</p>
+        <p v-if="transferSuccessMessage" class="sold-banner">{{ transferSuccessMessage }}</p>
       </div>
     </div>
 
@@ -604,6 +968,13 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
       :uploading="replacingPhoto"
       @close="closePhoto"
       @crop-confirmed="handleCropConfirmed"
+    />
+
+    <PhotoGalleryLightbox
+      v-if="galleryLightboxIndex !== null"
+      :photos="verificationPhotos"
+      :start-index="galleryLightboxIndex"
+      @close="galleryLightboxIndex = null"
     />
   </div>
 </template>
@@ -779,6 +1150,46 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
 .hint {
   font-size: 12.5px;
   color: var(--color-text-secondary);
+  margin: -6px 0 0;
+}
+
+.transfer-code-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.subsection-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.transfer-code {
+  margin: 0;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--color-primary);
+  padding: var(--space-xs) 0;
+}
+
+.text-btn {
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: var(--space-xs) 0;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--color-danger);
   margin: -6px 0 0;
 }
 
@@ -1072,6 +1483,10 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
   color: var(--color-success);
 }
 
+.appointment-row.completed .appointment-status {
+  color: var(--color-text-secondary);
+}
+
 .appointment-row.declined,
 .appointment-row.cancelled {
   opacity: 0.55;
@@ -1080,5 +1495,47 @@ function appointmentStatusLabel(status: ListingAppointment['status']): string {
 .appointment-row.declined .appointment-status,
 .appointment-row.cancelled .appointment-status {
   color: var(--color-danger);
+}
+
+.appointment-complete-btn {
+  flex-basis: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: var(--color-background);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.appointment-complete-btn:disabled {
+  opacity: 0.5;
+}
+
+.transfer-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.transfer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.sold-banner {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-success);
 }
 </style>

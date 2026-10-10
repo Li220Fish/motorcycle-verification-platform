@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import VehicleSearchBar from '@/components/home/VehicleSearchBar.vue'
+import { useI18n } from '@/composables/useI18n'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import type { Vehicle } from '@/types/vehicle'
@@ -12,6 +13,7 @@ import type { Verification } from '@/types/verification'
 
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const { t } = useI18n()
 
 interface ReportEntry {
   vehicle: Vehicle
@@ -52,16 +54,16 @@ onMounted(loadReports)
 
 <template>
   <div>
-    <AppHeader title="驗證報告" />
+    <AppHeader :title="t('reports', 'title')" />
 
     <div class="content">
-      <p class="hint">輸入車牌或車身號碼，查看該車輛的驗證報告。</p>
+      <p class="hint">{{ t('reports', 'searchHint') }}</p>
       <VehicleSearchBar />
 
-      <h2 class="section-title">我的驗證報告</h2>
-      <p v-if="loading" class="loading">載入中...</p>
+      <h2 class="section-title">{{ t('reports', 'myReports') }}</h2>
+      <p v-if="loading" class="loading">{{ t('reports', 'loading') }}</p>
       <div v-else-if="reports.length === 0" class="empty">
-        <p>目前沒有已完成的驗證報告。</p>
+        <p>{{ t('reports', 'empty') }}</p>
       </div>
       <div v-else class="report-list">
         <button

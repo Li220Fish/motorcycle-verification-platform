@@ -7,6 +7,9 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatDateDivider from '@/components/chat/ChatDateDivider.vue'
 import ChatInputBar from '@/components/chat/ChatInputBar.vue'
+import BookingSheet from '@/components/marketplace/BookingSheet.vue'
+import { useI18n } from '@/composables/useI18n'
+import { chatService } from '@/services/chat/chat.service'
 import { conversationService } from '@/services/chat/conversation.service'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import { listingService } from '@/services/firebase/listing.service'
@@ -14,6 +17,7 @@ import { vehicleService } from '@/services/firebase/vehicle.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { formatDateDivider } from '@/utils/format-time'
+import { resolveAvailableSlots } from '@/data/home/marketplace-mock'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 import type { ListingAppointment } from '@/types/listing-appointment'
 import type { Vehicle } from '@/types/vehicle'
@@ -24,6 +28,7 @@ const props = defineProps<{ conversationId: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const { t } = useI18n()
 
 const sending = ref(false)
 const menuOpen = ref(false)
@@ -51,7 +56,7 @@ const otherId = computed(() => {
 const otherName = computed(() => {
   const conversation = chatStore.currentConversation
   if (!conversation || !otherId.value) return ''
-  return conversation.memberSnapshots[otherId.value]?.displayName ?? '對話'
+  return conversation.memberSnapshots[otherId.value]?.displayName ?? t('chatRoom', 'defaultTitle')
 })
 
 const groupedMessages = computed(() => {
@@ -63,6 +68,17 @@ const groupedMessages = computed(() => {
     else groups.push({ label, items: [message] })
   }
   return groups
+})
+
+const TAG_LABEL_KEY: Record<string, 'filterTrading' | 'filterSystem'> = {
+  交易中: 'filterTrading',
+  系統: 'filterSystem',
+}
+const conversationTagLabel = computed(() => {
+  const tag = chatStore.currentConversation?.tag
+  if (!tag) return ''
+  const key = TAG_LABEL_KEY[tag]
+  return key ? t('messagesList', key) : tag
 })
 
 const otherHasRead = computed(() => {
@@ -99,6 +115,60 @@ async function loadContextListing(): Promise<void> {
 const isSeller = computed(
   () => !!contextListing.value?.sellerId && contextListing.value.sellerId === authStore.user?.id,
 )
+
+// 賣家沒設定預約時段時的備援：BookingSheet.vue 原本只會顯示一句提示文字請買家
+// 改用「聊聊」詢問——既然買家已經在聊聊視窗裡了，直接在這裡讓他自己挑一個時間
+// 送出預約請求，不用再多繞一次。buyer 端尚無有效預約（pending/approved）且賣家
+// 尚未開放任何時段時才顯示；流程其餘部分（送出後賣家可在上方 banner 同意/婉拒）
+// 與原本已有的 MarketplaceListingView.vue 預約流程完全相同。
+const bookingSheetOpen = ref(false)
+const bookingSubmitting = ref(false)
+
+const hasActiveAppointment = computed(
+  () =>
+    relevantAppointment.value?.status === 'pending' ||
+    relevantAppointment.value?.status === 'approved',
+)
+
+const showBookingPrompt = computed(() => {
+  if (!contextListing.value || isSeller.value || hasActiveAppointment.value) return false
+  return Object.keys(resolveAvailableSlots(contextListing.value)).length === 0
+})
+
+function handleOpenBookingPrompt(): void {
+  bookingSheetOpen.value = true
+}
+
+async function handleFreeBookingSubmit(payload: { scheduledAt: number }): Promise<void> {
+  const listing = contextListing.value
+  const sellerId = otherId.value
+  if (!listing || !sellerId || !authStore.user) return
+  const user = authStore.user
+  bookingSubmitting.value = true
+  try {
+    await listingService.createAppointment({
+      listingId: listing.id,
+      buyerId: user.id,
+      buyerName: user.displayName || user.email || t('chatRoom', 'defaultBuyer'),
+      scheduledAt: payload.scheduledAt,
+    })
+    await chatService.sendSystemNote(
+      props.conversationId,
+      user.id,
+      [sellerId],
+      t('chatRoom', 'systemNoteBooking', { time: formatDateTime(payload.scheduledAt) }),
+      {
+        displayName: user.displayName || user.email || t('chatRoom', 'defaultBuyer'),
+        photoUrl: user.photoUrl,
+      },
+    )
+    bookingSheetOpen.value = false
+  } catch {
+    actionError.value = t('chatRoom', 'bookingFailed')
+  } finally {
+    bookingSubmitting.value = false
+  }
+}
 
 function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-TW', {
@@ -152,16 +222,19 @@ function subscribeAppointment(): void {
 
       if (next && previous && next.id === previous.id && next.status !== previous.status) {
         if (isSeller.value && next.status === 'cancelled') {
-          showAppointmentToast(`買家已取消 ${formatDateTime(next.scheduledAt)} 的看車預約`)
+          showAppointmentToast(
+            t('chatRoom', 'toastBuyerCancelled', { time: formatDateTime(next.scheduledAt) }),
+          )
         } else if (!isSeller.value && next.status === 'approved') {
-          showAppointmentToast('賣家已同意您的看車預約')
+          showAppointmentToast(t('chatRoom', 'toastSellerApproved'))
         } else if (!isSeller.value && next.status === 'declined') {
-          showAppointmentToast('賣家已婉拒您的看車預約')
+          showAppointmentToast(t('chatRoom', 'toastSellerDeclined'))
         }
       } else if (isSeller.value && next?.status === 'pending' && next.id !== previous?.id) {
-        showAppointmentToast(`${next.buyerName} 送出了新的看車預約`)
+        showAppointmentToast(t('chatRoom', 'toastNewBooking', { name: next.buyerName }))
       }
 
+      if (next?.id !== previous?.id) resetDealForm()
       relevantAppointment.value = next
     },
   )
@@ -187,7 +260,7 @@ async function handleDecline(): Promise<void> {
     await listingService.updateAppointmentStatus(appointment.listingId, appointment.id, 'declined')
     relevantAppointment.value = { ...appointment, status: 'declined' }
     await chatStore.sendText(
-      `很抱歉，賣家婉拒了 ${formatDateTime(appointment.scheduledAt)} 的看車預約，歡迎在這裡討論其他時間。`,
+      t('chatRoom', 'systemNoteDeclined', { time: formatDateTime(appointment.scheduledAt) }),
     )
     await scrollToBottom()
   } finally {
@@ -206,11 +279,82 @@ async function handleCancel(): Promise<void> {
     await listingService.updateAppointmentStatus(appointment.listingId, appointment.id, 'cancelled')
     relevantAppointment.value = { ...appointment, status: 'cancelled' }
     await chatStore.sendText(
-      `已取消 ${formatDateTime(appointment.scheduledAt)} 的看車預約，歡迎在這裡討論其他時間。`,
+      t('chatRoom', 'systemNoteCancelled', { time: formatDateTime(appointment.scheduledAt) }),
     )
     await scrollToBottom()
   } finally {
     decidingAppointment.value = false
+  }
+}
+
+// "有成交嗎？" — once an 'approved' appointment's scheduledAt has passed,
+// swap the banner to ask each side independently (see firestore.rules'
+// buyerDealReport/sellerDealReport write rules — each side may only ever
+// write their own field, once). `now` ticks every 30s so the swap happens
+// live for anyone already sitting in the chat room at the moment the
+// meetup time passes, not just on next load.
+const now = ref(Date.now())
+let nowTimer: ReturnType<typeof setInterval> | null = null
+
+const meetupPassed = computed(
+  () =>
+    relevantAppointment.value?.status === 'approved' &&
+    relevantAppointment.value.scheduledAt < now.value,
+)
+const myDealReport = computed(() =>
+  isSeller.value
+    ? relevantAppointment.value?.sellerDealReport
+    : relevantAppointment.value?.buyerDealReport,
+)
+const otherDealReport = computed(() =>
+  isSeller.value
+    ? relevantAppointment.value?.buyerDealReport
+    : relevantAppointment.value?.sellerDealReport,
+)
+const showDealPrompt = computed(() => meetupPassed.value && !myDealReport.value)
+const bothDealsConfirmed = computed(
+  () => !!myDealReport.value?.dealConfirmed && !!otherDealReport.value?.dealConfirmed,
+)
+
+const dealAnswer = ref<'yes' | 'no' | null>(null)
+const dealPriceInput = ref('')
+const submittingDealReport = ref(false)
+
+function resetDealForm(): void {
+  dealAnswer.value = null
+  dealPriceInput.value = ''
+}
+
+function handleSelectNoDeal(): void {
+  dealAnswer.value = 'no'
+  dealPriceInput.value = ''
+}
+
+async function handleSubmitDealReport(): Promise<void> {
+  const appointment = relevantAppointment.value
+  if (!appointment || !dealAnswer.value) return
+  submittingDealReport.value = true
+  try {
+    const report = {
+      dealConfirmed: dealAnswer.value === 'yes',
+      priceTwd:
+        dealAnswer.value === 'yes' && dealPriceInput.value ? Number(dealPriceInput.value) : null,
+    }
+    await listingService.submitDealReport(
+      appointment.listingId,
+      appointment.id,
+      isSeller.value ? 'seller' : 'buyer',
+      report,
+    )
+    relevantAppointment.value = {
+      ...appointment,
+      ...(isSeller.value
+        ? { sellerDealReport: { ...report, respondedAt: Date.now() } }
+        : { buyerDealReport: { ...report, respondedAt: Date.now() } }),
+    }
+    resetDealForm()
+  } finally {
+    submittingDealReport.value = false
   }
 }
 
@@ -258,7 +402,7 @@ async function handleReport(): Promise<void> {
   if (!authStore.user || !otherId.value) return
   const { discussionService } = await import('@/services/discussion/discussion.service')
   await discussionService.reportContent(authStore.user.id, 'user', otherId.value, '不當言論')
-  actionError.value = '已送出檢舉，我們會儘快處理'
+  actionError.value = t('chatRoom', 'reportSent')
 }
 
 async function handleMute(): Promise<void> {
@@ -283,12 +427,16 @@ watch([contextListing, otherId], subscribeAppointment)
 
 onMounted(async () => {
   chatStore.openConversation(props.conversationId)
+  nowTimer = setInterval(() => {
+    now.value = Date.now()
+  }, 30000)
   await scrollToBottom()
 })
 
 onUnmounted(() => {
   chatStore.closeConversation()
   unsubscribeAppointment?.()
+  if (nowTimer) clearInterval(nowTimer)
   if (appointmentToastTimer) clearTimeout(appointmentToastTimer)
 })
 </script>
@@ -297,7 +445,11 @@ onUnmounted(() => {
   <div class="room">
     <AppHeader :title="otherName" back custom-back @back="handleBack">
       <template #right>
-        <button class="icon-button" aria-label="更多" @click="menuOpen = !menuOpen">
+        <button
+          class="icon-button"
+          :aria-label="t('chatRoom', 'more')"
+          @click="menuOpen = !menuOpen"
+        >
           <MoreVertical :size="18" />
         </button>
       </template>
@@ -307,13 +459,19 @@ onUnmounted(() => {
       v-if="relevantAppointment?.status === 'pending' && isSeller"
       class="appointment-banner pending"
     >
-      <p class="ab-text">買家提出看車預約：{{ formatDateTime(relevantAppointment.scheduledAt) }}</p>
+      <p class="ab-text">
+        {{
+          t('chatRoom', 'pendingSellerText', {
+            time: formatDateTime(relevantAppointment.scheduledAt),
+          })
+        }}
+      </p>
       <div class="ab-actions">
         <button class="ab-decline" :disabled="decidingAppointment" @click="handleDecline">
-          婉拒
+          {{ t('chatRoom', 'decline') }}
         </button>
         <button class="ab-approve" :disabled="decidingAppointment" @click="handleApprove">
-          同意
+          {{ t('chatRoom', 'approve') }}
         </button>
       </div>
     </div>
@@ -322,29 +480,96 @@ onUnmounted(() => {
       class="appointment-banner pending"
     >
       <p class="ab-text">
-        已送出看車預約：{{ formatDateTime(relevantAppointment.scheduledAt) }}，等待賣家確認。
+        {{
+          t('chatRoom', 'pendingBuyerText', {
+            time: formatDateTime(relevantAppointment.scheduledAt),
+          })
+        }}
       </p>
       <div class="ab-actions">
         <button class="ab-decline" :disabled="decidingAppointment" @click="handleCancel">
-          取消預約
+          {{ t('chatRoom', 'cancelBooking') }}
         </button>
       </div>
     </div>
-    <div v-else-if="relevantAppointment?.status === 'approved'" class="appointment-banner approved">
-      <p class="ab-text">雙方面交時間為 {{ formatDateTime(relevantAppointment.scheduledAt) }}</p>
+    <div
+      v-else-if="relevantAppointment?.status === 'approved' && !meetupPassed"
+      class="appointment-banner approved"
+    >
+      <p class="ab-text">
+        {{
+          t('chatRoom', 'approvedText', { time: formatDateTime(relevantAppointment.scheduledAt) })
+        }}
+      </p>
       <div v-if="!isSeller" class="ab-actions">
         <button class="ab-decline" :disabled="decidingAppointment" @click="handleCancel">
-          取消預約
+          {{ t('chatRoom', 'cancelBooking') }}
         </button>
       </div>
     </div>
+    <div
+      v-else-if="relevantAppointment?.status === 'approved' && bothDealsConfirmed"
+      class="appointment-banner approved"
+    >
+      <p class="ab-text">{{ t('chatRoom', 'bothDealsConfirmedText') }}</p>
+    </div>
+    <div
+      v-else-if="relevantAppointment?.status === 'approved' && showDealPrompt"
+      class="appointment-banner deal-prompt"
+    >
+      <p class="ab-text">{{ t('chatRoom', 'dealPromptText') }}</p>
+      <div class="deal-answer-row">
+        <button
+          class="deal-answer-btn"
+          :class="{ active: dealAnswer === 'yes' }"
+          @click="dealAnswer = 'yes'"
+        >
+          {{ t('chatRoom', 'dealYes') }}
+        </button>
+        <button
+          class="deal-answer-btn"
+          :class="{ active: dealAnswer === 'no' }"
+          @click="handleSelectNoDeal"
+        >
+          {{ t('chatRoom', 'dealNo') }}
+        </button>
+      </div>
+      <input
+        v-if="dealAnswer === 'yes'"
+        v-model="dealPriceInput"
+        type="number"
+        min="0"
+        :placeholder="t('chatRoom', 'dealPricePlaceholder')"
+        class="deal-price-input"
+      />
+      <button
+        class="deal-submit-btn"
+        :disabled="!dealAnswer || submittingDealReport"
+        @click="handleSubmitDealReport"
+      >
+        {{ submittingDealReport ? t('chatRoom', 'sending') : t('chatRoom', 'submitReply') }}
+      </button>
+    </div>
+    <div
+      v-else-if="relevantAppointment?.status === 'approved' && meetupPassed"
+      class="appointment-banner pending"
+    >
+      <p class="ab-text">{{ t('chatRoom', 'waitingOtherConfirm') }}</p>
+    </div>
+    <button
+      v-else-if="showBookingPrompt"
+      class="appointment-banner prompt"
+      @click="handleOpenBookingPrompt"
+    >
+      <p class="ab-text">{{ t('chatRoom', 'bookPrompt') }}</p>
+    </button>
 
     <Transition name="toast-fade">
       <p v-if="appointmentToast" class="appointment-toast">{{ appointmentToast }}</p>
     </Transition>
 
     <div v-if="chatStore.currentConversation" class="tag-row">
-      <span class="tag">{{ chatStore.currentConversation.tag }}</span>
+      <span class="tag">{{ conversationTagLabel }}</span>
     </div>
 
     <button
@@ -353,7 +578,7 @@ onUnmounted(() => {
       @click="router.push(`/vehicles/${contextVehicle.id}`)"
     >
       <span class="vc-title">{{ contextVehicle.brand }} {{ contextVehicle.model }}</span>
-      <span class="vc-link">查看車輛 →</span>
+      <span class="vc-link">{{ t('chatRoom', 'viewVehicle') }}</span>
     </button>
     <button
       v-else-if="contextListing"
@@ -363,7 +588,7 @@ onUnmounted(() => {
       <span class="vc-title"
         >{{ contextListing.vehicleSnapshot.brand }} {{ contextListing.vehicleSnapshot.model }}</span
       >
-      <span class="vc-link">查看刊登 →</span>
+      <span class="vc-link">{{ t('chatRoom', 'viewListing') }}</span>
     </button>
 
     <div v-if="menuOpen" class="menu">
@@ -371,16 +596,18 @@ onUnmounted(() => {
         <EyeOff :size="15" />
         {{
           chatStore.currentConversation?.mutedBy.includes(authStore.user?.id ?? '')
-            ? '取消靜音'
-            : '靜音通知'
+            ? t('chatRoom', 'unmute')
+            : t('chatRoom', 'mute')
         }}
       </button>
-      <button @click="handleReport"><Flag :size="15" />檢舉使用者</button>
-      <button class="danger" @click="handleBlock"><Ban :size="15" />封鎖使用者</button>
+      <button @click="handleReport"><Flag :size="15" />{{ t('chatRoom', 'reportUser') }}</button>
+      <button class="danger" @click="handleBlock">
+        <Ban :size="15" />{{ t('chatRoom', 'blockUser') }}
+      </button>
     </div>
 
     <div ref="messageLog" class="chat-log">
-      <p v-if="!chatStore.messagesLoaded" class="loading">載入中...</p>
+      <p v-if="!chatStore.messagesLoaded" class="loading">{{ t('chatRoom', 'loading') }}</p>
       <template v-for="group in groupedMessages" :key="group.label">
         <ChatDateDivider :label="group.label" />
         <ChatBubble
@@ -392,7 +619,7 @@ onUnmounted(() => {
         />
       </template>
       <p v-if="chatStore.messagesLoaded && chatStore.messages.length === 0" class="empty-hint">
-        還沒有訊息，打聲招呼吧！
+        {{ t('chatRoom', 'emptyHint') }}
       </p>
     </div>
 
@@ -406,6 +633,15 @@ onUnmounted(() => {
       accept="image/*"
       class="hidden-file"
       @change="handleFileChange"
+    />
+
+    <BookingSheet
+      :open="bookingSheetOpen"
+      :submitting="bookingSubmitting"
+      :available-slots="{}"
+      :booked-timestamps="[]"
+      @close="bookingSheetOpen = false"
+      @submit="handleFreeBookingSubmit"
     />
   </div>
 </template>
@@ -446,6 +682,73 @@ onUnmounted(() => {
 
 .appointment-banner.approved {
   background: var(--color-success-bg);
+}
+
+.appointment-banner.deal-prompt {
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--color-primary-bg, #e8f1fd);
+}
+
+.appointment-banner.deal-prompt .ab-text {
+  color: var(--color-primary);
+}
+
+.deal-answer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.deal-answer-btn {
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.deal-answer-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.deal-price-input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.deal-submit-btn {
+  height: 34px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.deal-submit-btn:disabled {
+  opacity: 0.5;
+}
+
+.appointment-banner.prompt {
+  width: 100%;
+  border: none;
+  background: var(--color-primary-bg, #e8f1fd);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.appointment-banner.prompt .ab-text {
+  color: var(--color-primary);
 }
 
 .ab-text {

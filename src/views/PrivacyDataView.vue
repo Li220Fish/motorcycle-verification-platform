@@ -3,24 +3,19 @@ import { ref } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 interface PolicySection {
   key: string
-  title: string
-  body: string
+  titleKey: 'privacyTitle' | 'termsTitle'
+  bodyKey: 'privacyBody' | 'termsBody'
 }
 
 const policySections: PolicySection[] = [
-  {
-    key: 'privacy',
-    title: '隱私權政策',
-    body: '我們僅蒐集提供驗車與交易媒合功能所必要的資料，不會在未經同意下與第三方分享您的個人資訊。',
-  },
-  {
-    key: 'terms',
-    title: '服務條款',
-    body: '使用 MotoVerify 即表示您同意遵守平台的驗車流程規範與交易禮儀，並對所刊登的車輛資訊負責。',
-  },
+  { key: 'privacy', titleKey: 'privacyTitle', bodyKey: 'privacyBody' },
+  { key: 'terms', titleKey: 'termsTitle', bodyKey: 'termsBody' },
 ]
 const expandedKey = ref<string | null>(null)
 function toggleSection(key: string): void {
@@ -43,39 +38,41 @@ async function handleExport(): Promise<void> {
   exporting.value = true
   await new Promise((resolve) => setTimeout(resolve, 800))
   exporting.value = false
-  showNotice('已送出資料匯出請求，完成後會寄送到您的 Email')
+  showNotice(t('privacy', 'exportSent'))
 }
 
 function handleDeleteAccount(): void {
-  const confirmed = window.confirm('確定要刪除帳號嗎？此操作無法復原。')
+  const confirmed = window.confirm(t('privacy', 'confirmDeleteAccount'))
   if (!confirmed) return
-  showNotice('帳號刪除功能尚未開放，如需協助請聯繫客服')
+  showNotice(t('privacy', 'deleteNotAvailable'))
 }
 </script>
 
 <template>
   <div>
-    <AppHeader title="資料與隱私" back />
+    <AppHeader :title="t('privacy', 'title')" back />
 
     <div class="content">
       <div class="section-list">
         <div v-for="section in policySections" :key="section.key" class="policy-row">
           <button class="policy-header" @click="toggleSection(section.key)">
-            <span>{{ section.title }}</span>
+            <span>{{ t('privacy', section.titleKey) }}</span>
             <ChevronDown
               :size="18"
               color="var(--color-text-disabled)"
               :class="{ rotated: expandedKey === section.key }"
             />
           </button>
-          <p v-if="expandedKey === section.key" class="policy-body">{{ section.body }}</p>
+          <p v-if="expandedKey === section.key" class="policy-body">
+            {{ t('privacy', section.bodyKey) }}
+          </p>
         </div>
       </div>
 
       <div class="toggle-row">
         <div class="toggle-info">
-          <p class="toggle-title">個人化建議</p>
-          <p class="toggle-desc">依您的瀏覽紀錄推薦相關車輛與內容</p>
+          <p class="toggle-title">{{ t('privacy', 'personalizedTitle') }}</p>
+          <p class="toggle-desc">{{ t('privacy', 'personalizedDesc') }}</p>
         </div>
         <button
           class="switch"
@@ -89,10 +86,12 @@ function handleDeleteAccount(): void {
       </div>
 
       <button class="action-row" :disabled="exporting" @click="handleExport">
-        {{ exporting ? '處理中...' : '匯出我的資料' }}
+        {{ exporting ? t('privacy', 'processing') : t('privacy', 'exportData') }}
       </button>
 
-      <button class="action-row danger" @click="handleDeleteAccount">刪除帳號</button>
+      <button class="action-row danger" @click="handleDeleteAccount">
+        {{ t('privacy', 'deleteAccount') }}
+      </button>
 
       <p v-if="noticeMessage" class="notice">{{ noticeMessage }}</p>
     </div>

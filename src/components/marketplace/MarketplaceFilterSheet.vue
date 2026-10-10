@@ -1,36 +1,66 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import { computed } from 'vue'
 
+import { useI18n } from '@/composables/useI18n'
 import PriceRangeSlider from './PriceRangeSlider.vue'
 import {
   DEFAULT_MARKETPLACE_FILTERS,
+  PLATE_COLOR_OPTIONS,
   PRICE_FILTER_MAX,
   PRICE_FILTER_MIN,
   PRICE_FILTER_STEP,
   type MarketplaceFilters,
   type MarketplaceSortOption,
-  type SellerTypeFilter,
+  type PowerTypeFilter,
 } from './marketplace-filters'
 
-const props = defineProps<{ open: boolean; modelValue: MarketplaceFilters }>()
+const props = defineProps<{
+  open: boolean
+  modelValue: MarketplaceFilters
+  /** Distinct values pulled from the currently-loaded listings
+   * (MarketplaceView.vue) — not a fixed enum, since 車型類別 is admin
+   * free-text (see admin/sections/ModelsSection.vue). */
+  bodyTypeOptions: string[]
+  brandOptions: string[]
+}>()
 const emit = defineEmits<{ 'update:modelValue': [MarketplaceFilters]; close: [] }>()
+const { t } = useI18n()
 
-const SELLER_TYPE_OPTIONS: { value: SellerTypeFilter; label: string }[] = [
-  { value: 'all', label: '全部' },
-  { value: 'individual', label: '個人賣家' },
-  { value: 'dealer', label: '認證車商' },
-]
+const SORT_OPTIONS = computed<{ value: MarketplaceSortOption; label: string }[]>(() => [
+  { value: 'price-desc', label: t('marketplace', 'sortPriceDesc') },
+  { value: 'price-asc', label: t('marketplace', 'sortPriceAsc') },
+])
 
-const SORT_OPTIONS: { value: MarketplaceSortOption; label: string }[] = [
-  { value: 'default', label: '預設排序' },
-  { value: 'price-asc', label: '價格由低到高' },
-  { value: 'price-desc', label: '價格由高到低' },
-  { value: 'mileage-asc', label: '里程由低到高' },
-  { value: 'score-desc', label: '驗證分數高到低' },
-]
+const POWER_TYPE_OPTIONS = computed<{ value: PowerTypeFilter; label: string }[]>(() => [
+  { value: 'all', label: t('marketplace', 'powerAll') },
+  { value: 'gasoline', label: t('marketplace', 'powerGasoline') },
+  { value: 'electric', label: t('marketplace', 'powerElectric') },
+])
+
+const PLATE_LABEL_KEY: Record<
+  (typeof PLATE_COLOR_OPTIONS)[number]['value'],
+  'plateGreen' | 'plateWhite' | 'plateYellow' | 'plateRed'
+> = {
+  green: 'plateGreen',
+  white: 'plateWhite',
+  yellow: 'plateYellow',
+  red: 'plateRed',
+}
 
 function update(changes: Partial<MarketplaceFilters>): void {
   emit('update:modelValue', { ...props.modelValue, ...changes })
+}
+
+function selectBodyType(value: string): void {
+  update({ bodyType: props.modelValue.bodyType === value ? null : value })
+}
+
+function selectBrand(value: string): void {
+  update({ brand: props.modelValue.brand === value ? null : value })
+}
+
+function selectPlateColor(value: MarketplaceFilters['plateColor']): void {
+  update({ plateColor: props.modelValue.plateColor === value ? null : value })
 }
 
 function handleReset(): void {
@@ -44,14 +74,11 @@ function handleReset(): void {
       <div class="sheet">
         <div class="handle" />
         <div class="sheet-head">
-          <h3>篩選與排序</h3>
-          <button class="close-btn" aria-label="關閉" @click="$emit('close')">
-            <X :size="16" />
-          </button>
+          <h3>{{ t('marketplace', 'filterTitle') }}</h3>
         </div>
 
         <div class="filter-group">
-          <p class="group-title">價格範圍</p>
+          <p class="group-title">{{ t('marketplace', 'priceRange') }}</p>
           <PriceRangeSlider
             :model-value="modelValue.priceRange"
             :min="PRICE_FILTER_MIN"
@@ -62,22 +89,68 @@ function handleReset(): void {
         </div>
 
         <div class="filter-group">
-          <p class="group-title">賣家類型</p>
+          <p class="group-title">{{ t('marketplace', 'displacement') }}</p>
           <div class="chip-row">
             <button
-              v-for="option in SELLER_TYPE_OPTIONS"
+              v-for="option in PLATE_COLOR_OPTIONS"
               :key="option.value"
               class="chip"
-              :class="{ active: modelValue.sellerType === option.value }"
-              @click="update({ sellerType: option.value })"
+              :class="{ active: modelValue.plateColor === option.value }"
+              @click="selectPlateColor(option.value)"
+            >
+              {{ t('marketplace', PLATE_LABEL_KEY[option.value])
+              }}<span class="chip-sub">{{ option.range }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <p class="group-title">{{ t('marketplace', 'powerType') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="option in POWER_TYPE_OPTIONS"
+              :key="option.value"
+              class="chip"
+              :class="{ active: modelValue.powerType === option.value }"
+              @click="update({ powerType: option.value })"
             >
               {{ option.label }}
             </button>
           </div>
         </div>
 
+        <div v-if="bodyTypeOptions.length > 0" class="filter-group">
+          <p class="group-title">{{ t('marketplace', 'bodyType') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="option in bodyTypeOptions"
+              :key="option"
+              class="chip"
+              :class="{ active: modelValue.bodyType === option }"
+              @click="selectBodyType(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="brandOptions.length > 0" class="filter-group">
+          <p class="group-title">{{ t('marketplace', 'brand') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="option in brandOptions"
+              :key="option"
+              class="chip"
+              :class="{ active: modelValue.brand === option }"
+              @click="selectBrand(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+        </div>
+
         <div class="filter-group">
-          <p class="group-title">排序方式</p>
+          <p class="group-title">{{ t('marketplace', 'sortBy') }}</p>
           <div class="option-list">
             <button
               v-for="option in SORT_OPTIONS"
@@ -91,7 +164,9 @@ function handleReset(): void {
           </div>
         </div>
 
-        <button class="reset-link" @click="handleReset">重設篩選條件</button>
+        <button class="reset-link" @click="handleReset">
+          {{ t('marketplace', 'resetFilters') }}
+        </button>
       </div>
     </div>
   </Teleport>
@@ -113,7 +188,7 @@ function handleReset(): void {
   overflow-y: auto;
   background: var(--color-surface);
   border-radius: 20px 20px 0 0;
-  padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+  padding: 14px 18px calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -130,7 +205,7 @@ function handleReset(): void {
 .sheet-head {
   display: flex;
   align-items: center;
-  justif-y-content: space-between;
+  justify-content: space-between;
 }
 
 .sheet-head h3 {
@@ -138,18 +213,6 @@ function handleReset(): void {
   font-size: 15.5px;
   font-weight: 800;
   color: var(--color-text-primary);
-}
-
-.closebtn {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: none;
-  background: var(--color-background);
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .filter-group {
@@ -163,10 +226,6 @@ function handleReset(): void {
   font-size: 13px;
   font-weight: 700;
   color: var(--color-text-secondary);
-}
-
-.group-title.no-margin {
-  margin: 0;
 }
 
 .chip-row {
@@ -189,6 +248,18 @@ function handleReset(): void {
   border-color: var(--color-primary);
   background: var(--color-primary-bg, #e8f1fd);
   color: var(--color-primary);
+}
+
+.chip-sub {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.chip.active .chip-sub {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .option-list {

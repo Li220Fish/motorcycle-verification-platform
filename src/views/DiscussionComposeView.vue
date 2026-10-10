@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
 import { DISCUSSION_CATEGORIES } from '@/services/discussion/discussion.types'
 import { useAuthStore } from '@/stores/auth.store'
 import { useDiscussionStore } from '@/stores/discussion.store'
@@ -12,6 +13,7 @@ import { useDiscussionStore } from '@/stores/discussion.store'
 const router = useRouter()
 const authStore = useAuthStore()
 const discussionStore = useDiscussionStore()
+const { t } = useI18n()
 
 const category = ref(DISCUSSION_CATEGORIES[0])
 const title = ref('')
@@ -47,7 +49,10 @@ async function submit(): Promise<void> {
   try {
     const postId = await discussionStore.createPost({
       authorId: authStore.user.id,
-      authorSnapshot: { displayName: authStore.user.displayName ?? '匿名使用者' },
+      authorSnapshot: {
+        displayName: authStore.user.displayName ?? t('discussionCompose', 'anonymousUser'),
+        photoUrl: authStore.user.photoUrl,
+      },
       title: title.value.trim(),
       body: body.value.trim(),
       category: category.value,
@@ -55,7 +60,8 @@ async function submit(): Promise<void> {
     })
     router.replace(`/discussion/${postId}`)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '文章發布失敗，請重試'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('discussionCompose', 'publishFailed')
   } finally {
     submitting.value = false
   }
@@ -64,32 +70,47 @@ async function submit(): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="發表新討論" back />
+    <AppHeader :title="t('discussionCompose', 'title')" back />
 
     <div class="content">
       <label class="field">
-        <span>分類</span>
+        <span>{{ t('discussionCompose', 'category') }}</span>
         <select v-model="category">
           <option v-for="c in DISCUSSION_CATEGORIES" :key="c" :value="c">{{ c }}</option>
         </select>
       </label>
 
       <label class="field">
-        <span>標題</span>
-        <input v-model="title" placeholder="輸入討論標題" maxlength="80" />
+        <span>{{ t('discussionCompose', 'titleField') }}</span>
+        <input
+          v-model="title"
+          :placeholder="t('discussionCompose', 'titlePlaceholder')"
+          maxlength="80"
+        />
       </label>
 
       <label class="field">
-        <span>內容</span>
-        <textarea v-model="body" placeholder="分享你的想法..." rows="8" maxlength="5000" />
+        <span>{{ t('discussionCompose', 'content') }}</span>
+        <textarea
+          v-model="body"
+          :placeholder="t('discussionCompose', 'contentPlaceholder')"
+          rows="8"
+          maxlength="5000"
+        />
       </label>
 
       <div class="field">
-        <span>圖片（選填，最多 4 張）</span>
+        <span>{{ t('discussionCompose', 'photos') }}</span>
         <div class="image-row">
           <div v-for="(src, i) in previews" :key="src" class="preview">
-            <img :src="src" alt="預覽圖片" />
-            <button class="remove" @click="removeImage(i)"><X :size="12" /></button>
+            <img :src="src" alt="" />
+            <button
+              class="remove"
+              :aria-label="t('discussionCompose', 'removeImage')"
+              @click="removeImage(i)"
+            >
+              <X :size="12" />
+            </button>
           </div>
           <label v-if="images.length < 4" class="add-image">
             +
@@ -107,7 +128,7 @@ async function submit(): Promise<void> {
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
       <PrimaryButton block :disabled="!canSubmit" @click="submit">
-        {{ submitting ? '發布中...' : '發布討論' }}
+        {{ submitting ? t('discussionCompose', 'publishing') : t('discussionCompose', 'publish') }}
       </PrimaryButton>
     </div>
   </div>

@@ -4,14 +4,19 @@ import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
-import FeaturedDealersSection from '@/components/home/FeaturedDealersSection.vue'
+// 精選車商 — temporarily disabled (not deleted, may come back), see the
+// <FeaturedDealersSection> usage below for the matching commented-out spot.
+// import FeaturedDealersSection from '@/components/home/FeaturedDealersSection.vue'
 import VehicleMarketRow from '@/components/home/VehicleMarketRow.vue'
 import MarketplaceFilterSheet from '@/components/marketplace/MarketplaceFilterSheet.vue'
 import {
   DEFAULT_MARKETPLACE_FILTERS,
+  matchesPlateColor,
+  normalizeBrand,
   PRICE_FILTER_MAX,
   type MarketplaceFilters,
 } from '@/components/marketplace/marketplace-filters'
+import { useI18n } from '@/composables/useI18n'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import { listingService } from '@/services/firebase/listing.service'
 import { useAuthStore } from '@/stores/auth.store'
@@ -19,6 +24,7 @@ import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 const allListings = ref<MockMarketListing[]>([])
 const searchQuery = ref('')
 const filterSheetOpen = ref(false)
@@ -52,16 +58,36 @@ async function handleToggleFavorite(listingId: string): Promise<void> {
 
 const activeFilterCount = computed(() => {
   let count = 0
-  if (filters.value.sellerType !== 'all') count += 1
-  if (filters.value.sortBy !== 'default') count += 1
   if (
     filters.value.priceRange[0] !== DEFAULT_MARKETPLACE_FILTERS.priceRange[0] ||
     filters.value.priceRange[1] !== DEFAULT_MARKETPLACE_FILTERS.priceRange[1]
   ) {
     count += 1
   }
+  if (filters.value.plateColor !== null) count += 1
+  if (filters.value.powerType !== 'all') count += 1
+  if (filters.value.bodyType !== null) count += 1
+  if (filters.value.brand !== null) count += 1
   return count
 })
+
+// Chip options for the filter sheet — derived from whatever's actually
+// loaded rather than a fixed enum, since 車型類別/廠牌 are both
+// admin-authored free text (see admin/sections/ModelsSection.vue).
+const bodyTypeOptions = computed(() =>
+  Array.from(
+    new Set(
+      allListings.value
+        .map((listing) => listing.vehicleSnapshot.bodyType)
+        .filter((v): v is string => !!v),
+    ),
+  ).sort(),
+)
+const brandOptions = computed(() =>
+  Array.from(
+    new Set(allListings.value.map((listing) => normalizeBrand(listing.vehicleSnapshot.brand))),
+  ).sort(),
+)
 
 // All client-side over the already-fetched DEMO listings — no backend
 // search/filter exists (or is needed) for a fixed mock dataset this size.
@@ -74,14 +100,38 @@ const listings = computed(() => {
         `${listing.vehicleSnapshot.brand} ${listing.vehicleSnapshot.model} ${listing.region} ${listing.district}`.toLowerCase()
       if (!haystack.includes(keyword)) return false
     }
-    if (filters.value.sellerType !== 'all' && listing.sellerType !== filters.value.sellerType)
-      return false
     const [priceMin, priceMax] = filters.value.priceRange
     if (listing.priceTwd < priceMin) return false
     // priceMax at the slider's own ceiling means "or more" (see
     // marketplace-filters.ts), not a hard cap — otherwise a listing priced
     // above PRICE_FILTER_MAX would be hidden by leaving the slider untouched.
     if (priceMax < PRICE_FILTER_MAX && listing.priceTwd > priceMax) return false
+
+    if (
+      filters.value.plateColor !== null &&
+      !matchesPlateColor(listing.vehicleSnapshot.displacementCc, filters.value.plateColor)
+    )
+      return false
+
+    if (
+      filters.value.powerType !== 'all' &&
+      listing.vehicleSnapshot.powerType !== filters.value.powerType
+    )
+      return false
+    // Missing bodyType/powerType (a listing published before these fields
+    // existed) never matches a specific filter selection — see
+    // VehicleSnapshot.bodyType's doc comment in marketplace-mock.ts for why
+    // "pass through" would be worse than "not filterable yet" here.
+    if (
+      filters.value.bodyType !== null &&
+      listing.vehicleSnapshot.bodyType !== filters.value.bodyType
+    )
+      return false
+    if (
+      filters.value.brand !== null &&
+      normalizeBrand(listing.vehicleSnapshot.brand) !== filters.value.brand
+    )
+      return false
     return true
   })
   switch (filters.value.sortBy) {
@@ -91,12 +141,6 @@ const listings = computed(() => {
     case 'price-desc':
       result = [...result].sort((a, b) => b.priceTwd - a.priceTwd)
       break
-    case 'mileage-asc':
-      result = [...result].sort((a, b) => a.vehicleSnapshot.mileage - b.vehicleSnapshot.mileage)
-      break
-    case 'score-desc':
-      result = [...result].sort((a, b) => b.verificationScore - a.verificationScore)
-      break
   }
   return result
 })
@@ -104,7 +148,7 @@ const listings = computed(() => {
 
 <template>
   <div>
-    <AppHeader title="交易市場" />
+    <AppHeader :title="t('marketplace', 'title')" />
 
     <div class="content">
       <div class="tab-row">
@@ -113,14 +157,14 @@ const listings = computed(() => {
           :class="{ active: activeTab === 'market' }"
           @click="activeTab = 'market'"
         >
-          市場
+          {{ t('marketplace', 'tabMarket') }}
         </button>
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'favorites' }"
           @click="activeTab = 'favorites'"
         >
-          我的最愛
+          {{ t('marketplace', 'tabFavorites') }}
         </button>
       </div>
 
@@ -130,14 +174,14 @@ const listings = computed(() => {
           <input
             v-model="searchQuery"
             type="search"
-            placeholder="搜尋車款、地區、關鍵字"
-            aria-label="搜尋車款、地區、關鍵字"
+            :placeholder="t('marketplace', 'searchPlaceholder')"
+            :aria-label="t('marketplace', 'searchPlaceholder')"
           />
         </div>
         <button
           class="filter-btn"
           :class="{ active: activeFilterCount > 0 }"
-          aria-label="篩選"
+          :aria-label="t('marketplace', 'filter')"
           @click="filterSheetOpen = true"
         >
           <SlidersHorizontal :size="18" />
@@ -146,10 +190,10 @@ const listings = computed(() => {
       </div>
 
       <p v-if="activeTab === 'favorites' && listings.length === 0" class="empty-hint">
-        還沒有收藏的車輛，點列表旁的愛心加入我的最愛吧。
+        {{ t('marketplace', 'emptyFavorites') }}
       </p>
       <p v-else-if="allListings.length > 0 && listings.length === 0" class="empty-hint">
-        找不到符合條件的車輛，試試調整搜尋或篩選條件。
+        {{ t('marketplace', 'emptyFiltered') }}
       </p>
 
       <!-- Main list: horizontal row, image left — image should carry more
@@ -170,12 +214,16 @@ const listings = computed(() => {
         </div>
       </div>
 
+      <!-- 精選車商 — temporarily disabled (not deleted, may come back).
       <FeaturedDealersSection v-if="activeTab === 'market'" />
+      -->
     </div>
 
     <MarketplaceFilterSheet
       v-model="filters"
       :open="filterSheetOpen"
+      :body-type-options="bodyTypeOptions"
+      :brand-options="brandOptions"
       @close="filterSheetOpen = false"
     />
   </div>

@@ -5,12 +5,14 @@ import { useRouter } from 'vue-router'
 
 import Avatar from '@/components/common/Avatar.vue'
 import HomeContent from '@/components/home/HomeContent.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNotificationStore } from '@/stores/notification.store'
 
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const displayName = computed(
   () => authStore.user?.displayName || authStore.user?.email?.split('@')[0] || '朋友',
@@ -23,11 +25,17 @@ const displayName = computed(
       <button class="greeting" @click="router.push('/settings')">
         <Avatar :name="displayName" :photo-url="authStore.user?.photoUrl" :size="40" />
         <span class="greeting-text">
-          <span class="greeting-title">你好，{{ displayName }}！</span>
-          <span class="greeting-subtitle">查驗車況，買賣都安心</span>
+          <span class="greeting-title">{{
+            t('dashboard', 'greeting', { name: displayName })
+          }}</span>
+          <span class="greeting-subtitle">{{ t('dashboard', 'tagline') }}</span>
         </span>
       </button>
-      <button class="icon-button" aria-label="通知" @click="router.push('/notifications')">
+      <button
+        class="icon-button"
+        :aria-label="t('dashboard', 'notifications')"
+        @click="router.push('/notifications')"
+      >
         <Bell :size="20" />
         <span v-if="notificationStore.unreadCount > 0" class="badge-dot" />
       </button>
@@ -47,7 +55,7 @@ const displayName = computed(
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-md) 18px;
-  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+  padding-top: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)));
   background: var(--color-background);
   position: sticky;
   top: 0;

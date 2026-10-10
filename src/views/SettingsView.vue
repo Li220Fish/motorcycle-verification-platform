@@ -10,14 +10,17 @@ import {
   Shield,
   User as UserIcon,
 } from 'lucide-vue-next'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import Avatar from '@/components/common/Avatar.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const { t } = useI18n()
 
 interface SettingSection {
   icon: typeof UserIcon
@@ -25,14 +28,14 @@ interface SettingSection {
   to: string
 }
 
-const sections: SettingSection[] = [
-  { icon: UserIcon, label: '帳號', to: '/settings/account' },
-  { icon: Bell, label: '通知', to: '/settings/notifications' },
-  { icon: Settings, label: '調整設置', to: '/settings/preferences' },
-  { icon: Bluetooth, label: 'Probe 連接', to: '/probe' },
-  { icon: Shield, label: '資料與隱私', to: '/settings/privacy' },
-  { icon: Info, label: '關於 MotoVerify', to: '/settings/about' },
-]
+const sections = computed<SettingSection[]>(() => [
+  { icon: UserIcon, label: t('settings', 'account'), to: '/settings/account' },
+  { icon: Bell, label: t('settings', 'notifications'), to: '/settings/notifications' },
+  { icon: Settings, label: t('settings', 'preferences'), to: '/settings/preferences' },
+  { icon: Bluetooth, label: t('settings', 'probe'), to: '/probe' },
+  { icon: Shield, label: t('settings', 'privacy'), to: '/settings/privacy' },
+  { icon: Info, label: t('settings', 'about'), to: '/settings/about' },
+])
 
 function handleSectionClick(section: SettingSection): void {
   router.push(section.to)
@@ -46,7 +49,7 @@ async function handleLogout(): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="我的">
+    <AppHeader :title="t('settings', 'title')">
       <template #right>
         <button class="icon-button" aria-label="回到主頁" @click="router.push('/dashboard')">
           <Home :size="20" />
@@ -82,7 +85,7 @@ async function handleLogout(): Promise<void> {
 
       <button class="logout-row" @click="handleLogout">
         <LogOut :size="18" />
-        <span>登出</span>
+        <span>{{ t('settings', 'logout') }}</span>
       </button>
     </div>
   </div>

@@ -1,20 +1,19 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
-import { Bike, Plus, Trash2 } from 'lucide-vue-next'
-import { useRoute, useRouter } from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
+import { Bike, ArrowRightLeft, Plus, Trash2 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VehicleCard from '@/components/common/VehicleCard.vue'
-import VehicleModelSelect from '@/components/common/VehicleModelSelect.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useVehicleStore } from '@/stores/vehicle.store'
-import type { VehicleModelOption } from '@/services/firebase/vehicle-model.service'
-import type { Vehicle, VehicleDraft } from '@/types/vehicle'
+import type { Vehicle } from '@/types/vehicle'
 
 const vehicleStore = useVehicleStore()
 const router = useRouter()
-const route = useRoute()
+const { t } = useI18n()
 
 // --- Long-press-drag reorder — the top card after a drop is what
 // HomeContent.vue's status card features (photo + mileage/fuel stats).
@@ -180,52 +179,21 @@ function onCardClick(vehicleId: string): void {
   openVehicle(vehicleId)
 }
 
-// Arriving from Vehicle Detail's "新增車輛" menu item (?new=1) already means
-// the user wants the form open — no need to click 新增車輛 again.
-const showForm = ref(route.query.new === '1')
-const submitting = ref(false)
+// "+" in the header no longer opens an inline form — it offers a choice
+// between 新增車輛 (its own page, VehicleAddView.vue) and 車輛轉移 (its own
+// page, VehicleTransferView.vue — just the invite code, see
+// functions/src/functions/vehicle-transfer-invite.ts for why that's a
+// separate mechanism from a marketplace sale).
+const addMenuOpen = ref(false)
 
-const form = reactive<VehicleDraft>({
-  brand: '',
-  model: '',
-  manufactureYear: null,
-  mileage: null,
-  licensePlate: '',
-  photos: [],
-  modelId: null,
-  displacementCc: null,
-  transmission: null,
-  hasChain: null,
-})
-
-/** Populates the fields the catalog already knows — modelId/displacementCc/
- *  transmission/hasChain — so a picked model doesn't just fill in
- *  brand/model text but also feeds BasicHealthCheck13.vue's 鏈條 item later.
- *  `null` (manual entry / cleared selection) resets them the same way. */
-function handleModelPicked(option: VehicleModelOption | null): void {
-  form.modelId = option?.id ?? null
-  form.displacementCc = option?.displacementCc ?? null
-  form.transmission = option?.transmission ?? null
-  form.hasChain = option?.hasChain ?? null
+function goToAddVehicle(): void {
+  addMenuOpen.value = false
+  router.push('/vehicles/new')
 }
 
-async function handleCreate(): Promise<void> {
-  submitting.value = true
-  try {
-    await vehicleStore.createVehicle({ ...form })
-    form.brand = ''
-    form.model = ''
-    form.manufactureYear = null
-    form.mileage = null
-    form.licensePlate = ''
-    form.modelId = null
-    form.displacementCc = null
-    form.transmission = null
-    form.hasChain = null
-    showForm.value = false
-  } finally {
-    submitting.value = false
-  }
+function goToTransferVehicle(): void {
+  addMenuOpen.value = false
+  router.push('/vehicles/transfer')
 }
 
 function openVehicle(id: string): void {
@@ -244,8 +212,8 @@ function toggleMenu(vehicleId: string): void {
 
 async function handleDeleteVehicle(vehicle: Vehicle): Promise<void> {
   openMenuId.value = null
-  const label = `${vehicle.brand} ${vehicle.model}`.trim() || '這台車'
-  if (!window.confirm(`刪除「${label}」？此操作無法復原。`)) return
+  const label = `${vehicle.brand} ${vehicle.model}`.trim() || t('vehicles', 'unnamedVehicle')
+  if (!window.confirm(t('vehicles', 'confirmDelete', { name: label }))) return
   deletingId.value = vehicle.id
   try {
     await vehicleStore.deleteVehicle(vehicle.id)
@@ -261,43 +229,40 @@ onMounted(() => {
 
 <template>
   <div>
-    <AppHeader title="我的車輛">
+    <AppHeader :title="t('vehicles', 'title')">
       <template #right>
-        <button class="icon-button" aria-label="新增車輛" @click="showForm = !showForm">
+        <button
+          class="icon-button"
+          :aria-label="t('vehicles', 'addOrTransfer')"
+          @click="addMenuOpen = !addMenuOpen"
+        >
           <Plus :size="20" />
         </button>
       </template>
     </AppHeader>
 
-    <div class="content">
-      <form v-if="showForm" class="vehicle-form" @submit.prevent="handleCreate">
-        <VehicleModelSelect
-          v-model:brand="form.brand"
-          v-model:model="form.model"
-          @model-picked="handleModelPicked"
-        />
-        <input v-model.number="form.manufactureYear" type="number" placeholder="年式" />
-        <input v-model.number="form.mileage" type="number" placeholder="里程 (km)" />
-        <input v-model="form.licensePlate" placeholder="車牌號碼" />
-        <PrimaryButton type="submit" block :disabled="submitting">
-          {{ submitting ? '儲存中...' : '新增車輛' }}
-        </PrimaryButton>
-      </form>
+    <div v-if="addMenuOpen" class="add-menu">
+      <button @click="goToAddVehicle"><Plus :size="15" />{{ t('vehicles', 'addVehicle') }}</button>
+      <button @click="goToTransferVehicle">
+        <ArrowRightLeft :size="15" />{{ t('vehicles', 'transferVehicle') }}
+      </button>
+    </div>
 
-      <p v-if="vehicleStore.loading">載入中...</p>
+    <div class="content">
+      <p v-if="vehicleStore.loading">{{ t('common', 'loading') }}</p>
       <EmptyState
         v-else-if="vehicleStore.vehicles.length === 0"
         :icon="Bike"
-        title="尚未建立車輛"
-        description="新增第一台車，開始建立屬於它的驗證紀錄。"
+        :title="t('vehicles', 'emptyTitle')"
+        :description="t('vehicles', 'emptyDesc')"
       >
         <template #action>
-          <PrimaryButton @click="showForm = true">新增車輛</PrimaryButton>
+          <PrimaryButton @click="goToAddVehicle">{{ t('vehicles', 'addVehicle') }}</PrimaryButton>
         </template>
       </EmptyState>
       <template v-else>
         <p v-if="displayVehicles.length > 1" class="reorder-hint">
-          長按車輛卡片可拖曳排序，排在最上方的車輛會顯示在首頁封面
+          {{ t('vehicles', 'reorderHint') }}
         </p>
         <div class="vehicle-list">
           <div
@@ -323,7 +288,11 @@ onMounted(() => {
                 :disabled="deletingId === vehicle.id"
                 @click="handleDeleteVehicle(vehicle)"
               >
-                <Trash2 :size="15" />{{ deletingId === vehicle.id ? '刪除中...' : '刪除車輛' }}
+                <Trash2 :size="15" />{{
+                  deletingId === vehicle.id
+                    ? t('common', 'deleting')
+                    : t('vehicles', 'deleteVehicle')
+                }}
               </button>
             </div>
           </div>
@@ -353,23 +322,33 @@ onMounted(() => {
   gap: var(--space-md);
 }
 
-.vehicle-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-md);
+.add-menu {
+  position: fixed;
+  top: calc(var(--header-height) + var(--safe-area-inset-top, env(safe-area-inset-top)));
+  right: var(--space-md);
+  margin-top: 4px;
+  z-index: 30;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 160px;
 }
 
-.vehicle-form input {
-  width: 100%;
-  height: 44px;
-  padding: 0 var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: 15px;
+.add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: left;
 }
 
 .vehicle-list {

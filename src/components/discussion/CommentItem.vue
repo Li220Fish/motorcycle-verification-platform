@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import Avatar from '@/components/common/Avatar.vue'
+import { useI18n } from '@/composables/useI18n'
+import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { DiscussionComment } from '@/services/discussion/discussion.types'
 
-defineProps<{
+const props = defineProps<{
   comment: DiscussionComment
   canDelete: boolean
   /** Resolved by the parent (DiscussionPostView.vue) from the comment's own
@@ -12,24 +14,40 @@ defineProps<{
   replyToName?: string | null
 }>()
 defineEmits<{ delete: []; reply: [] }>()
+const { t } = useI18n()
+
+// Live-subscribed — see DiscussionPostCard.vue's own comment on why the
+// frozen authorSnapshot.photoUrl alone isn't enough.
+const authorPhotoUrl = useLiveAvatar(
+  () => props.comment.authorId,
+  () => props.comment.authorSnapshot.photoUrl,
+)
 </script>
 
 <template>
   <div class="row" :class="{ indented: !!comment.parentCommentId }">
-    <Avatar :name="comment.authorSnapshot.displayName" :size="28" />
+    <Avatar :name="comment.authorSnapshot.displayName" :photo-url="authorPhotoUrl" :size="28" />
     <div class="bubble">
       <div class="author-row">
         <span class="author">{{ comment.authorSnapshot.displayName }}</span>
         <span class="time">{{ formatRelativeTime(comment.createdAt) }}</span>
       </div>
-      <p v-if="comment.status === 'deleted'" class="deleted">此留言已刪除</p>
+      <p v-if="comment.status === 'deleted'" class="deleted">
+        {{ t('discussionPost', 'commentDeleted') }}
+      </p>
       <template v-else>
-        <p v-if="replyToName" class="reply-to">回覆 @{{ replyToName }}</p>
+        <p v-if="replyToName" class="reply-to">
+          {{ t('discussionPost', 'replyTo', { name: replyToName }) }}
+        </p>
         <p class="text">{{ comment.text }}</p>
       </template>
       <div v-if="comment.status !== 'deleted'" class="actions">
-        <button class="reply-btn" @click="$emit('reply')">回覆</button>
-        <button v-if="canDelete" class="delete-btn" @click="$emit('delete')">刪除</button>
+        <button class="reply-btn" @click="$emit('reply')">
+          {{ t('discussionPost', 'reply') }}
+        </button>
+        <button v-if="canDelete" class="delete-btn" @click="$emit('delete')">
+          {{ t('discussionPost', 'delete') }}
+        </button>
       </div>
     </div>
   </div>

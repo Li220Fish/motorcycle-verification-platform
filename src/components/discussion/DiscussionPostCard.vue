@@ -3,20 +3,33 @@ import { Heart, MessageSquare } from 'lucide-vue-next'
 
 import Avatar from '@/components/common/Avatar.vue'
 import { ADMIN_UID } from '@/admin/services/admin-auth.service'
+import { useI18n } from '@/composables/useI18n'
+import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { DiscussionPost } from '@/services/discussion/discussion.types'
 
-defineProps<{ post: DiscussionPost }>()
+const props = defineProps<{ post: DiscussionPost }>()
+const { t } = useI18n()
+
+// Live-subscribed — authorSnapshot.photoUrl alone is frozen at post-creation
+// time and never updates again, so an author's later avatar change would
+// otherwise never show on their older posts.
+const authorPhotoUrl = useLiveAvatar(
+  () => props.post.authorId,
+  () => props.post.authorSnapshot.photoUrl,
+)
 </script>
 
 <template>
   <div class="card">
     <div class="top">
-      <Avatar :name="post.authorSnapshot.displayName" :size="26" />
+      <Avatar :name="post.authorSnapshot.displayName" :photo-url="authorPhotoUrl" :size="26" />
       <span class="author">{{ post.authorSnapshot.displayName }}</span>
-      <span v-if="post.authorId === ADMIN_UID" class="official-tag">官方</span>
+      <span v-if="post.authorId === ADMIN_UID" class="official-tag">{{
+        t('discussion', 'officialTag')
+      }}</span>
       <span class="time">· {{ formatRelativeTime(post.createdAt) }}</span>
-      <span v-if="post.featured" class="featured-tag">精選</span>
+      <span v-if="post.featured" class="featured-tag">{{ t('discussion', 'featuredTag') }}</span>
     </div>
     <p class="title">{{ post.title }}</p>
     <p class="excerpt">{{ post.body.slice(0, 60) }}</p>

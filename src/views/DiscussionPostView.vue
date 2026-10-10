@@ -9,6 +9,8 @@ import { ADMIN_UID, isAdminSession } from '@/admin/services/admin-auth.service'
 import AuthorFollowButton from '@/components/discussion/AuthorFollowButton.vue'
 import CommentInput from '@/components/discussion/CommentInput.vue'
 import CommentItem from '@/components/discussion/CommentItem.vue'
+import { useI18n } from '@/composables/useI18n'
+import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { commentService } from '@/services/discussion/comment.service'
 import { discussionService } from '@/services/discussion/discussion.service'
 import { useAuthStore } from '@/stores/auth.store'
@@ -20,6 +22,14 @@ const props = defineProps<{ postId: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const discussionStore = useDiscussionStore()
+const { t } = useI18n()
+
+// Live-subscribed — see DiscussionPostCard.vue's own comment on why the
+// frozen authorSnapshot.photoUrl alone isn't enough.
+const authorPhotoUrl = useLiveAvatar(
+  () => discussionStore.currentPost?.authorId,
+  () => discussionStore.currentPost?.authorSnapshot.photoUrl,
+)
 
 const liked = ref(false)
 const sendingComment = ref(false)
@@ -79,7 +89,10 @@ async function submitComment(text: string): Promise<void> {
     await discussionStore.addComment(
       props.postId,
       authStore.user.id,
-      { displayName: authStore.user.displayName ?? '匿名使用者' },
+      {
+        displayName: authStore.user.displayName ?? t('discussionPost', 'anonymousUser'),
+        photoUrl: authStore.user.photoUrl,
+      },
       text,
       replyingTo.value?.commentId ?? null,
     )
@@ -103,7 +116,7 @@ async function reportPost(): Promise<void> {
   menuOpen.value = false
   if (!authStore.user) return
   await discussionService.reportContent(authStore.user.id, 'post', props.postId, '不當言論')
-  actionMessage.value = '已送出檢舉，我們會儘快處理'
+  actionMessage.value = t('discussionPost', 'reportSent')
 }
 
 onMounted(() => {
@@ -118,9 +131,13 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <AppHeader title="討論內容" back>
+    <AppHeader :title="t('discussionPost', 'title')" back>
       <template #right>
-        <button class="icon-button" aria-label="更多" @click="menuOpen = !menuOpen">
+        <button
+          class="icon-button"
+          :aria-label="t('discussionPost', 'more')"
+          @click="menuOpen = !menuOpen"
+        >
           <MoreVertical :size="18" />
         </button>
       </template>
@@ -128,31 +145,45 @@ onUnmounted(() => {
 
     <div v-if="menuOpen" class="menu">
       <button v-if="canManageFeatured" @click="toggleFeatured">
-        <Sparkles :size="15" />{{ discussionStore.currentPost?.featured ? '取消精選' : '設為精選' }}
+        <Sparkles :size="15" />{{
+          discussionStore.currentPost?.featured
+            ? t('discussionPost', 'unfeature')
+            : t('discussionPost', 'setFeatured')
+        }}
       </button>
       <button v-if="isAuthor" class="danger" @click="deletePost">
-        <Trash2 :size="15" />刪除文章
+        <Trash2 :size="15" />{{ t('discussionPost', 'deletePost') }}
       </button>
-      <button v-else @click="reportPost"><Flag :size="15" />檢舉文章</button>
+      <button v-else @click="reportPost">
+        <Flag :size="15" />{{ t('discussionPost', 'reportPost') }}
+      </button>
     </div>
 
-    <div v-if="!discussionStore.currentPost" class="loading">載入中...</div>
+    <div v-if="!discussionStore.currentPost" class="loading">
+      {{ t('discussionPost', 'loading') }}
+    </div>
     <div v-else-if="discussionStore.currentPost.status === 'deleted'" class="loading">
-      此文章已刪除
+      {{ t('discussionPost', 'postDeleted') }}
     </div>
 
     <div v-else class="scroll">
       <div class="post-card">
         <div class="top">
-          <Avatar :name="discussionStore.currentPost.authorSnapshot.displayName" :size="32" />
+          <Avatar
+            :name="discussionStore.currentPost.authorSnapshot.displayName"
+            :photo-url="authorPhotoUrl"
+            :size="32"
+          />
           <div class="author-col">
             <span class="author-row">
               <span class="author">{{
                 discussionStore.currentPost.authorSnapshot.displayName
               }}</span>
-              <span v-if="isAdminPost" class="official-badge">官方</span>
+              <span v-if="isAdminPost" class="official-badge">{{
+                t('discussionPost', 'officialBadge')
+              }}</span>
               <span v-if="discussionStore.currentPost.featured" class="featured-badge">
-                <Sparkles :size="11" />精選
+                <Sparkles :size="11" />{{ t('discussionPost', 'featuredBadge') }}
               </span>
             </span>
             <span class="time">{{
@@ -172,7 +203,7 @@ onUnmounted(() => {
             v-for="m in discussionStore.currentPost.media"
             :key="m.storagePath"
             :src="m.url"
-            alt="討論圖片"
+            alt=""
           />
         </div>
         <div class="foot">
@@ -182,7 +213,11 @@ onUnmounted(() => {
           </button>
           <span
             ><MessageSquare :size="15" />
-            {{ discussionStore.comments.filter((c) => c.status !== 'deleted').length }} 則留言</span
+            {{
+              t('discussionPost', 'commentCount', {
+                count: discussionStore.comments.filter((c) => c.status !== 'deleted').length,
+              })
+            }}</span
           >
         </div>
       </div>
@@ -190,9 +225,11 @@ onUnmounted(() => {
       <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
       <div class="comments">
-        <p v-if="!discussionStore.commentsLoaded" class="loading small">載入留言中...</p>
+        <p v-if="!discussionStore.commentsLoaded" class="loading small">
+          {{ t('discussionPost', 'loadingComments') }}
+        </p>
         <p v-else-if="discussionStore.comments.length === 0" class="loading small">
-          還沒有留言，搶頭香吧！
+          {{ t('discussionPost', 'noComments') }}
         </p>
         <CommentItem
           v-for="c in discussionStore.comments"

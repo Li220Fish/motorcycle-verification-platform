@@ -6,9 +6,11 @@ import { useRouter } from 'vue-router'
 import AppHeader from '@/components/common/AppHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
 import { listingService } from '@/services/firebase/listing.service'
 import { storageService } from '@/services/firebase/storage.service'
 import { verificationService } from '@/services/firebase/verification.service'
+import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
@@ -24,6 +26,16 @@ import type { Vehicle } from '@/types/vehicle'
 const router = useRouter()
 const authStore = useAuthStore()
 const vehicleStore = useVehicleStore()
+const { t } = useI18n()
+
+const NON_PUBLISHED_STATUS_KEY: Record<
+  string,
+  'listingStatusDraft' | 'listingStatusSold' | 'listingStatusDelisted'
+> = {
+  draft: 'listingStatusDraft',
+  sold: 'listingStatusSold',
+  delisted: 'listingStatusDelisted',
+}
 
 const listings = ref<MockMarketListing[]>([])
 const loading = ref(true)
@@ -72,7 +84,7 @@ async function loadListings(): Promise<void> {
 
 // Only vehicles with a completed 車輛驗證 that aren't already listed can be
 // published — every listing on this platform is backed by a real inspection
-// (see MarketplaceListingView.vue's "已通過 MotoVerify 專業檢驗" framing).
+// (see MarketplaceListingView.vue's "已通過 RiDE78 專業檢驗" framing).
 async function loadEligibleVehicles(): Promise<void> {
   loadingEligible.value = true
   try {
@@ -169,12 +181,22 @@ async function handleSubmit(): Promise<void> {
     )
     const photos = uploadedUrls.length > 0 ? uploadedUrls : (entry.vehicle.photos ?? [])
 
+    // Snapshot bodyType/powerType from the linked 車款主檔 (if any) at publish
+    // time — same "denormalize once, never live-join" reasoning as the rest
+    // of vehicleSnapshot. No modelId link means both stay null; the filter
+    // sheet on /marketplace treats that as "doesn't match" for either facet
+    // rather than guessing.
+    const modelProfile = entry.vehicle.modelId
+      ? await vehicleModelService.getProfile(entry.vehicle.modelId)
+      : null
+
     await listingService.create(listingId, {
       brand: entry.vehicle.brand,
       model: entry.vehicle.model,
       year: entry.vehicle.manufactureYear ?? new Date().getFullYear(),
       mileageKm: entry.vehicle.mileage ?? 0,
       vehicleId: entry.vehicle.id,
+      modelId: entry.vehicle.modelId ?? null,
       verificationId: entry.verificationId,
       priceTwd: form.priceTwd as number,
       region: form.region.trim(),
@@ -183,10 +205,13 @@ async function handleSubmit(): Promise<void> {
       transmission: form.transmission.trim(),
       color: form.color.trim(),
       modified: form.modified,
+      bodyType: modelProfile?.bodyType ?? null,
+      powerType: modelProfile?.powerType ?? null,
       description: form.description.trim(),
       photos,
       sellerId: authStore.user.id,
-      sellerName: authStore.user.displayName || authStore.user.email || '賣家',
+      sellerName:
+        authStore.user.displayName || authStore.user.email || t('myListings', 'defaultSeller'),
       sellerType: 'individual',
       sellerRating: 5,
       sellerReviewCount: 0,
@@ -200,7 +225,7 @@ async function handleSubmit(): Promise<void> {
     await loadListings()
     await loadEligibleVehicles()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '刊登失敗，請稍後再試'
+    errorMessage.value = error instanceof Error ? error.message : t('myListings', 'publishFailed')
   } finally {
     submitting.value = false
   }
@@ -209,9 +234,13 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="我的刊登">
+    <AppHeader :title="t('myListings', 'title')">
       <template #right>
-        <button class="icon-button" aria-label="新增刊登" @click="showForm = !showForm">
+        <button
+          class="icon-button"
+          :aria-label="t('myListings', 'addListing')"
+          @click="showForm = !showForm"
+        >
           <Plus :size="20" />
         </button>
       </template>
@@ -220,20 +249,20 @@ async function handleSubmit(): Promise<void> {
     <div class="content">
       <form v-if="showForm" class="listing-form" @submit.prevent="handleSubmit">
         <template v-if="!loadingEligible && eligibleVehicles.length === 0">
-          <p class="hint">目前沒有可以刊登的車輛——請先完成一台車的車輛驗證。</p>
+          <p class="hint">{{ t('myListings', 'noEligibleHint') }}</p>
           <PrimaryButton
             variant="secondary"
             block
             @click="router.push('/verification?type=seller')"
           >
-            前往驗車
+            {{ t('myListings', 'goVerify') }}
           </PrimaryButton>
         </template>
         <template v-else>
           <label class="field">
-            <span>選擇要刊登的車輛</span>
+            <span>{{ t('myListings', 'selectVehicle') }}</span>
             <select v-model="form.vehicleId" required>
-              <option value="" disabled>請選擇</option>
+              <option value="" disabled>{{ t('myListings', 'pleaseSelect') }}</option>
               <option
                 v-for="entry in eligibleVehicles"
                 :key="entry.vehicle.id"
@@ -246,30 +275,30 @@ async function handleSubmit(): Promise<void> {
           </label>
 
           <label class="field">
-            <span>售價 (NT$)</span>
+            <span>{{ t('myListings', 'price') }}</span>
             <input
               v-model.number="form.priceTwd"
               type="number"
               min="0"
-              placeholder="例如 68000"
+              :placeholder="t('myListings', 'pricePlaceholder')"
               required
             />
           </label>
 
           <div class="field-row">
             <label class="field">
-              <span>縣市</span>
+              <span>{{ t('myListings', 'region') }}</span>
               <select v-model="form.region" required>
-                <option value="" disabled>請選擇縣市</option>
+                <option value="" disabled>{{ t('myListings', 'selectRegion') }}</option>
                 <option v-for="region in TAIWAN_REGIONS" :key="region.name" :value="region.name">
                   {{ region.name }}
                 </option>
               </select>
             </label>
             <label class="field">
-              <span>行政區</span>
+              <span>{{ t('myListings', 'district') }}</span>
               <select v-model="form.district" required :disabled="!form.region">
-                <option value="" disabled>請先選擇縣市</option>
+                <option value="" disabled>{{ t('myListings', 'selectRegionFirst') }}</option>
                 <option v-for="district in availableDistricts" :key="district" :value="district">
                   {{ district }}
                 </option>
@@ -279,25 +308,30 @@ async function handleSubmit(): Promise<void> {
 
           <div class="field-row">
             <label class="field">
-              <span>排氣量 (cc)</span>
+              <span>{{ t('myListings', 'displacement') }}</span>
               <input
                 v-model.number="form.displacementCc"
                 type="number"
                 min="0"
-                placeholder="例如 155"
+                :placeholder="t('myListings', 'displacementPlaceholder')"
                 required
               />
             </label>
             <label class="field">
-              <span>車身顏色</span>
-              <input v-model="form.color" type="text" placeholder="例如 消光黑" required />
+              <span>{{ t('myListings', 'color') }}</span>
+              <input
+                v-model="form.color"
+                type="text"
+                :placeholder="t('myListings', 'colorPlaceholder')"
+                required
+              />
             </label>
           </div>
 
           <div class="field">
-            <span>傳動</span>
+            <span>{{ t('myListings', 'transmission') }}</span>
             <p v-if="chainKnownFromVehicle" class="hint">
-              {{ form.transmission }}（依車輛型號資料自動判斷）
+              {{ t('myListings', 'autoDetected', { value: form.transmission }) }}
             </p>
             <div v-else class="segmented-control">
               <button
@@ -306,7 +340,7 @@ async function handleSubmit(): Promise<void> {
                 :class="{ active: form.transmission === TRANSMISSION_NO_EXPOSED_CHAIN }"
                 @click="form.transmission = TRANSMISSION_NO_EXPOSED_CHAIN"
               >
-                沒有外露鏈條
+                {{ t('myListings', 'noExposedChain') }}
               </button>
               <button
                 type="button"
@@ -314,44 +348,44 @@ async function handleSubmit(): Promise<void> {
                 :class="{ active: form.transmission === TRANSMISSION_CHAIN_EXPOSED }"
                 @click="form.transmission = TRANSMISSION_CHAIN_EXPOSED"
               >
-                有外露鏈條
+                {{ t('myListings', 'exposedChain') }}
               </button>
             </div>
           </div>
 
           <label class="toggle-field">
             <input v-model="form.modified" type="checkbox" />
-            <span>曾經改裝</span>
+            <span>{{ t('myListings', 'modified') }}</span>
           </label>
 
           <label class="field">
-            <span>車輛描述</span>
+            <span>{{ t('myListings', 'description') }}</span>
             <textarea
               v-model="form.description"
               rows="3"
-              placeholder="跟買家說說這台車的狀況、保養紀錄..."
+              :placeholder="t('myListings', 'descriptionPlaceholder')"
             />
           </label>
 
           <label class="field">
-            <span>照片（第一張為封面照）</span>
+            <span>{{ t('myListings', 'photos') }}</span>
             <input type="file" accept="image/*" multiple @change="handleFileChange" />
           </label>
 
           <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
           <PrimaryButton type="submit" block :disabled="!canSubmit">
-            {{ submitting ? '刊登中...' : '確認刊登' }}
+            {{ submitting ? t('myListings', 'publishing') : t('myListings', 'confirmPublish') }}
           </PrimaryButton>
         </template>
       </form>
 
-      <p v-if="loading">載入中...</p>
+      <p v-if="loading">{{ t('common', 'loading') }}</p>
       <EmptyState
         v-else-if="listings.length === 0"
         :icon="Bike"
-        title="尚未有任何刊登"
-        description="完成一台車的車輛驗證後，就能把它刊登到交易市場。"
+        :title="t('myListings', 'noListingsTitle')"
+        :description="t('myListings', 'noListingsDesc')"
       />
       <div v-else class="listing-list">
         <button
@@ -369,10 +403,23 @@ async function handleSubmit(): Promise<void> {
             <Bike v-else :size="24" color="var(--color-text-disabled)" />
           </span>
           <span class="info">
-            <span class="title"
-              >{{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
-              {{ listing.vehicleSnapshot.model }}</span
-            >
+            <span class="title-row">
+              <span class="title"
+                >{{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
+                {{ listing.vehicleSnapshot.model }}</span
+              >
+              <span
+                v-if="listing.status !== 'published'"
+                class="status-badge"
+                :class="listing.status"
+              >
+                {{
+                  NON_PUBLISHED_STATUS_KEY[listing.status]
+                    ? t('common', NON_PUBLISHED_STATUS_KEY[listing.status])
+                    : listing.status
+                }}
+              </span>
+            </span>
             <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
           </span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
@@ -551,10 +598,36 @@ async function handleSubmit(): Promise<void> {
   gap: 2px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .title {
   font-size: 14.5px;
   font-weight: 700;
   color: var(--color-text-primary);
+}
+
+.status-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+}
+
+.status-badge.sold {
+  background: var(--color-background);
+  color: var(--color-text-disabled);
+}
+
+.status-badge.delisted {
+  background: var(--color-background);
+  color: var(--color-danger);
 }
 
 .price {

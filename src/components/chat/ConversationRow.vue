@@ -1,26 +1,56 @@
 <script setup lang="ts">
 import Avatar from '@/components/common/Avatar.vue'
+import { useI18n } from '@/composables/useI18n'
+import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { Conversation } from '@/services/chat/chat.types'
 
 const props = defineProps<{ conversation: Conversation; currentUid: string }>()
+const { t } = useI18n()
+
+const TAG_LABEL_KEY: Record<string, 'filterTrading' | 'filterSystem'> = {
+  交易中: 'filterTrading',
+  系統: 'filterSystem',
+}
+
+function tagLabel(): string {
+  const key = TAG_LABEL_KEY[props.conversation.tag]
+  return key ? t('messagesList', key) : props.conversation.tag
+}
+
+function otherId(): string | undefined {
+  return props.conversation.memberIds.find((id) => id !== props.currentUid)
+}
 
 function otherName(): string {
-  const otherId = props.conversation.memberIds.find((id) => id !== props.currentUid)
-  if (!otherId) return '未知使用者'
-  return props.conversation.memberSnapshots[otherId]?.displayName ?? '未知使用者'
+  const id = otherId()
+  const fallback = t('messagesList', 'unknownUser')
+  if (!id) return fallback
+  return props.conversation.memberSnapshots[id]?.displayName ?? fallback
 }
+
+function otherSnapshotPhotoUrl(): string | null | undefined {
+  const id = otherId()
+  return id ? props.conversation.memberSnapshots[id]?.photoUrl : undefined
+}
+
+// Live-subscribed — see useLiveAvatar's doc comment on why memberSnapshots'
+// own photoUrl alone (only refreshed when the other member next sends a
+// message) isn't enough to show an avatar change right away.
+const otherPhotoUrl = useLiveAvatar(otherId, otherSnapshotPhotoUrl)
 </script>
 
 <template>
   <div class="row">
-    <Avatar :name="otherName()" :size="42" />
+    <Avatar :name="otherName()" :photo-url="otherPhotoUrl" :size="42" />
     <div class="body">
       <div class="top">
         <span class="name">{{ otherName() }}</span>
-        <span class="tag">{{ conversation.tag }}</span>
+        <span class="tag">{{ tagLabel() }}</span>
       </div>
-      <p class="preview">{{ conversation.lastMessage?.text ?? '尚無訊息' }}</p>
+      <p class="preview">
+        {{ conversation.lastMessage?.text ?? t('messagesList', 'noMessageYet') }}
+      </p>
     </div>
     <div class="right">
       <span class="time">{{ formatRelativeTime(conversation.lastMessageAt) }}</span>

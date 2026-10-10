@@ -2,7 +2,10 @@
 import { Bike, MoreHorizontal } from 'lucide-vue-next'
 
 import StatusBadge from './StatusBadge.vue'
+import { useI18n } from '@/composables/useI18n'
 import type { Vehicle } from '@/types/vehicle'
+
+const { t } = useI18n()
 
 defineProps<{
   vehicle: Vehicle
@@ -22,7 +25,9 @@ defineEmits<{ more: [] }>()
       <p class="brand">{{ vehicle.brand }}</p>
       <p class="model">{{ vehicle.model }}</p>
       <p class="meta">
-        <span v-if="vehicle.manufactureYear">{{ vehicle.manufactureYear }} 年式</span>
+        <span v-if="vehicle.manufactureYear">{{
+          t('common', 'modelYear', { year: vehicle.manufactureYear })
+        }}</span>
         <span v-if="vehicle.mileage !== null"
           >{{ vehicle.manufactureYear ? ' · ' : ''
           }}{{ vehicle.mileage?.toLocaleString() }} km</span

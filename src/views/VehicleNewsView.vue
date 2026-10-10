@@ -2,11 +2,13 @@
 import { onMounted, ref } from 'vue'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import { useI18n } from '@/composables/useI18n'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { MockVehicleNews } from '@/data/home/vehicle-news-mock'
 
 const props = defineProps<{ newsId: string }>()
+const { t } = useI18n()
 
 const news = ref<MockVehicleNews | null>(null)
 const loaded = ref(false)
@@ -19,10 +21,10 @@ onMounted(async () => {
 
 <template>
   <div>
-    <AppHeader title="車訊新知" back />
+    <AppHeader :title="t('vehicleNews', 'title')" back />
 
-    <div v-if="!loaded" class="loading">載入中...</div>
-    <div v-else-if="!news" class="loading">找不到這則消息</div>
+    <div v-if="!loaded" class="loading">{{ t('vehicleNews', 'loading') }}</div>
+    <div v-else-if="!news" class="loading">{{ t('vehicleNews', 'notFound') }}</div>
 
     <div v-else class="scroll">
       <div class="post-card">

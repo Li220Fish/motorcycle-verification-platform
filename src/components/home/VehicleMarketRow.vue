@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Bike, Heart, Store } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 defineProps<{ listing: MockMarketListing; isFavorite?: boolean }>()
 defineEmits<{ toggleFavorite: [] }>()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -27,12 +29,18 @@ defineEmits<{ toggleFavorite: [] }>()
              get their own badge instead (see marketplace-mock.ts). Icon-only
              and inline with the title, same treatment as the Home market
              card (VehicleMarketCard.vue). -->
-        <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
+        <span
+          v-if="listing.sellerType === 'dealer'"
+          class="dealer-badge"
+          :title="t('marketplace', 'dealerBadge')"
+        >
           <Store :size="11" />
         </span>
       </div>
       <p class="meta">
-        {{ listing.vehicleSnapshot.manufactureYear }} 年式 ·
+        <template v-if="listing.vehicleSnapshot.manufactureYear"
+          >{{ t('common', 'modelYear', { year: listing.vehicleSnapshot.manufactureYear }) }} ·
+        </template>
         {{ listing.vehicleSnapshot.mileage.toLocaleString() }} km · {{ listing.region }}
       </p>
       <div class="bottom-row">
@@ -42,7 +50,9 @@ defineEmits<{ toggleFavorite: [] }>()
     <button
       class="favorite-btn"
       :class="{ active: isFavorite }"
-      :aria-label="isFavorite ? '取消收藏' : '加入我的最愛'"
+      :aria-label="
+        isFavorite ? t('marketplace', 'removeFavorite') : t('marketplace', 'addFavorite')
+      "
       @click.stop="$emit('toggleFavorite')"
     >
       <Heart :size="18" :fill="isFavorite ? 'currentColor' : 'none'" />

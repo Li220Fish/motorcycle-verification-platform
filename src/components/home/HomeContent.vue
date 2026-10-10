@@ -6,6 +6,7 @@ import VehicleCarousel from './VehicleCarousel.vue'
 import VehicleNewsSection from './VehicleNewsSection.vue'
 import VehicleSearchBar from './VehicleSearchBar.vue'
 import VehicleStatusCard from './VehicleStatusCard.vue'
+import { useI18n } from '@/composables/useI18n'
 import { getFlatItems } from '@/data/verification'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import { vehicleLogService } from '@/services/firebase/vehicle-log.service'
@@ -17,6 +18,7 @@ import type { Vehicle } from '@/types/vehicle'
 
 const vehicleStore = useVehicleStore()
 const marketListings = ref<MockMarketListing[]>([])
+const { t } = useI18n()
 
 interface VehicleWithProgress {
   vehicle: Vehicle
@@ -82,9 +84,9 @@ const featuredVehicle = computed(() => vehiclesWithProgress.value[0] ?? null)
 const featuredStatusLabel = computed(() => {
   const entry = featuredVehicle.value
   if (!entry) return ''
-  if (entry.hasCompletedVerification) return '狀態良好'
-  if (entry.percent !== null) return '驗證中'
-  return '尚未驗證'
+  if (entry.hasCompletedVerification) return t('home', 'statusGood')
+  if (entry.percent !== null) return t('home', 'statusVerifying')
+  return t('home', 'statusUnverified')
 })
 
 const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
@@ -98,7 +100,6 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
       <VehicleStatusCard
         :vehicle="featuredVehicle?.vehicle ?? null"
         :status-label="featuredStatusLabel"
-        :vehicle-count="vehicleStore.vehicles.length"
         :avg-fuel-consumption="featuredAvgFuelConsumption"
       />
     </div>
@@ -109,8 +110,8 @@ const hasVehicles = computed(() => vehicleStore.vehicles.length > 0)
 
     <div class="section">
       <div class="section-header">
-        <h2>熱門車輛</h2>
-        <RouterLink to="/marketplace" class="see-all">查看全部 →</RouterLink>
+        <h2>{{ t('home', 'popularVehicles') }}</h2>
+        <RouterLink to="/marketplace" class="see-all">{{ t('home', 'viewAll') }} →</RouterLink>
       </div>
       <VehicleCarousel :listings="marketListings" />
     </div>

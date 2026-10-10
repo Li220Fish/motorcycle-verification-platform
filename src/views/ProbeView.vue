@@ -6,11 +6,13 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import ProbeStatusCard from '@/components/probe/ProbeStatusCard.vue'
 import VoltageChart from '@/components/probe/VoltageChart.vue'
 import VoltageMetric from '@/components/probe/VoltageMetric.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useBluetoothStore } from '@/stores/bluetooth.store'
 import { useProbeStore } from '@/stores/probe.store'
 
 const probeStore = useProbeStore()
 const bluetoothStore = useBluetoothStore()
+const { t } = useI18n()
 
 const connecting = ref(false)
 const errorMessage = ref('')
@@ -30,7 +32,7 @@ async function handleSearch(): Promise<void> {
     await probeStore.connect()
     await probeStore.start()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '搜尋裝置失敗'
+    errorMessage.value = error instanceof Error ? error.message : t('probe', 'searchFailed')
   } finally {
     connecting.value = false
   }
@@ -60,43 +62,40 @@ onMounted(() => {
     <template v-if="!probeStore.connected">
       <header class="probe-header">
         <span class="spacer" />
-        <h1>連接 Probe</h1>
+        <h1>{{ t('probe', 'connectTitle') }}</h1>
         <button class="icon-button" aria-label="Help" @click="showHelp = !showHelp">
           <HelpCircle :size="20" />
         </button>
       </header>
 
       <div class="connect-content">
-        <p v-if="showHelp" class="help-tip">
-          MotoProbe 是一個透過藍牙傳送電瓶電壓的檢測儀。找不到裝置時，請確認 Probe
-          電源已開啟，且手機藍牙與定位權限已允許。
-        </p>
+        <p v-if="showHelp" class="help-tip">{{ t('probe', 'helpTip') }}</p>
         <div class="device-illustration">
           <Bluetooth :size="40" color="var(--color-probe-voltage)" />
         </div>
-        <p class="device-name">MotoProbe</p>
-        <p class="device-subtitle">電壓檢測儀</p>
+        <p class="device-name">{{ t('probe', 'deviceName') }}</p>
+        <p class="device-subtitle">{{ t('probe', 'deviceSubtitle') }}</p>
 
-        <p class="connection-state">未連接</p>
+        <p class="connection-state">{{ t('probe', 'notConnected') }}</p>
 
         <PrimaryButton block :disabled="connecting" @click="handleSearch">
-          {{ connecting ? '搜尋中...' : '搜尋裝置' }}
+          {{ connecting ? t('probe', 'searching') : t('probe', 'searchDevice') }}
         </PrimaryButton>
 
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
         <button class="mode-toggle" @click="toggleMode">
-          <span>{{ isMockMode() ? 'Developer Mode / Mock Probe' : '真實 BLE 模式' }}</span>
+          <span>{{ isMockMode() ? t('probe', 'mockMode') : t('probe', 'realBleMode') }}</span>
           <span class="mode-switch" :class="{ on: isMockMode() }" />
         </button>
 
         <div class="instructions">
-          <h2>使用說明</h2>
+          <h2>{{ t('probe', 'instructions') }}</h2>
           <ol>
-            <li>紅色夾接電瓶正極 (+)</li>
-            <li>黑色夾接電瓶負極 (-)</li>
-            <li>開啟 Probe 電源</li>
-            <li>點選「搜尋裝置」</li>
+            <li>{{ t('probe', 'step1') }}</li>
+            <li>{{ t('probe', 'step2') }}</li>
+            <li>{{ t('probe', 'step3') }}</li>
+            <li>{{ t('probe', 'step4') }}</li>
           </ol>
         </div>
       </div>
@@ -107,7 +106,7 @@ onMounted(() => {
         <button class="icon-button" aria-label="Back" @click="handleStopMonitoring">
           <ChevronLeft :size="22" />
         </button>
-        <h1>Probe 監測中</h1>
+        <h1>{{ t('probe', 'monitoringTitle') }}</h1>
         <span class="spacer" />
       </header>
 
@@ -115,7 +114,7 @@ onMounted(() => {
         <ProbeStatusCard :connected="true" device-name="MotoProbe-3846" />
 
         <div class="voltage-hero">
-          <p class="voltage-label">目前電壓</p>
+          <p class="voltage-label">{{ t('probe', 'currentVoltage') }}</p>
           <p class="voltage-value">
             {{ probeStore.currentVoltage !== null ? probeStore.currentVoltage.toFixed(2) : '--' }}
             <span class="voltage-unit">V</span>
@@ -125,48 +124,63 @@ onMounted(() => {
         <VoltageChart :samples="probeStore.samples" />
 
         <div class="metric-row">
-          <VoltageMetric label="最低電壓" :value="`${probeStore.analysis.minVoltage} V`" />
-          <VoltageMetric label="最高電壓" :value="`${probeStore.analysis.maxVoltage} V`" />
-          <VoltageMetric label="平均電壓" :value="`${probeStore.analysis.averageVoltage} V`" />
+          <VoltageMetric
+            :label="t('probe', 'minVoltage')"
+            :value="`${probeStore.analysis.minVoltage} V`"
+          />
+          <VoltageMetric
+            :label="t('probe', 'maxVoltage')"
+            :value="`${probeStore.analysis.maxVoltage} V`"
+          />
+          <VoltageMetric
+            :label="t('probe', 'avgVoltage')"
+            :value="`${probeStore.analysis.averageVoltage} V`"
+          />
         </div>
 
-        <PrimaryButton variant="danger" block @click="handleStopMonitoring">停止監測</PrimaryButton>
+        <PrimaryButton variant="danger" block @click="handleStopMonitoring">
+          {{ t('probe', 'stopMonitoring') }}
+        </PrimaryButton>
         <PrimaryButton
           v-if="isMockMode()"
           variant="secondary"
           block
           @click="probeStore.simulateEngineStart"
         >
-          模擬啟動測試
+          {{ t('probe', 'simulateEngineStart') }}
         </PrimaryButton>
       </div>
     </template>
 
     <div class="devices-section">
       <button class="devices-toggle" @click="showDevices = !showDevices">
-        {{ showDevices ? '隱藏' : '顯示' }}藍牙裝置列表（進階）
+        {{ showDevices ? t('probe', 'hideDeviceList') : t('probe', 'showDeviceList') }}
       </button>
 
       <div v-if="showDevices" class="devices-panel">
-        <p class="devices-hint">
-          一般 BLE 掃描，與上方的 Probe 連線功能各自獨立，用來確認手機藍牙硬體與權限是否正常。
-        </p>
+        <p class="devices-hint">{{ t('probe', 'devicesHint') }}</p>
         <p class="devices-status">
-          藍牙狀態：{{ bluetoothStore.enabled ? '已啟用' : '未知 / 未啟用' }}
+          {{
+            t('probe', 'bluetoothStatus', {
+              status: bluetoothStore.enabled
+                ? t('probe', 'enabled')
+                : t('probe', 'unknownOrDisabled'),
+            })
+          }}
         </p>
 
         <div class="devices-controls">
           <button class="ghost-button" @click="toggleScan">
-            {{ bluetoothStore.scanning ? '停止掃描' : '掃描附近裝置' }}
+            {{ bluetoothStore.scanning ? t('probe', 'stopScan') : t('probe', 'startScan') }}
           </button>
           <button class="ghost-button" @click="bluetoothStore.refreshBondedDevices">
-            重新整理配對裝置
+            {{ t('probe', 'refreshBonded') }}
           </button>
         </div>
 
         <p v-if="bluetoothStore.errorMessage" class="error">{{ bluetoothStore.errorMessage }}</p>
 
-        <h3>附近裝置</h3>
+        <h3>{{ t('probe', 'nearbyDevices') }}</h3>
         <ul class="device-list">
           <li v-for="result in bluetoothStore.scannedDevices" :key="result.device.deviceId">
             <span>{{ result.localName || result.device.name || result.device.deviceId }}</span>
@@ -176,25 +190,27 @@ onMounted(() => {
               class="ghost-button small"
               @click="bluetoothStore.connectTo(result.device.deviceId)"
             >
-              連接
+              {{ t('probe', 'connect') }}
             </button>
             <button
               v-else
               class="ghost-button small"
               @click="bluetoothStore.disconnectFrom(result.device.deviceId)"
             >
-              斷開
+              {{ t('probe', 'disconnect') }}
             </button>
           </li>
-          <li v-if="bluetoothStore.scannedDevices.length === 0">尚未找到裝置。</li>
+          <li v-if="bluetoothStore.scannedDevices.length === 0">
+            {{ t('probe', 'noDevicesFound') }}
+          </li>
         </ul>
 
-        <h3>已配對裝置（僅 Android）</h3>
+        <h3>{{ t('probe', 'bondedDevices') }}</h3>
         <ul class="device-list">
           <li v-for="device in bluetoothStore.bondedDevices" :key="device.deviceId">
             {{ device.name || device.deviceId }}
           </li>
-          <li v-if="bluetoothStore.bondedDevices.length === 0">無資料，或此平台不支援。</li>
+          <li v-if="bluetoothStore.bondedDevices.length === 0">{{ t('probe', 'noBondedData') }}</li>
         </ul>
       </div>
     </div>
@@ -215,7 +231,7 @@ onMounted(() => {
   justify-content: space-between;
   height: var(--header-height);
   padding: 0 var(--space-md);
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top));
 }
 
 .probe-header h1 {

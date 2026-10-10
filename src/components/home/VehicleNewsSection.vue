@@ -3,12 +3,14 @@ import { onMounted, ref } from 'vue'
 import { FileText } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useI18n } from '@/composables/useI18n'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { MockVehicleNews } from '@/data/home/vehicle-news-mock'
 
 const router = useRouter()
 const newsItems = ref<MockVehicleNews[]>([])
+const { t } = useI18n()
 
 onMounted(async () => {
   newsItems.value = await homeContentService.listVehicleNews()
@@ -18,7 +20,7 @@ onMounted(async () => {
 <template>
   <div class="section">
     <div class="section-header">
-      <h2>車訊新知</h2>
+      <h2>{{ t('home', 'vehicleNews') }}</h2>
     </div>
     <div class="news-list">
       <button

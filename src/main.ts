@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { platformService } from './services/platform/platform.service'
+import { useFontSizeStore } from './stores/font-size.store'
+import { useLocaleStore } from './stores/locale.store'
 import { useThemeStore } from './stores/theme.store'
 import './style.css'
 
@@ -14,6 +16,8 @@ app.use(createPinia())
 app.use(router)
 
 void useThemeStore().initialize()
+void useFontSizeStore().initialize()
+void useLocaleStore().initialize()
 
 /**
  * Android hardware back button + system edge-swipe-back gesture: Capacitor's

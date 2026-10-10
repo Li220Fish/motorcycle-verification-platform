@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ShieldCheck } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 
 const mode = ref<'login' | 'register'>('login')
 const email = ref('')
@@ -35,7 +36,7 @@ async function handleSubmit(): Promise<void> {
 }
 
 function handleUnavailableLogin(providerName: string): void {
-  errorMessage.value = `${providerName} 登入尚未啟用`
+  errorMessage.value = t('login', 'unavailableLogin', { provider: providerName })
 }
 
 // Dev/QA-only quick login — see scripts/seed-test-users.mjs and
@@ -69,44 +70,84 @@ async function quickLogin(accountEmail: string): Promise<void> {
 <template>
   <div class="auth-wrap">
     <div class="auth-logo">
-      <div class="mark"><ShieldCheck :size="26" /></div>
-      <div class="name">Moto<b>Verify</b></div>
-      <div class="sub">機車驗證平台</div>
+      <div class="mark">
+        <!-- Same inline mark as Logo.vue — see its own comment for why this
+             is inlined rather than an <img> to /favicon.svg. -->
+        <svg viewBox="0 0 618 618" class="mark-svg">
+          <rect width="618" height="618" fill="#2C4BEA" />
+          <g transform="translate(-28,-10)">
+            <path
+              d="M295.2,327.7 A70,70 0 1 0 308.6,430"
+              fill="none"
+              stroke="#FFFFFF"
+              stroke-width="50"
+            />
+            <path
+              d="M155,158 H380 C437,158 482,200 482,252 C482,300 445,338 395,345 L520,472 L448,474 L265,380 L340,282 H378 C398,282 410,268 410,252 C410,236 398,220 378,220 H208 Z"
+              fill="#FFFFFF"
+              stroke="#2C4BEA"
+              stroke-width="14"
+              stroke-linejoin="miter"
+              paint-order="stroke"
+            />
+          </g>
+        </svg>
+      </div>
+      <div class="name">RiDE<b>78</b></div>
+      <div class="sub">{{ t('login', 'tagline') }}</div>
     </div>
 
     <div class="auth-tabs">
-      <button :class="{ active: mode === 'login' }" @click="mode = 'login'">登入</button>
-      <button :class="{ active: mode === 'register' }" @click="mode = 'register'">註冊</button>
+      <button :class="{ active: mode === 'login' }" @click="mode = 'login'">
+        {{ t('login', 'login') }}
+      </button>
+      <button :class="{ active: mode === 'register' }" @click="mode = 'register'">
+        {{ t('login', 'register') }}
+      </button>
     </div>
 
     <form class="auth-form" @submit.prevent="handleSubmit">
       <label v-if="mode === 'register'" class="form-field">
-        <span>顯示名稱</span>
-        <input v-model="displayName" type="text" placeholder="騎士大哥" />
+        <span>{{ t('login', 'displayName') }}</span>
+        <input
+          v-model="displayName"
+          type="text"
+          :placeholder="t('login', 'displayNamePlaceholder')"
+        />
       </label>
       <label class="form-field">
-        <span>電子郵件</span>
+        <span>{{ t('login', 'email') }}</span>
         <input v-model="email" type="email" required placeholder="you@example.com" />
       </label>
       <label class="form-field">
-        <span>密碼</span>
+        <span>{{ t('login', 'password') }}</span>
         <input v-model="password" type="password" required minlength="6" placeholder="••••••••" />
       </label>
 
       <button class="cta-blue" type="submit" :disabled="submitting">
-        {{ submitting ? '請稍候...' : mode === 'register' ? '註冊' : '登入' }}
+        {{
+          submitting
+            ? t('login', 'pleaseWait')
+            : mode === 'register'
+              ? t('login', 'register')
+              : t('login', 'login')
+        }}
       </button>
     </form>
 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <div class="auth-divider">或使用其他方式</div>
+    <div class="auth-divider">{{ t('login', 'orOtherWays') }}</div>
 
-    <button class="social-btn" @click="handleUnavailableLogin('Google')">Google 登入</button>
-    <button class="social-btn" @click="handleUnavailableLogin('Apple')">Apple 登入</button>
+    <button class="social-btn" @click="handleUnavailableLogin('Google')">
+      {{ t('login', 'googleLogin') }}
+    </button>
+    <button class="social-btn" @click="handleUnavailableLogin('Apple')">
+      {{ t('login', 'appleLogin') }}
+    </button>
 
     <div v-if="isDev" class="quick-login">
-      <div class="auth-divider">測試帳號快速登入（僅限開發環境）</div>
+      <div class="auth-divider">{{ t('login', 'quickLoginDivider') }}</div>
       <div class="quick-login-buttons">
         <button
           v-for="account in quickLoginAccounts"
@@ -145,11 +186,15 @@ async function quickLogin(accountEmail: string): Promise<void> {
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  background: var(--color-primary-dark);
-  color: #fff;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.auth-logo .mark-svg {
+  width: 100%;
+  height: 100%;
 }
 
 .auth-logo .name {

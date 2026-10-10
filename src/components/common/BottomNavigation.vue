@@ -1,19 +1,22 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { MessageCircle, Home, ShieldCheck, ShoppingBag, Users } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useI18n } from '@/composables/useI18n'
 import { useChatStore } from '@/stores/chat.store'
 
 const route = useRoute()
 const chatStore = useChatStore()
+const { t } = useI18n()
 
-const items = [
-  { path: '/dashboard', label: '首頁', icon: Home },
-  { path: '/marketplace', label: '市場', icon: ShoppingBag },
-  { path: '/verification', label: '檢驗', icon: ShieldCheck },
-  { path: '/messages', label: '訊息', icon: MessageCircle, badge: true },
-  { path: '/discussion', label: '討論中心', icon: Users },
-]
+const items = computed(() => [
+  { path: '/dashboard', label: t('nav', 'home'), icon: Home },
+  { path: '/marketplace', label: t('nav', 'market'), icon: ShoppingBag },
+  { path: '/verification', label: t('nav', 'verify'), icon: ShieldCheck },
+  { path: '/messages', label: t('nav', 'messages'), icon: MessageCircle, badge: true },
+  { path: '/discussion', label: t('nav', 'discussion'), icon: Users },
+])
 
 function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(`${path}/`)
@@ -49,7 +52,7 @@ function isActive(path: string): boolean {
   display: flex;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
-  padding: 8px 6px max(8px, env(safe-area-inset-bottom));
+  padding: 8px 6px max(8px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   z-index: 20;
 }
 

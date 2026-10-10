@@ -9,12 +9,14 @@ import DiscussionFilter from '@/components/discussion/DiscussionFilter.vue'
 import type { DiscussionViewMode } from '@/components/discussion/DiscussionFilter.vue'
 import DiscussionPostCard from '@/components/discussion/DiscussionPostCard.vue'
 import VehicleKnowledgeSection from '@/components/discussion/VehicleKnowledgeSection.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 import { useDiscussionStore } from '@/stores/discussion.store'
 
 const authStore = useAuthStore()
 const discussionStore = useDiscussionStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const viewMode = ref<DiscussionViewMode>('hot')
 
@@ -38,9 +40,13 @@ onUnmounted(() => {
 
 <template>
   <div class="discussion-shell">
-    <AppHeader title="討論中心">
+    <AppHeader :title="t('discussion', 'title')">
       <template v-if="viewMode !== 'vehicleKnowledge'" #right>
-        <button class="icon-button" aria-label="搜尋" @click="searchOpen = !searchOpen">
+        <button
+          class="icon-button"
+          :aria-label="t('discussion', 'search')"
+          @click="searchOpen = !searchOpen"
+        >
           <Search :size="18" />
         </button>
       </template>
@@ -54,23 +60,29 @@ onUnmounted(() => {
           v-if="searchOpen"
           v-model="searchQuery"
           class="search-input"
-          placeholder="搜尋討論標題"
+          :placeholder="t('discussion', 'searchPlaceholder')"
           autofocus
         />
 
-        <p v-if="!discussionStore.postsLoaded" class="loading">載入中...</p>
+        <p v-if="!discussionStore.postsLoaded" class="loading">{{ t('discussion', 'loading') }}</p>
         <EmptyState
           v-else-if="discussionStore.posts.length === 0"
           :icon="MessageSquare"
-          :title="discussionStore.sort === 'following' ? '尚未追蹤任何人' : '目前還沒有討論'"
+          :title="
+            discussionStore.sort === 'following'
+              ? t('discussion', 'emptyFollowingTitle')
+              : t('discussion', 'emptyTitle')
+          "
           :description="
             discussionStore.sort === 'following'
-              ? '追蹤其他使用者，看看他們在聊什麼'
-              : '發表第一篇討論，開始交流'
+              ? t('discussion', 'emptyFollowingDesc')
+              : t('discussion', 'emptyDesc')
           "
         >
           <template #action>
-            <button class="link-btn" @click="router.push('/discussion/compose')">發表第一篇</button>
+            <button class="link-btn" @click="router.push('/discussion/compose')">
+              {{ t('discussion', 'postFirst') }}
+            </button>
           </template>
         </EmptyState>
         <div v-else class="list">
@@ -95,7 +107,7 @@ onUnmounted(() => {
     <button
       v-if="viewMode !== 'vehicleKnowledge'"
       class="fab"
-      aria-label="發表新討論"
+      :aria-label="t('discussion', 'newPost')"
       @click="router.push('/discussion/compose')"
     >
       <Plus :size="22" color="#fff" />
@@ -171,7 +183,9 @@ onUnmounted(() => {
 .fab {
   position: fixed;
   right: 18px;
-  bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
+  bottom: calc(
+    var(--bottom-nav-height) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 16px
+  );
   width: 50px;
   height: 50px;
   border-radius: 50%;

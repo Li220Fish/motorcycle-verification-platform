@@ -2,8 +2,11 @@
 import { ref, watch } from 'vue'
 import { Send, X } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
+
 const props = defineProps<{ sending: boolean; replyToName?: string | null }>()
 const emit = defineEmits<{ submit: [string]; cancelReply: [] }>()
+const { t } = useI18n()
 
 const text = ref('')
 const inputEl = ref<HTMLInputElement | null>(null)
@@ -26,14 +29,20 @@ function submit(): void {
 <template>
   <div class="input-wrap">
     <div v-if="replyToName" class="reply-banner">
-      <span>回覆 @{{ replyToName }}</span>
-      <button aria-label="取消回覆" @click="$emit('cancelReply')"><X :size="14" /></button>
+      <span>{{ t('discussionPost', 'replyTo', { name: replyToName }) }}</span>
+      <button :aria-label="t('discussionPost', 'cancelReply')" @click="$emit('cancelReply')">
+        <X :size="14" />
+      </button>
     </div>
     <div class="input-bar">
       <input
         ref="inputEl"
         v-model="text"
-        :placeholder="replyToName ? `回覆 @${replyToName}...` : '留下你的想法...'"
+        :placeholder="
+          replyToName
+            ? t('discussionPost', 'replyPlaceholder', { name: replyToName })
+            : t('discussionPost', 'commentPlaceholder')
+        "
         @keydown.enter="submit"
       />
       <button class="send-btn" :disabled="!text.trim() || sending" @click="submit">
@@ -74,7 +83,7 @@ function submit(): void {
   gap: 8px;
   align-items: center;
   padding: 10px 14px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  padding-bottom: calc(10px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 }
 
 .input-bar input {

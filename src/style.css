@@ -17,6 +17,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 字體大小設定（設定 › 調整設置）— 'small' is every existing px font-size in
+   this codebase, unchanged; 'medium'/'large' scale UP from there via `zoom`
+   (see font-size.store.ts for why `zoom`, not `transform: scale()`). */
+:root[data-font-size='medium'] body {
+  zoom: 1.12;
+}
+
+:root[data-font-size='large'] body {
+  zoom: 1.28;
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

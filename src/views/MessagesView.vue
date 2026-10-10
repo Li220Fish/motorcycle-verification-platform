@@ -8,12 +8,14 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import ConversationFilter from '@/components/chat/ConversationFilter.vue'
 import type { ConversationFilterValue } from '@/components/chat/ConversationFilter.vue'
 import ConversationRow from '@/components/chat/ConversationRow.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const filter = ref<ConversationFilterValue>('全部')
 const searchOpen = ref(false)
@@ -53,9 +55,13 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <AppHeader title="訊息中心">
+    <AppHeader :title="t('messagesList', 'title')">
       <template #right>
-        <button class="icon-button" aria-label="搜尋" @click="searchOpen = !searchOpen">
+        <button
+          class="icon-button"
+          :aria-label="t('messagesList', 'search')"
+          @click="searchOpen = !searchOpen"
+        >
           <Search :size="18" />
         </button>
       </template>
@@ -66,20 +72,24 @@ onUnmounted(() => {
         v-if="searchOpen"
         v-model="searchQuery"
         class="search-input"
-        placeholder="搜尋對話對象"
+        :placeholder="t('messagesList', 'searchPlaceholder')"
         autofocus
       />
       <ConversationFilter v-model="filter" />
 
-      <p v-if="!chatStore.conversationsLoaded" class="loading">載入中...</p>
+      <p v-if="!chatStore.conversationsLoaded" class="loading">
+        {{ t('messagesList', 'loading') }}
+      </p>
       <EmptyState
         v-else-if="filtered.length === 0"
         :icon="MessageCircle"
-        title="目前沒有訊息"
-        description="從交易市場聯絡賣家，開始你的第一則對話"
+        :title="t('messagesList', 'emptyTitle')"
+        :description="t('messagesList', 'emptyDesc')"
       >
         <template #action>
-          <RouterLink to="/marketplace" class="link-btn">去市場看看</RouterLink>
+          <RouterLink to="/marketplace" class="link-btn">{{
+            t('messagesList', 'browseMarket')
+          }}</RouterLink>
         </template>
       </EmptyState>
       <div v-else class="list">

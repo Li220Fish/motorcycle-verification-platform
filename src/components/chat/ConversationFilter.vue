@@ -1,10 +1,22 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
+
 export type ConversationFilterValue = '全部' | '未讀' | '交易中' | '系統'
 
+const FILTER_LABEL_KEY: Record<
+  ConversationFilterValue,
+  'filterAll' | 'filterUnread' | 'filterTrading' | 'filterSystem'
+> = {
+  全部: 'filterAll',
+  未讀: 'filterUnread',
+  交易中: 'filterTrading',
+  系統: 'filterSystem',
+}
 const FILTERS: ConversationFilterValue[] = ['全部', '未讀', '交易中', '系統']
 
 defineProps<{ modelValue: ConversationFilterValue }>()
 defineEmits<{ 'update:modelValue': [ConversationFilterValue] }>()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -16,7 +28,7 @@ defineEmits<{ 'update:modelValue': [ConversationFilterValue] }>()
       :class="{ active: modelValue === f }"
       @click="$emit('update:modelValue', f)"
     >
-      {{ f }}
+      {{ t('messagesList', FILTER_LABEL_KEY[f]) }}
     </button>
   </div>
 </template>

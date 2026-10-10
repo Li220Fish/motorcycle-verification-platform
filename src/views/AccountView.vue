@@ -6,11 +6,13 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import Avatar from '@/components/common/Avatar.vue'
 import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import { storageService } from '@/services/firebase/storage.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const displayName = ref(authStore.user?.displayName ?? '')
 const saving = ref(false)
@@ -54,11 +56,11 @@ async function handleAvatarCropConfirmed(blob: Blob): Promise<void> {
     await authStore.updateAvatarUrl(url)
     if (previousUrl) void storageService.deleteFileAtUrl(previousUrl)
     avatarIsError.value = false
-    avatarMessage.value = '已更新大頭貼'
+    avatarMessage.value = t('account', 'avatarUpdated')
     pendingAvatarFile.value = null
   } catch {
     avatarIsError.value = true
-    avatarMessage.value = '大頭貼上傳失敗，請稍後再試'
+    avatarMessage.value = t('account', 'avatarUploadFailed')
   } finally {
     avatarUploading.value = false
     setTimeout(() => {
@@ -108,10 +110,10 @@ async function handleSave(): Promise<void> {
   try {
     await authStore.updateDisplayName(displayName.value.trim())
     saveIsError.value = false
-    saveMessage.value = '已更新顯示名稱'
+    saveMessage.value = t('account', 'displayNameUpdated')
   } catch {
     saveIsError.value = true
-    saveMessage.value = '更新失敗，請稍後再試'
+    saveMessage.value = t('account', 'updateFailed')
   } finally {
     saving.value = false
     setTimeout(() => {
@@ -126,19 +128,19 @@ async function handleSaveEmail(): Promise<void> {
   try {
     await authStore.updateEmail(newEmail.value.trim(), currentPassword.value)
     emailIsError.value = false
-    emailMessage.value = `已寄出驗證信到 ${newEmail.value.trim()}，請至新信箱完成驗證後才會生效`
+    emailMessage.value = t('account', 'verificationEmailSent', { email: newEmail.value.trim() })
     currentPassword.value = ''
   } catch (error) {
     emailIsError.value = true
     const code = (error as { code?: string }).code
     if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-      emailMessage.value = '目前密碼不正確'
+      emailMessage.value = t('account', 'wrongPassword')
     } else if (code === 'auth/email-already-in-use') {
-      emailMessage.value = '此 Email 已被其他帳號使用'
+      emailMessage.value = t('account', 'emailInUse')
     } else if (code === 'auth/invalid-email') {
-      emailMessage.value = 'Email 格式不正確'
+      emailMessage.value = t('account', 'invalidEmail')
     } else {
-      emailMessage.value = '更新失敗，請稍後再試'
+      emailMessage.value = t('account', 'updateFailed')
     }
   } finally {
     savingEmail.value = false
@@ -151,9 +153,9 @@ async function handleSendReset(): Promise<void> {
   resetMessage.value = ''
   try {
     await authStore.sendPasswordReset(authStore.user.email)
-    resetMessage.value = `已寄出密碼重設信到 ${authStore.user.email}`
+    resetMessage.value = t('account', 'resetEmailSent', { email: authStore.user.email })
   } catch {
-    resetMessage.value = '寄送失敗，請稍後再試'
+    resetMessage.value = t('account', 'resetFailed')
   } finally {
     sendingReset.value = false
   }
@@ -162,11 +164,15 @@ async function handleSendReset(): Promise<void> {
 
 <template>
   <div>
-    <AppHeader title="帳號" back />
+    <AppHeader :title="t('account', 'title')" back />
 
     <div class="content">
       <div class="avatar-row">
-        <button class="avatar-edit-btn" aria-label="更換大頭貼" @click="pickAvatarFile">
+        <button
+          class="avatar-edit-btn"
+          :aria-label="t('account', 'changeAvatar')"
+          @click="pickAvatarFile"
+        >
           <Avatar
             :name="displayName || authStore.user?.email || '?'"
             :photo-url="authStore.user?.photoUrl"
@@ -196,26 +202,35 @@ async function handleSendReset(): Promise<void> {
       />
 
       <label class="field">
-        <span>顯示名稱</span>
-        <input v-model="displayName" type="text" placeholder="輸入顯示名稱" maxlength="20" />
+        <span>{{ t('account', 'displayName') }}</span>
+        <input
+          v-model="displayName"
+          type="text"
+          :placeholder="t('account', 'displayNamePlaceholder')"
+          maxlength="20"
+        />
       </label>
 
       <PrimaryButton block :disabled="!canSave" @click="handleSave">
-        {{ saving ? '儲存中...' : '儲存變更' }}
+        {{ saving ? t('account', 'saving') : t('account', 'saveChanges') }}
       </PrimaryButton>
       <p v-if="saveMessage" class="feedback" :class="{ error: saveIsError }">{{ saveMessage }}</p>
 
       <label class="field">
-        <span>電子郵件</span>
-        <input v-model="newEmail" type="email" placeholder="輸入新的電子郵件" />
+        <span>{{ t('account', 'email') }}</span>
+        <input v-model="newEmail" type="email" :placeholder="t('account', 'emailPlaceholder')" />
       </label>
       <label class="field">
-        <span>目前密碼（變更 Email 需要驗證身份）</span>
-        <input v-model="currentPassword" type="password" placeholder="輸入目前密碼" />
+        <span>{{ t('account', 'currentPassword') }}</span>
+        <input
+          v-model="currentPassword"
+          type="password"
+          :placeholder="t('account', 'currentPasswordPlaceholder')"
+        />
       </label>
 
       <PrimaryButton block :disabled="!canSaveEmail" @click="handleSaveEmail">
-        {{ savingEmail ? '更新中...' : '更新 Email' }}
+        {{ savingEmail ? t('account', 'updating') : t('account', 'updateEmail') }}
       </PrimaryButton>
       <p v-if="emailMessage" class="feedback" :class="{ error: emailIsError }">
         {{ emailMessage }}
@@ -223,17 +238,17 @@ async function handleSendReset(): Promise<void> {
 
       <div class="info-card">
         <div class="info-row">
-          <span>使用者 ID</span>
+          <span>{{ t('account', 'userId') }}</span>
           <span class="mono">{{ authStore.user?.id }}</span>
         </div>
         <div class="info-row">
-          <span>加入日期</span>
+          <span>{{ t('account', 'joinedDate') }}</span>
           <span>{{ joinedDate }}</span>
         </div>
       </div>
 
       <button class="ghost-row" :disabled="sendingReset" @click="handleSendReset">
-        {{ sendingReset ? '寄送中...' : '寄送密碼重設信' }}
+        {{ sendingReset ? t('account', 'sending') : t('account', 'sendPasswordReset') }}
       </button>
       <p v-if="resetMessage" class="feedback">{{ resetMessage }}</p>
     </div>

@@ -3,14 +3,29 @@ import { onMounted, ref } from 'vue'
 import { Bike, Heart } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
+import { useI18n } from '@/composables/useI18n'
 import { listingService } from '@/services/firebase/listing.service'
 import { useAuthStore } from '@/stores/auth.store'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
-const STATUS_LABEL: Record<string, string> = { reviewing: '審核中', active: '售中' }
+// Was previously collapsed to just published/"審核中" for everything else —
+// wrongly implied a moderation queue that doesn't exist (listingService
+// .publish() flips straight to 'published', no admin step at all) and
+// lumped draft/sold/delisted together under that misleading label. Matches
+// MyListingsView.vue's own NON_PUBLISHED_STATUS_LABEL now.
+const STATUS_LABEL_KEY: Record<
+  MockMarketListing['status'],
+  'listingStatusDraft' | 'listingStatusPublished' | 'listingStatusSold' | 'listingStatusDelisted'
+> = {
+  draft: 'listingStatusDraft',
+  published: 'listingStatusPublished',
+  sold: 'listingStatusSold',
+  delisted: 'listingStatusDelisted',
+}
 // Fallback for a listing with no imageUrl — deterministic per-card color so
 // it's still visually distinct rather than a plain gray box.
 const GRADIENTS = [
@@ -31,8 +46,10 @@ onMounted(async () => {
 <template>
   <div class="section">
     <div class="section-header">
-      <h2>我的刊登</h2>
-      <button class="manage-link" @click="router.push('/my-listings')">管理 ›</button>
+      <h2>{{ t('home', 'myListings') }}</h2>
+      <button class="manage-link" @click="router.push('/my-listings')">
+        {{ t('home', 'manage') }} ›
+      </button>
     </div>
     <div class="listing-grid">
       <div
@@ -49,9 +66,7 @@ onMounted(async () => {
               : { background: GRADIENTS[index % GRADIENTS.length] }
           "
         >
-          <span class="status-pill">{{
-            STATUS_LABEL[listing.status === 'published' ? 'active' : 'reviewing']
-          }}</span>
+          <span class="status-pill">{{ t('common', STATUS_LABEL_KEY[listing.status]) }}</span>
           <img
             v-if="listing.vehicleSnapshot.photos[0]"
             :src="listing.vehicleSnapshot.photos[0]"
@@ -65,11 +80,13 @@ onMounted(async () => {
           {{ listing.vehicleSnapshot.model }}
         </p>
         <p class="price">${{ listing.priceTwd.toLocaleString() }}</p>
-        <p class="interest"><Heart :size="12" /> {{ listing.sellerReviewCount }} 則評價</p>
+        <p class="interest">
+          <Heart :size="12" /> {{ t('home', 'reviewCount', { count: listing.sellerReviewCount }) }}
+        </p>
       </div>
       <button v-if="listings.length === 0" class="empty-card" @click="router.push('/my-listings')">
         <Bike :size="26" color="var(--color-text-disabled)" />
-        <span>新增第一筆刊登</span>
+        <span>{{ t('home', 'addFirstListing') }}</span>
       </button>
     </div>
   </div>

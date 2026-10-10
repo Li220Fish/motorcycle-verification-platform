@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
 import type { DiscussionSort } from '@/services/discussion/discussion.types'
 
 // 車輛新知 isn't a post sort — it swaps the whole panel below this chip-row
@@ -6,16 +7,21 @@ import type { DiscussionSort } from '@/services/discussion/discussion.types'
 // — but it reads as just one more chip alongside 熱門/最新/精選/追蹤中.
 export type DiscussionViewMode = DiscussionSort | 'vehicleKnowledge'
 
-const FILTERS: { value: DiscussionViewMode; label: string }[] = [
-  { value: 'hot', label: '熱門' },
-  { value: 'new', label: '最新' },
-  { value: 'featured', label: '精選' },
-  { value: 'following', label: '追蹤中' },
-  { value: 'vehicleKnowledge', label: '車輛資訊' },
+const FILTERS: {
+  value: DiscussionViewMode
+  labelKey:
+    'filterHot' | 'filterNew' | 'filterFeatured' | 'filterFollowing' | 'filterVehicleKnowledge'
+}[] = [
+  { value: 'hot', labelKey: 'filterHot' },
+  { value: 'new', labelKey: 'filterNew' },
+  { value: 'featured', labelKey: 'filterFeatured' },
+  { value: 'following', labelKey: 'filterFollowing' },
+  { value: 'vehicleKnowledge', labelKey: 'filterVehicleKnowledge' },
 ]
 
 defineProps<{ modelValue: DiscussionViewMode }>()
 defineEmits<{ 'update:modelValue': [DiscussionViewMode] }>()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -27,7 +33,7 @@ defineEmits<{ 'update:modelValue': [DiscussionViewMode] }>()
       :class="{ active: modelValue === f.value }"
       @click="$emit('update:modelValue', f.value)"
     >
-      {{ f.label }}
+      {{ t('discussion', f.labelKey) }}
     </button>
   </div>
 </template>
