@@ -1,50 +1,98 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 
 import AppHeader from '@/components/common/AppHeader.vue'
+import { useI18n } from '@/composables/useI18n'
+import { notificationPrefsService } from '@/services/firebase/notification-prefs.service'
+import { useAuthStore } from '@/stores/auth.store'
+import { DEFAULT_NOTIFICATION_PREFS } from '@/types/notification'
+import type { NotificationPrefs } from '@/types/notification'
+
+const authStore = useAuthStore()
+const { t } = useI18n()
 
 interface ToggleRow {
-  key: string
-  label: string
-  desc: string
+  key: keyof NotificationPrefs
+  labelKey:
+    | 'pushLabel'
+    | 'chatLabel'
+    | 'tradeLabel'
+    | 'discussionLabel'
+    | 'vehicleNewsLabel'
+    | 'systemLabel'
+  descKey:
+    'pushDesc' | 'chatDesc' | 'tradeDesc' | 'discussionDesc' | 'vehicleNewsDesc' | 'systemDesc'
 }
 
+// One row per real NotificationType category (functions/src/services/
+// notification-dispatch.service.ts's categoryForType) — every one of the
+// app's 13 notification types maps to exactly one of these 5, plus the
+// separate `push` master switch. No "保養提醒" row: no maintenance-reminder
+// notification has ever existed in this codebase, so a toggle for it would
+// control nothing.
 const rows: ToggleRow[] = [
-  { key: 'push', label: '推播通知', desc: '接收 App 的推播提醒' },
-  { key: 'chat', label: '訊息通知', desc: '有新的聊天訊息時通知我' },
-  { key: 'trade', label: '交易通知', desc: '刊登有新詢問或狀態更新時通知我' },
-  { key: 'maintenance', label: '保養提醒', desc: '車輛保養週期將到時提前通知我' },
-  { key: 'system', label: '系統公告', desc: '重要系統與政策異動通知' },
+  { key: 'push', labelKey: 'pushLabel', descKey: 'pushDesc' },
+  { key: 'chat', labelKey: 'chatLabel', descKey: 'chatDesc' },
+  { key: 'trade', labelKey: 'tradeLabel', descKey: 'tradeDesc' },
+  { key: 'discussion', labelKey: 'discussionLabel', descKey: 'discussionDesc' },
+  { key: 'vehicleNews', labelKey: 'vehicleNewsLabel', descKey: 'vehicleNewsDesc' },
+  { key: 'system', labelKey: 'systemLabel', descKey: 'systemDesc' },
 ]
 
-// Prototype only — no notification backend exists yet, so these toggles
-// don't persist anywhere; they just demonstrate the intended interaction.
-const state = reactive<Record<string, boolean>>({
-  push: true,
-  chat: true,
-  trade: true,
-  maintenance: true,
-  system: false,
+const state = reactive<NotificationPrefs>({ ...DEFAULT_NOTIFICATION_PREFS })
+const loading = ref(true)
+const savingKey = ref<keyof NotificationPrefs | null>(null)
+const errorMessage = ref('')
+
+onMounted(async () => {
+  const uid = authStore.user?.id
+  if (!uid) {
+    loading.value = false
+    return
+  }
+  try {
+    const prefs = await notificationPrefsService.getPrefs(uid)
+    Object.assign(state, prefs)
+  } finally {
+    loading.value = false
+  }
 })
 
-function toggle(key: string): void {
-  state[key] = !state[key]
+async function toggle(key: keyof NotificationPrefs): Promise<void> {
+  const uid = authStore.user?.id
+  if (!uid || savingKey.value) return
+  const next = !state[key]
+  const previous = state[key]
+  state[key] = next
+  savingKey.value = key
+  errorMessage.value = ''
+  try {
+    await notificationPrefsService.updatePrefs(uid, { [key]: next })
+  } catch (error) {
+    state[key] = previous
+    errorMessage.value = error instanceof Error ? error.message : '設定失敗，請稍後再試'
+  } finally {
+    savingKey.value = null
+  }
 }
 </script>
 
 <template>
   <div>
-    <AppHeader title="通知" back />
+    <AppHeader :title="t('notificationSettings', 'title')" back />
 
     <div class="content">
+      <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+
       <div v-for="row in rows" :key="row.key" class="toggle-row">
         <div class="toggle-info">
-          <p class="toggle-title">{{ row.label }}</p>
-          <p class="toggle-desc">{{ row.desc }}</p>
+          <p class="toggle-title">{{ t('notificationSettings', row.labelKey) }}</p>
+          <p class="toggle-desc">{{ t('notificationSettings', row.descKey) }}</p>
         </div>
         <button
           class="switch"
           :class="{ on: state[row.key] }"
+          :disabled="loading || savingKey === row.key"
           role="switch"
           :aria-checked="state[row.key]"
           @click="toggle(row.key)"
@@ -62,6 +110,13 @@ function toggle(key: string): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.error {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-danger);
 }
 
 .toggle-row {
@@ -102,6 +157,10 @@ function toggle(key: string): void {
   background: var(--color-border);
   position: relative;
   transition: background 0.15s ease;
+}
+
+.switch:disabled {
+  opacity: 0.6;
 }
 
 .switch.on {

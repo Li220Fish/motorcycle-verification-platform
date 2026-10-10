@@ -16,6 +16,7 @@ export type NotificationType =
   | 'discussion_comment'
   | 'discussion_like'
   | 'discussion_reply'
+  | 'vehicle_transferred'
 
 export interface NotificationInput {
   type: NotificationType
@@ -49,18 +50,28 @@ const BATCH_SIZE = 450
 /** Fans a notification out to every user in the system (system/admin/news/
  *  featured broadcasts) — O(user count) writes, batched. Fine at this app's
  *  current scale; a genuinely large user base would need a queue-backed
- *  fan-out instead of one Function invocation doing it all synchronously. */
+ *  fan-out instead of one Function invocation doing it all synchronously.
+ *
+ *  `targetUids`, when given, replaces the "every user" query with that exact
+ *  list — used by notification-dispatch.service.ts's notifyBroadcast, which
+ *  has already filtered out whoever has this category's notificationPrefs
+ *  switched off before calling here. */
 export async function broadcastNotification(
   input: NotificationInput,
   excludeUid?: string,
+  targetUids?: string[],
 ): Promise<void> {
   const db = getFirestore()
-  const usersSnap = await db.collection('users').select().get()
-  const targetUids = usersSnap.docs.map((d) => d.id).filter((uid) => uid !== excludeUid)
+  let uids = targetUids
+  if (!uids) {
+    const usersSnap = await db.collection('users').select().get()
+    uids = usersSnap.docs.map((d) => d.id)
+  }
+  const finalTargetUids = uids.filter((uid) => uid !== excludeUid)
 
-  for (let i = 0; i < targetUids.length; i += BATCH_SIZE) {
+  for (let i = 0; i < finalTargetUids.length; i += BATCH_SIZE) {
     const batch = db.batch()
-    for (const uid of targetUids.slice(i, i + BATCH_SIZE)) {
+    for (const uid of finalTargetUids.slice(i, i + BATCH_SIZE)) {
       const ref = db.collection('users').doc(uid).collection('notifications').doc()
       batch.set(ref, {
         type: input.type,

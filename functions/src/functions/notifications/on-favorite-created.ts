@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 
 interface ListingDoc {
   sellerId: string
@@ -19,7 +19,7 @@ export const onFavoriteCreated = onDocumentCreated(
     if (!listing || listing.sellerId === uid) return
 
     const vehicleName = `${listing.vehicleSnapshot.brand} ${listing.vehicleSnapshot.model}`
-    await createNotification(listing.sellerId, {
+    await notifyUser(listing.sellerId, {
       type: 'listing_favorited',
       title: '有人收藏了你的刊登',
       body: `${vehicleName} 被加入收藏`,

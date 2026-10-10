@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { isAdminUid } from '../../services/auth.service'
-import { broadcastNotification } from '../../services/notification.service'
+import { notifyBroadcast } from '../../services/notification-dispatch.service'
 
 interface PostDoc {
   authorId: string
@@ -19,7 +19,7 @@ export const onDiscussionPostCreated = onDocumentCreated(
     if (!post || !isAdminUid(post.authorId) || post.status !== 'active') return
 
     const { postId } = event.params
-    await broadcastNotification(
+    await notifyBroadcast(
       {
         type: 'discussion_admin_post',
         title: '官方發布新文章',

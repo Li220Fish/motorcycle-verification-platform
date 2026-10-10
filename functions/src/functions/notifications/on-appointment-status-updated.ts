@@ -1,6 +1,6 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 import { findConversationId } from '../../services/conversation-lookup.service'
 
 interface ListingDoc {
@@ -52,13 +52,15 @@ export const onAppointmentStatusUpdated = onDocumentUpdated(
     const conversationId = await findConversationId(db, listing.sellerId, after.buyerId, listingId)
     const approved = after.status === 'approved'
 
-    await createNotification(after.buyerId, {
-      type: approved ? 'booking_approved' : 'booking_declined',
-      title: approved ? '預約已同意' : '預約已婉拒',
-      body: approved
-        ? `賣家同意了您 ${formatDateTime(scheduledAt)} 賞車 ${vehicleName} 的預約`
-        : `賣家婉拒了您 ${formatDateTime(scheduledAt)} 賞車 ${vehicleName} 的預約`,
-      link: conversationId ? `/messages/${conversationId}` : `/marketplace/${listingId}`,
-    })
+    const link = conversationId ? `/messages/${conversationId}` : `/marketplace/${listingId}`
+    const title = approved ? '預約已同意' : '預約已婉拒'
+    const body = approved
+      ? `賣家同意了您 ${formatDateTime(scheduledAt)} 賞車 ${vehicleName} 的預約`
+      : `賣家婉拒了您 ${formatDateTime(scheduledAt)} 賞車 ${vehicleName} 的預約`
+    await notifyUser(
+      after.buyerId,
+      { type: approved ? 'booking_approved' : 'booking_declined', title, body, link },
+      { title, body, link },
+    )
   },
 )

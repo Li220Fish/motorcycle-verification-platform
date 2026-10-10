@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 
 interface MessageDoc {
   senderId: string
@@ -40,12 +40,12 @@ export const onMessageCreated = onDocumentCreated(
 
     for (const uid of convo.memberIds ?? []) {
       if (uid === message.senderId || mutedBy.includes(uid)) continue
-      await createNotification(uid, {
-        type: 'chat_message',
-        title: senderName,
-        body: preview,
-        link: `/messages/${conversationId}`,
-      })
+      const link = `/messages/${conversationId}`
+      await notifyUser(
+        uid,
+        { type: 'chat_message', title: senderName, body: preview, link },
+        { title: senderName, body: preview, link },
+      )
     }
   },
 )

@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 
 interface PostDoc {
   authorId: string
@@ -18,7 +18,7 @@ export const onDiscussionLikeCreated = onDocumentCreated(
     const post = postSnap.data() as PostDoc | undefined
     if (!post || post.authorId === uid) return
 
-    await createNotification(post.authorId, {
+    await notifyUser(post.authorId, {
       type: 'discussion_like',
       title: '你的文章有新的愛心',
       body: post.title,

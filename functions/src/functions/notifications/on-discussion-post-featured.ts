@@ -1,5 +1,5 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
-import { broadcastNotification } from '../../services/notification.service'
+import { notifyBroadcast } from '../../services/notification-dispatch.service'
 
 interface PostDoc {
   authorId: string
@@ -20,7 +20,7 @@ export const onDiscussionPostFeatured = onDocumentUpdated(
     if (before.featured || !after.featured) return
 
     const { postId } = event.params
-    await broadcastNotification({
+    await notifyBroadcast({
       type: 'discussion_featured',
       title: '討論中心精選文章',
       body: after.title,

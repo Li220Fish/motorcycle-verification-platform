@@ -1,5 +1,5 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
-import { broadcastNotification } from '../../services/notification.service'
+import { notifyBroadcast } from '../../services/notification-dispatch.service'
 
 interface VehicleNewsDoc {
   title: string
@@ -10,7 +10,7 @@ export const onVehicleNewsCreated = onDocumentCreated('vehicleNews/{newsId}', as
   if (!news) return
 
   const { newsId } = event.params
-  await broadcastNotification({
+  await notifyBroadcast({
     type: 'vehicle_news',
     title: '車訊新知',
     body: news.title,

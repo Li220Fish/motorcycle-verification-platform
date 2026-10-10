@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 
 interface CommentDoc {
   authorId: string
@@ -48,7 +48,7 @@ export const onDiscussionCommentCreated = onDocumentCreated(
       const parent = parentSnap.data() as CommentDoc | undefined
       if (parent && parent.authorId !== comment.authorId) {
         replyRecipient = parent.authorId
-        await createNotification(parent.authorId, {
+        await notifyUser(parent.authorId, {
           type: 'discussion_reply',
           title: `${commenterName} 回覆了你的留言`,
           body: comment.text,
@@ -58,7 +58,7 @@ export const onDiscussionCommentCreated = onDocumentCreated(
     }
 
     if (post.authorId !== comment.authorId && post.authorId !== replyRecipient) {
-      await createNotification(post.authorId, {
+      await notifyUser(post.authorId, {
         type: 'discussion_comment',
         title: `${commenterName} 留言了你的文章`,
         body: comment.text,

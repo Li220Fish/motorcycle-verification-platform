@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createNotification } from '../../services/notification.service'
+import { notifyUser } from '../../services/notification-dispatch.service'
 import { findConversationId } from '../../services/conversation-lookup.service'
 
 interface ListingDoc {
@@ -32,11 +32,13 @@ export const onAppointmentCreated = onDocumentCreated(
       appointment.buyerId,
       listingId,
     )
-    await createNotification(listing.sellerId, {
-      type: 'booking_request',
-      title: '新的看車預約',
-      body: `${appointment.buyerName} 預約看 ${vehicleName}`,
-      link: conversationId ? `/messages/${conversationId}` : `/marketplace/${listingId}`,
-    })
+    const link = conversationId ? `/messages/${conversationId}` : `/marketplace/${listingId}`
+    const title = '新的看車預約'
+    const body = `${appointment.buyerName} 預約看 ${vehicleName}`
+    await notifyUser(
+      listing.sellerId,
+      { type: 'booking_request', title, body, link },
+      { title, body, link },
+    )
   },
 )
