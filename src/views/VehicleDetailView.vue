@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { Copy, KeyRound, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
@@ -11,8 +11,10 @@ import VideoCapture from '@/components/media/VideoCapture.vue'
 import AudioRecorder from '@/components/media/AudioRecorder.vue'
 import VehiclePhotoGallery from '@/components/vehicle/VehiclePhotoGallery.vue'
 import VehicleRegistrationCard from '@/components/vehicle/VehicleRegistrationCard.vue'
+import { useI18n } from '@/composables/useI18n'
 import { storageService } from '@/services/firebase/storage.service'
 import { vehicleLogService } from '@/services/firebase/vehicle-log.service'
+import { createVehicleTransferInvite } from '@/services/firebase/vehicle-transfer.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
@@ -29,6 +31,7 @@ const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 const authStore = useAuthStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const uploading = ref(false)
 const uploadedUrl = ref('')
@@ -43,17 +46,20 @@ function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString('zh-TW')
 }
 
-const typeLabel: Record<string, string> = {
-  seller: '車輛驗證',
-  buyer: '買家複驗',
-  professional: '專業驗證',
-}
+const typeLabelKey: Record<string, 'typeLabelSeller' | 'typeLabelBuyer' | 'typeLabelProfessional'> =
+  {
+    seller: 'typeLabelSeller',
+    buyer: 'typeLabelBuyer',
+    professional: 'typeLabelProfessional',
+  }
 
 const verificationItems = computed(() =>
   verificationStore.verifications.map((verification) => ({
     id: verification.id,
     type: verification.type,
-    label: typeLabel[verification.type] ?? verification.type,
+    label: typeLabelKey[verification.type]
+      ? t('vehicleDetail', typeLabelKey[verification.type])
+      : verification.type,
     date: formatDate(verification.createdAt),
     completed: verification.status === 'completed',
   })),
@@ -260,7 +266,7 @@ async function saveFuelLog(): Promise<void> {
 }
 
 async function removeFuelLog(log: FuelLog): Promise<void> {
-  if (!window.confirm('刪除這筆加油紀錄？此操作無法復原。')) return
+  if (!window.confirm(t('vehicleDetail', 'confirmDeleteFuel'))) return
   await vehicleLogService.deleteFuelLog(props.id, log.id)
   fuelLogs.value = fuelLogs.value.filter((item) => item.id !== log.id)
   if (editingFuelLogId.value === log.id) closeFuelForm()
@@ -299,28 +305,64 @@ async function saveMaintenanceLog(): Promise<void> {
 }
 
 async function removeMaintenanceLog(log: MaintenanceLog): Promise<void> {
-  if (!window.confirm('刪除這筆保養紀錄？此操作無法復原。')) return
+  if (!window.confirm(t('vehicleDetail', 'confirmDeleteMaintenance'))) return
   await vehicleLogService.deleteMaintenanceLog(props.id, log.id)
   maintenanceLogs.value = maintenanceLogs.value.filter((item) => item.id !== log.id)
 }
 
-// Top-right "..." menu — 新增車輛 jumps to 我的車輛 with its form pre-opened,
-// 刪除車輛 only removes the vehicle doc itself (verification history for it
-// is left intact, same as the Freeze Zone posture elsewhere in this app).
+// Top-right "..." menu — 新增車輛 jumps to its own page, 刪除車輛 only
+// removes the vehicle doc itself (verification history for it is left
+// intact, same as the Freeze Zone posture elsewhere in this app).
 const menuOpen = ref(false)
 const deletingVehicle = ref(false)
 
 function goToAddVehicle(): void {
   menuOpen.value = false
-  router.push({ path: '/vehicles', query: { new: '1' } })
+  router.push('/vehicles/new')
+}
+
+// 車輛轉移邀請碼 — generates a short code (functions/src/functions/vehicle-
+// transfer-invite.ts) the current owner hands to the new owner by any
+// channel; shown inline here with a copy button rather than navigating
+// away, since there's nothing else to do with this screen once it's
+// generated.
+const generatingInvite = ref(false)
+const inviteCode = ref<string | null>(null)
+const inviteError = ref('')
+const inviteCopied = ref(false)
+
+async function handleCreateInvite(): Promise<void> {
+  menuOpen.value = false
+  inviteError.value = ''
+  inviteCopied.value = false
+  generatingInvite.value = true
+  try {
+    const result = await createVehicleTransferInvite(props.id)
+    inviteCode.value = result.code
+  } catch (error) {
+    inviteError.value = error instanceof Error ? error.message : t('vehicleDetail', 'inviteError')
+  } finally {
+    generatingInvite.value = false
+  }
+}
+
+async function copyInviteCode(): Promise<void> {
+  if (!inviteCode.value) return
+  await navigator.clipboard.writeText(inviteCode.value)
+  inviteCopied.value = true
+}
+
+function dismissInvite(): void {
+  inviteCode.value = null
+  inviteError.value = ''
 }
 
 async function handleDeleteVehicle(): Promise<void> {
   menuOpen.value = false
   const vehicle = vehicleStore.currentVehicle
   if (!vehicle) return
-  const label = `${vehicle.brand} ${vehicle.model}`.trim() || '這台車'
-  if (!window.confirm(`刪除「${label}」？此操作無法復原。`)) return
+  const label = `${vehicle.brand} ${vehicle.model}`.trim() || t('vehicles', 'unnamedVehicle')
+  if (!window.confirm(t('vehicles', 'confirmDelete', { name: label }))) return
   deletingVehicle.value = true
   try {
     await vehicleStore.deleteVehicle(props.id)
@@ -341,32 +383,62 @@ onMounted(async () => {
 
 <template>
   <div>
-    <AppHeader title="車輛詳情" back>
+    <AppHeader :title="t('vehicleDetail', 'title')" back>
       <template #right>
-        <button class="icon-button" aria-label="更多" @click="menuOpen = !menuOpen">
+        <button
+          class="icon-button"
+          :aria-label="t('vehicleDetail', 'more')"
+          @click="menuOpen = !menuOpen"
+        >
           <MoreHorizontal :size="20" />
         </button>
       </template>
     </AppHeader>
 
     <div v-if="menuOpen" class="menu">
-      <button @click="goToAddVehicle"><Plus :size="15" />新增車輛</button>
+      <button @click="goToAddVehicle">
+        <Plus :size="15" />{{ t('vehicleDetail', 'menuAdd') }}
+      </button>
+      <button :disabled="generatingInvite" @click="handleCreateInvite">
+        <KeyRound :size="15" />{{
+          generatingInvite
+            ? t('vehicleDetail', 'menuGenerating')
+            : t('vehicleDetail', 'menuGenerateInvite')
+        }}
+      </button>
       <button class="danger" :disabled="deletingVehicle" @click="handleDeleteVehicle">
-        <Trash2 :size="15" />刪除車輛
+        <Trash2 :size="15" />{{ t('vehicleDetail', 'menuDelete') }}
       </button>
     </div>
 
-    <p v-if="vehicleStore.loading" class="state-text">載入中...</p>
-    <p v-else-if="!vehicleStore.currentVehicle" class="state-text">找不到這台車輛。</p>
+    <p v-if="vehicleStore.loading" class="state-text">{{ t('common', 'loading') }}</p>
+    <p v-else-if="!vehicleStore.currentVehicle" class="state-text">
+      {{ t('vehicleDetail', 'notFound') }}
+    </p>
     <div v-else class="content">
+      <div v-if="inviteCode || inviteError" class="invite-card">
+        <template v-if="inviteCode">
+          <h3 class="section-title" style="margin: 0">{{ t('vehicleDetail', 'inviteTitle') }}</h3>
+          <p class="hint">{{ t('vehicleDetail', 'inviteHint') }}</p>
+          <p class="invite-code">{{ inviteCode }}</p>
+          <PrimaryButton block @click="copyInviteCode">
+            <Copy :size="15" />{{
+              inviteCopied ? t('vehicleDetail', 'copied') : t('vehicleDetail', 'copyCode')
+            }}
+          </PrimaryButton>
+          <button class="secondary" @click="dismissInvite">{{ t('common', 'close') }}</button>
+        </template>
+        <p v-else class="error">{{ inviteError }}</p>
+      </div>
+
       <VehiclePhotoGallery :vehicle-id="props.id" :photos="vehicleStore.currentVehicle.photos" />
 
       <div class="title-block">
         <h2>{{ vehicleStore.currentVehicle.brand }} {{ vehicleStore.currentVehicle.model }}</h2>
         <p class="subtitle">
-          <span v-if="vehicleStore.currentVehicle.manufactureYear"
-            >{{ vehicleStore.currentVehicle.manufactureYear }} 年式</span
-          >
+          <span v-if="vehicleStore.currentVehicle.manufactureYear">{{
+            t('common', 'modelYear', { year: vehicleStore.currentVehicle.manufactureYear })
+          }}</span>
           <span v-if="vehicleStore.currentVehicle.mileage !== null">
             {{ vehicleStore.currentVehicle.manufactureYear ? ' / ' : '' }}
             {{ vehicleStore.currentVehicle.mileage?.toLocaleString() }} km
@@ -376,14 +448,14 @@ onMounted(async () => {
 
       <div class="info-card">
         <div class="stats-card-header">
-          <h3 class="section-title" style="margin: 0">車輛資料</h3>
+          <h3 class="section-title" style="margin: 0">{{ t('vehicleDetail', 'vehicleInfo') }}</h3>
           <button v-if="!editingInfo" class="edit-btn" @click="openInfoEditor">
-            <Pencil :size="13" /> 編輯
+            <Pencil :size="13" /> {{ t('common', 'edit') }}
           </button>
         </div>
         <template v-if="!editingInfo">
           <div class="info-row">
-            <span>車牌</span>
+            <span>{{ t('vehicleDetail', 'plate') }}</span>
             <span>{{
               vehicleStore.currentVehicle.licensePlate
                 ? maskLicensePlate(vehicleStore.currentVehicle.licensePlate)
@@ -391,35 +463,40 @@ onMounted(async () => {
             }}</span>
           </div>
           <div class="info-row">
-            <span>引擎號碼</span>
+            <span>{{ t('vehicleDetail', 'engineNumber') }}</span>
             <span>{{ vehicleStore.currentVehicle.engineNumber || '—' }}</span>
           </div>
           <div class="info-row">
-            <span>車身號碼</span>
+            <span>{{ t('vehicleDetail', 'chassisNumber') }}</span>
             <span>{{ vehicleStore.currentVehicle.chassisNumber || '—' }}</span>
           </div>
           <div class="info-row">
-            <span>建立日期</span>
+            <span>{{ t('vehicleDetail', 'createdDate') }}</span>
             <span>{{ formatDate(vehicleStore.currentVehicle.createdAt) }}</span>
           </div>
         </template>
         <form v-else class="stats-form" @submit.prevent="saveInfo">
           <label>
-            <span>車牌號碼</span>
-            <input v-model="infoForm.licensePlate" placeholder="例如 ABC-1234" />
+            <span>{{ t('vehicleDetail', 'plate') }}</span>
+            <input
+              v-model="infoForm.licensePlate"
+              :placeholder="t('vehicleDetail', 'platePlaceholder')"
+            />
           </label>
           <label>
-            <span>引擎號碼</span>
+            <span>{{ t('vehicleDetail', 'engineNumber') }}</span>
             <input v-model="infoForm.engineNumber" />
           </label>
           <label>
-            <span>車身號碼</span>
+            <span>{{ t('vehicleDetail', 'chassisNumber') }}</span>
             <input v-model="infoForm.chassisNumber" />
           </label>
           <div class="stats-form-actions">
-            <button type="button" class="secondary-btn" @click="editingInfo = false">取消</button>
+            <button type="button" class="secondary-btn" @click="editingInfo = false">
+              {{ t('common', 'cancel') }}
+            </button>
             <PrimaryButton type="submit" :disabled="savingInfo">
-              {{ savingInfo ? '儲存中...' : '儲存' }}
+              {{ savingInfo ? t('common', 'saving') : t('common', 'save') }}
             </PrimaryButton>
           </div>
         </form>
@@ -432,9 +509,9 @@ onMounted(async () => {
 
       <div class="info-card stats-card">
         <div class="stats-card-header">
-          <h3 class="section-title" style="margin: 0">車輛狀態數據</h3>
+          <h3 class="section-title" style="margin: 0">{{ t('vehicleDetail', 'statusData') }}</h3>
           <button v-if="!editingStats" class="edit-btn" @click="openStatsEditor">
-            <Pencil :size="13" /> 編輯
+            <Pencil :size="13" /> {{ t('common', 'edit') }}
           </button>
         </div>
         <template v-if="!editingStats">
@@ -443,76 +520,88 @@ onMounted(async () => {
               <span class="stat-value">{{
                 vehicleStore.currentVehicle.mileage?.toLocaleString() ?? '—'
               }}</span>
-              <span class="stat-label">總里程 km</span>
+              <span class="stat-label">{{ t('vehicleDetail', 'totalMileageKm') }}</span>
             </div>
             <div class="stat">
               <span class="stat-value">{{ derivedAvgFuelConsumption ?? '—' }}</span>
-              <span class="stat-label">平均油耗 km/L</span>
+              <span class="stat-label">{{ t('vehicleDetail', 'avgFuelKmL') }}</span>
             </div>
           </div>
           <p v-if="derivedAvgFuelConsumption === null" class="stat-hint">
-            新增 2 筆以上加滿油箱的加油紀錄，即可自動算出平均油耗。
+            {{ t('vehicleDetail', 'fuelHint') }}
           </p>
         </template>
         <form v-else class="stats-form" @submit.prevent="saveStats">
           <label>
-            <span>總里程（km）</span>
+            <span>{{ t('vehicleDetail', 'totalMileageField') }}</span>
             <input v-model="statsForm.mileage" type="number" min="0" />
           </label>
           <div class="stats-form-actions">
-            <button type="button" class="secondary-btn" @click="editingStats = false">取消</button>
+            <button type="button" class="secondary-btn" @click="editingStats = false">
+              {{ t('common', 'cancel') }}
+            </button>
             <PrimaryButton type="submit" :disabled="savingStats">
-              {{ savingStats ? '儲存中...' : '儲存' }}
+              {{ savingStats ? t('common', 'saving') : t('common', 'save') }}
             </PrimaryButton>
           </div>
         </form>
       </div>
 
       <div class="stats-card-header">
-        <h3 class="section-title" style="margin: 0">加油紀錄</h3>
+        <h3 class="section-title" style="margin: 0">{{ t('vehicleDetail', 'fuelLogs') }}</h3>
         <button class="edit-btn" @click="showFuelForm ? closeFuelForm() : openFuelForm()">
-          <Plus :size="13" /> 新增
+          <Plus :size="13" /> {{ t('vehicleDetail', 'add') }}
         </button>
       </div>
       <form v-if="showFuelForm" class="stats-form" @submit.prevent="saveFuelLog">
         <label>
-          <span>日期</span>
+          <span>{{ t('vehicleDetail', 'date') }}</span>
           <input v-model="fuelForm.date" type="date" required />
         </label>
         <label>
-          <span>里程（km）</span>
+          <span>{{ t('vehicleDetail', 'mileageKmField') }}</span>
           <input v-model="fuelForm.mileage" type="number" min="0" />
         </label>
         <label>
-          <span>公升數（L）</span>
+          <span>{{ t('vehicleDetail', 'liters') }}</span>
           <input v-model="fuelForm.liters" type="number" min="0" step="0.01" />
         </label>
         <label>
-          <span>金額（元）</span>
+          <span>{{ t('vehicleDetail', 'amount') }}</span>
           <input v-model="fuelForm.cost" type="number" min="0" required />
         </label>
         <label class="checkbox-label">
           <input v-model="fuelForm.fullTank" type="checkbox" />
-          <span>這次有加滿油箱</span>
+          <span>{{ t('vehicleDetail', 'fullTank') }}</span>
         </label>
         <label>
-          <span>備註</span>
-          <input v-model="fuelForm.note" placeholder="選填" />
+          <span>{{ t('vehicleDetail', 'note') }}</span>
+          <input v-model="fuelForm.note" :placeholder="t('common', 'optional')" />
         </label>
         <div class="stats-form-actions">
-          <button type="button" class="secondary-btn" @click="closeFuelForm">取消</button>
+          <button type="button" class="secondary-btn" @click="closeFuelForm">
+            {{ t('common', 'cancel') }}
+          </button>
           <PrimaryButton type="submit" :disabled="savingFuel">
-            {{ savingFuel ? '儲存中...' : editingFuelLogId ? '更新' : '儲存' }}
+            {{
+              savingFuel
+                ? t('common', 'saving')
+                : editingFuelLogId
+                  ? t('vehicleDetail', 'update')
+                  : t('common', 'save')
+            }}
           </PrimaryButton>
         </div>
       </form>
-      <div v-if="fuelLogs.length === 0 && !showFuelForm" class="empty-hint">尚無加油紀錄。</div>
+      <div v-if="fuelLogs.length === 0 && !showFuelForm" class="empty-hint">
+        {{ t('vehicleDetail', 'noFuelLogs') }}
+      </div>
       <div v-else class="log-list">
         <div v-for="log in fuelLogs" :key="log.id" class="log-row">
           <div class="log-main">
             <span class="log-date"
               >{{ formatDate(log.refueledAt)
-              }}<template v-if="!log.fullTank">（未加滿）</template></span
+              }}<template v-if="!log.fullTank">{{ t('vehicleDetail', 'notFull') }}</template></span
             >
             <span class="log-detail">
               <template v-if="log.mileage !== null"
@@ -524,10 +613,18 @@ onMounted(async () => {
             <span v-if="log.note" class="log-note">{{ log.note }}</span>
           </div>
           <div class="log-actions">
-            <button class="log-edit" aria-label="編輯加油紀錄" @click="openEditFuelLog(log)">
+            <button
+              class="log-edit"
+              :aria-label="t('vehicleDetail', 'ariaEditFuelLog')"
+              @click="openEditFuelLog(log)"
+            >
               <Pencil :size="15" />
             </button>
-            <button class="log-delete" aria-label="刪除加油紀錄" @click="removeFuelLog(log)">
+            <button
+              class="log-delete"
+              :aria-label="t('vehicleDetail', 'ariaDeleteFuelLog')"
+              @click="removeFuelLog(log)"
+            >
               <Trash2 :size="15" />
             </button>
           </div>
@@ -535,46 +632,50 @@ onMounted(async () => {
       </div>
 
       <div class="stats-card-header">
-        <h3 class="section-title" style="margin: 0">保養紀錄</h3>
+        <h3 class="section-title" style="margin: 0">{{ t('vehicleDetail', 'maintenanceLogs') }}</h3>
         <button
           class="edit-btn"
           @click="showMaintenanceForm ? (showMaintenanceForm = false) : openMaintenanceForm()"
         >
-          <Plus :size="13" /> 新增
+          <Plus :size="13" /> {{ t('vehicleDetail', 'add') }}
         </button>
       </div>
       <form v-if="showMaintenanceForm" class="stats-form" @submit.prevent="saveMaintenanceLog">
         <label>
-          <span>日期</span>
+          <span>{{ t('vehicleDetail', 'date') }}</span>
           <input v-model="maintenanceForm.date" type="date" required />
         </label>
         <label>
-          <span>里程（km）</span>
+          <span>{{ t('vehicleDetail', 'mileageKmField') }}</span>
           <input v-model="maintenanceForm.mileage" type="number" min="0" />
         </label>
         <label>
-          <span>保養項目</span>
-          <input v-model="maintenanceForm.item" placeholder="例如：更換機油" required />
+          <span>{{ t('vehicleDetail', 'maintenanceItem') }}</span>
+          <input
+            v-model="maintenanceForm.item"
+            :placeholder="t('vehicleDetail', 'maintenanceItemPlaceholder')"
+            required
+          />
         </label>
         <label>
-          <span>金額（元）</span>
+          <span>{{ t('vehicleDetail', 'amount') }}</span>
           <input v-model="maintenanceForm.cost" type="number" min="0" />
         </label>
         <label>
-          <span>備註</span>
-          <input v-model="maintenanceForm.note" placeholder="選填" />
+          <span>{{ t('vehicleDetail', 'note') }}</span>
+          <input v-model="maintenanceForm.note" :placeholder="t('common', 'optional')" />
         </label>
         <div class="stats-form-actions">
           <button type="button" class="secondary-btn" @click="showMaintenanceForm = false">
-            取消
+            {{ t('common', 'cancel') }}
           </button>
           <PrimaryButton type="submit" :disabled="savingMaintenance">
-            {{ savingMaintenance ? '儲存中...' : '儲存' }}
+            {{ savingMaintenance ? t('common', 'saving') : t('common', 'save') }}
           </PrimaryButton>
         </div>
       </form>
       <div v-if="maintenanceLogs.length === 0 && !showMaintenanceForm" class="empty-hint">
-        尚無保養紀錄。
+        {{ t('vehicleDetail', 'noMaintenanceLogs') }}
       </div>
       <div v-else class="log-list">
         <div v-for="log in maintenanceLogs" :key="log.id" class="log-row">
@@ -591,14 +692,20 @@ onMounted(async () => {
             </span>
             <span v-if="log.note" class="log-note">{{ log.note }}</span>
           </div>
-          <button class="log-delete" aria-label="刪除保養紀錄" @click="removeMaintenanceLog(log)">
+          <button
+            class="log-delete"
+            :aria-label="t('vehicleDetail', 'ariaDeleteMaintenanceLog')"
+            @click="removeMaintenanceLog(log)"
+          >
             <Trash2 :size="15" />
           </button>
         </div>
       </div>
 
-      <h3 class="section-title">驗證紀錄</h3>
-      <div v-if="verificationItems.length === 0" class="empty-hint">尚無驗證紀錄。</div>
+      <h3 class="section-title">{{ t('vehicleDetail', 'verificationHistory') }}</h3>
+      <div v-if="verificationItems.length === 0" class="empty-hint">
+        {{ t('vehicleDetail', 'noVerification') }}
+      </div>
       <div v-else class="verification-list">
         <button
           v-for="item in verificationItems"
@@ -609,16 +716,18 @@ onMounted(async () => {
           <span>{{ item.label }}</span>
           <span class="verification-date">{{ item.date }}</span>
           <StatusBadge :tone="item.completed ? 'success' : 'primary'">
-            {{ item.completed ? '✓ 已完成' : '進行中' }}
+            {{
+              item.completed ? t('vehicleDetail', 'completed') : t('vehicleDetail', 'inProgress')
+            }}
           </StatusBadge>
         </button>
       </div>
 
       <PrimaryButton block :disabled="!isRegistrationVerified" @click="startVerification">
-        開始新的驗證
+        {{ t('vehicleDetail', 'startVerification') }}
       </PrimaryButton>
       <p v-if="!isRegistrationVerified" class="gate-hint">
-        請先完成上方「行照驗證」，才能開始這台車的驗車流程。
+        {{ t('vehicleDetail', 'startGateHint') }}
       </p>
 
       <details v-if="isDev" class="dev-tools">
@@ -759,6 +868,44 @@ onMounted(async () => {
 .state-text {
   padding: var(--space-lg) var(--space-md);
   color: var(--color-text-secondary);
+}
+
+.invite-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-md);
+}
+
+.invite-card .hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.invite-code {
+  margin: 0;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--color-primary);
+  padding: var(--space-sm) 0;
+}
+
+.invite-card .secondary {
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .content {
