@@ -74,7 +74,7 @@ watch(() => props.message.id, loadRichContent)
       >
         <span class="rich-icon"><ShieldCheck :size="18" /></span>
         <span class="rich-body">
-          <span class="rich-title">RiDE78 驗證報告</span>
+          <span class="rich-title">RiDE 驗證報告</span>
           <span class="rich-sub">{{
             verification?.status === 'completed' ? '已完成 · 點擊查看' : '點擊查看報告'
           }}</span>

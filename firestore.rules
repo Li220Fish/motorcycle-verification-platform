@@ -742,6 +742,44 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // --- 訓練資料集 (capture-app/ writes, /admin 訓練資料集 reviews) ---
+    // See src/data/training/training-dataset.types.ts. Upload rights come
+    // from an admin-managed allowlist doc rather than any field on users/
+    // (which users can write themselves). Only admin may annotate/approve —
+    // a collector can never move their own photo out of 'pending'.
+    function isDataCollector() {
+      return isAdmin()
+        || (signedIn() && exists(/databases/$(database)/documents/dataCollectors/$(myUid())));
+    }
+
+    match /dataCollectors/{uid} {
+      allow get: if signedIn() && (myUid() == uid || isAdmin());
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /trainingSessions/{sessionId} {
+      allow get, list: if signedIn() && (resource.data.collectorUid == myUid() || isAdmin());
+      allow create: if isDataCollector() && request.resource.data.collectorUid == myUid();
+      allow update: if (isDataCollector()
+          && resource.data.collectorUid == myUid()
+          && request.resource.data.collectorUid == myUid())
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /trainingCaptures/{captureId} {
+      allow get, list: if signedIn() && (resource.data.collectorUid == myUid() || isAdmin());
+      allow create: if isDataCollector()
+        && request.resource.data.collectorUid == myUid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.annotations == null;
+      allow update: if isAdmin();
+      // A collector may withdraw their own not-yet-reviewed photo (retake of
+      // a single-shot item replaces the previous upload).
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.collectorUid == myUid() && resource.data.status == 'pending');
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

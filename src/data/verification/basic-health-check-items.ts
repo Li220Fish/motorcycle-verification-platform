@@ -100,6 +100,32 @@ export interface HealthCheckAnchor {
   page: 1 | 2
 }
 
+/**
+ * Fallback anchors for models the admin hasn't annotated yet in
+ * HealthCheckSection.vue (vehicleModels/{id}.healthCheckAnchors is unset) —
+ * the original hand-placed positions from before per-model annotation
+ * existed, matched to BIKE_REFERENCE_PHOTO (basic-health-check-photo.ts).
+ * BasicHealthCheck13.vue uses this set *together with* that same default
+ * photo, never mixed with a model's own uploaded coverImageUrl — an
+ * unannotated model's real photo (if it has one) has no matching
+ * coordinates, so showing it here would misplace every marker.
+ */
+export const DEFAULT_HEALTH_CHECK_ANCHORS: Record<string, HealthCheckAnchor> = {
+  headlight: { x: 20.5, y: 38.0, page: 1 },
+  turnsignal: { x: 40.0, y: 55.8, page: 1 },
+  taillight: { x: 85.0, y: 45.2, page: 1 },
+  seat: { x: 51.7, y: 35.7, page: 1 },
+  othermod: { x: 58.4, y: 80.0, page: 1 },
+  triple: { x: 68.5, y: 53.0, page: 2 },
+  frontshock: { x: 66.8, y: 65.0, page: 2 },
+  frontbrake: { x: 77.7, y: 79.4, page: 2 },
+  fronttire: { x: 70.0, y: 90.0, page: 2 },
+  rearbrake: { x: 24.8, y: 60.4, page: 2 },
+  reartire: { x: 20.0, y: 77.0, page: 2 },
+  rearshock: { x: 20.1, y: 45.8, page: 2 },
+  chain: { x: 32.0, y: 70.0, page: 2 },
+}
+
 export type HealthCheckAnnotationStatus = 'none' | 'partial' | 'complete'
 
 export function computeHealthCheckAnnotationStatus(

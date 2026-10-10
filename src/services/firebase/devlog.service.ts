@@ -37,8 +37,8 @@ function deletionsCollection() {
   return collection(db, 'devlog_deletions')
 }
 
-function countdownDocRef() {
-  return doc(db, 'devlog_settings', 'countdown')
+function countdownsCollection() {
+  return collection(db, 'devlog_countdowns')
 }
 
 function subscribeSubmissions(
@@ -64,19 +64,36 @@ async function addSubmission(input: DevLogSubmissionInput): Promise<void> {
   await addDoc(submissionsCollection(), payload)
 }
 
-function subscribeCountdown(
-  onChange: (state: CountdownState | null) => void,
+/** Any number of countdown timers can run side by side (e.g. one deadline
+ *  per deliverable) — ordered by createdAt so a timer's position stays
+ *  stable across edits. */
+function subscribeCountdowns(
+  onChange: (list: Array<{ id: string; data: CountdownState }>) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
+  const q = query(countdownsCollection(), orderBy('createdAt', 'asc'))
   return onSnapshot(
-    countdownDocRef(),
-    (snap) => onChange(snap.exists() ? (snap.data() as CountdownState) : null),
+    q,
+    (snapshot) => {
+      onChange(snapshot.docs.map((d) => ({ id: d.id, data: d.data() as CountdownState })))
+    },
     (error) => onError?.(error),
   )
 }
 
-async function saveCountdown(state: CountdownState): Promise<void> {
-  await setDoc(countdownDocRef(), state)
+/** `id` omitted creates a new timer; passed, overwrites that one in place
+ *  (edit). Returns the doc id either way. */
+async function saveCountdown(state: CountdownState, id?: string): Promise<string> {
+  if (id) {
+    await setDoc(doc(countdownsCollection(), id), state)
+    return id
+  }
+  const ref = await addDoc(countdownsCollection(), state)
+  return ref.id
+}
+
+async function deleteCountdown(id: string): Promise<void> {
+  await deleteDoc(doc(countdownsCollection(), id))
 }
 
 /** One doc per edited base entry (git/manual-log/team-sheet/submission),
@@ -130,8 +147,9 @@ async function restoreEntry(entryId: string): Promise<void> {
 export const devlogService = {
   subscribeSubmissions,
   addSubmission,
-  subscribeCountdown,
+  subscribeCountdowns,
   saveCountdown,
+  deleteCountdown,
   subscribeOverrides,
   saveOverride,
   subscribeDeletions,

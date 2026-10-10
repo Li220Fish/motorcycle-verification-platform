@@ -26,6 +26,7 @@ import {
   BASIC_HEALTH_CHECK_CHAIN_ITEM,
   basicHealthCheckItemId,
   basicHealthCheckItemsFor,
+  DEFAULT_HEALTH_CHECK_ANCHORS,
   type HealthCheckAnchor,
 } from '@/data/verification/basic-health-check-items'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
@@ -121,9 +122,18 @@ watch(
   },
 )
 
-const activeAnchors = computed(() => props.anchorsOverride ?? fetchedAnchors.value)
+// Unannotated models (no admin-placed anchors yet) fall back to the shared
+// default photo + its matching default anchors as a pair — never the
+// model's own uploaded coverImageUrl without anchors placed for it, since
+// the default coordinates only line up with the default photo.
+const activeAnchors = computed(
+  () => props.anchorsOverride ?? fetchedAnchors.value ?? DEFAULT_HEALTH_CHECK_ANCHORS,
+)
 const photoUrl = computed(
-  () => props.coverImageOverride ?? fetchedCoverImageUrl.value ?? BIKE_REFERENCE_PHOTO,
+  () =>
+    props.coverImageOverride ??
+    (fetchedAnchors.value ? fetchedCoverImageUrl.value : null) ??
+    BIKE_REFERENCE_PHOTO,
 )
 
 const ITEMS = computed<ChecklistItem[]>(() => {
@@ -485,6 +495,9 @@ const pickerAnchor = computed<[number, number]>(() => {
   white-space: nowrap;
   transform: translate(-50%, -50%);
   z-index: 2;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chip.side-left {

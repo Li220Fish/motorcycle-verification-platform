@@ -52,7 +52,7 @@ async function handleSubmit(): Promise<void> {
           </svg>
         </div>
         <div>
-          <div class="admin-login-name">RiDE78</div>
+          <div class="admin-login-name">RiDE</div>
           <div class="admin-login-sub">營運後台</div>
         </div>
       </div>

@@ -50,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'models', label: '車輛選單資訊' },
       { key: 'healthcheck', label: '健檢標記' },
+      { key: 'training', label: '訓練資料集' },
     ],
   },
   { title: '系統設定', items: [{ key: 'prompts', label: 'AI Prompt 設定' }] },
@@ -72,6 +73,7 @@ const TITLES: Record<string, [string, string]> = {
   probe: ['Probe 裝置', 'collection: voltageSessions（目前無寫入來源）'],
   models: ['車輛選單資訊', 'collection: vehicleModels'],
   healthcheck: ['健檢標記', 'collection: vehicleModels（healthCheckAnchors 欄位）'],
+  training: ['訓練資料集', 'collection: trainingCaptures / trainingSessions / dataCollectors — YOLO26-OBB'],
   prompts: ['AI Prompt 設定', 'collection: aiPrompts（新建，覆寫 functions 端預設值）'],
 }
 
@@ -96,6 +98,7 @@ const SECTION_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {
   probe: () => import('./sections/ProbeSection.vue'),
   models: () => import('./sections/ModelsSection.vue'),
   healthcheck: () => import('./sections/HealthCheckSection.vue'),
+  training: () => import('./sections/TrainingDatasetSection.vue'),
   prompts: () => import('./sections/PromptsSection.vue'),
 }
 
@@ -160,7 +163,7 @@ watch(activeKey, loadBadges)
             </svg>
           </div>
           <div>
-            <div class="admin-brand-name">RiDE78</div>
+            <div class="admin-brand-name">RiDE</div>
             <div class="admin-brand-sub">營運後台</div>
           </div>
         </div>
@@ -192,7 +195,7 @@ watch(activeKey, loadBadges)
             <div class="admin-crumb">{{ crumb }}</div>
           </div>
           <div class="admin-topbar-spacer"></div>
-          <div class="admin-op">當班：<b>RiDE78 管理員</b>，平台管理員</div>
+          <div class="admin-op">當班：<b>RiDE 管理員</b>，平台管理員</div>
           <button class="admin-logout" @click="handleLogout">登出</button>
         </header>
 

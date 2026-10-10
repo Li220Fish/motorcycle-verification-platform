@@ -538,7 +538,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           <p class="description-text">{{ listing.description }}</p>
         </template>
 
-        <!-- Every listing already requires a passing RiDE78 inspection
+        <!-- Every listing already requires a passing RiDE inspection
              before it can go live. Real listings route to their actual
              verification report; the seeded DEMO listings (no backing
              verification) fall back to the fabricated demo report. -->

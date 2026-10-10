@@ -59,6 +59,10 @@ export interface DevLogData {
 export interface CountdownState {
   purpose: string
   targetIso: string
+  /** Set once at creation, never touched by an edit — sort key so a timer's
+   *  position in the list stays stable even after its purpose/target change
+   *  (updatedAt alone would reorder it to the front on every edit). */
+  createdAt: string
   updatedBy?: string
   updatedAt: string
 }

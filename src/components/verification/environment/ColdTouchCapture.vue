@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
     <template v-else-if="phase === 'permission-denied'">
       <div class="panel-card">
         <h2>需要相機與麥克風權限</h2>
-        <p class="main-copy">冷車狀態確認需要錄影。請允許 RiDE78 使用相機與麥克風。</p>
+        <p class="main-copy">冷車狀態確認需要錄影。請允許 RiDE 使用相機與麥克風。</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
         <PrimaryButton block @click="handleStart">允許相機與麥克風</PrimaryButton>
       </div>

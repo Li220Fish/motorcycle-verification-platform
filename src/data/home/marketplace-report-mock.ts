@@ -5,7 +5,7 @@ import type { ReportSection } from '@/components/verification/InspectionReportBo
 import type { MockMarketListing } from './marketplace-mock'
 
 /**
- * Every Marketplace listing already claims a passing MotoVerify inspection
+ * Every Marketplace listing already claims a passing RiDE inspection
  * (see marketplace-mock.ts's header comment) — this builds the same
  * 5-category/70-item breakdown the real 檢驗報告 screen shows for an actual
  * vehicle (see VerificationReportView.vue), reusing the real Seller flow's

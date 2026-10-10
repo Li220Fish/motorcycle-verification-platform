@@ -1,5 +1,5 @@
 /**
- * Translation dictionary for RiDE78's static UI chrome — labels, buttons,
+ * Translation dictionary for RiDE's static UI chrome — labels, buttons,
  * headers, placeholders, empty states. Deliberately does NOT cover
  * user-generated content (chat messages, discussion posts/comments,
  * marketplace listing descriptions, vehicle brand/model text, admin-authored
@@ -29,7 +29,7 @@ export const messages = {
       preferences: '調整設置',
       probe: 'Probe 連接',
       privacy: '資料與隱私',
-      about: '關於 RiDE78',
+      about: '關於 RiDE',
       logout: '登出',
     },
     preferences: {
@@ -234,7 +234,7 @@ export const messages = {
       description: '車輛描述',
       reportSection: '驗車報告',
       reportTitle: '車輛檢驗報告',
-      reportSubtitle: '已通過 RiDE78 專業檢驗',
+      reportSubtitle: '已通過 RiDE 專業檢驗',
       otherPhotos: '其他照片',
       sellerInfo: '賣家資訊',
       needLoginFavorite: '請先登入才能收藏',
@@ -249,7 +249,7 @@ export const messages = {
       featureNotAvailable: '「{feature}」尚未開放',
       defaultUser: '使用者',
       defaultBuyer: '買家',
-      shareTitle: 'RiDE78 車輛詳情',
+      shareTitle: 'RiDE 車輛詳情',
       systemNoteBooking: '買家預約了看車時間：{time}，請至對話上方確認是否同意。',
     },
     booking: {
@@ -592,7 +592,7 @@ export const messages = {
         '我們僅蒐集提供驗車與交易媒合功能所必要的資料，不會在未經同意下與第三方分享您的個人資訊。',
       termsTitle: '服務條款',
       termsBody:
-        '使用 RiDE78 即表示您同意遵守平台的驗車流程規範與交易禮儀，並對所刊登的車輛資訊負責。',
+        '使用 RiDE 即表示您同意遵守平台的驗車流程規範與交易禮儀，並對所刊登的車輛資訊負責。',
       personalizedTitle: '個人化建議',
       personalizedDesc: '依您的瀏覽紀錄推薦相關車輛與內容',
       processing: '處理中...',
@@ -679,7 +679,7 @@ export const messages = {
       preferences: 'Preferences',
       probe: 'Probe Connection',
       privacy: 'Data & Privacy',
-      about: 'About RiDE78',
+      about: 'About RiDE',
       logout: 'Log Out',
     },
     preferences: {
@@ -888,7 +888,7 @@ export const messages = {
       description: 'Description',
       reportSection: 'Inspection Report',
       reportTitle: 'Vehicle Inspection Report',
-      reportSubtitle: 'Passed RiDE78 Professional Inspection',
+      reportSubtitle: 'Passed RiDE Professional Inspection',
       otherPhotos: 'More Photos',
       sellerInfo: 'Seller Info',
       needLoginFavorite: 'Please sign in to add favorites',
@@ -903,7 +903,7 @@ export const messages = {
       featureNotAvailable: '"{feature}" is not available yet',
       defaultUser: 'User',
       defaultBuyer: 'Buyer',
-      shareTitle: 'RiDE78 Vehicle Details',
+      shareTitle: 'RiDE Vehicle Details',
       systemNoteBooking: 'The buyer requested a viewing at {time} — please confirm above.',
     },
     booking: {
@@ -1259,7 +1259,7 @@ export const messages = {
         'We only collect the data needed to provide inspection and marketplace matching — we never share your personal information with third parties without consent.',
       termsTitle: 'Terms of Service',
       termsBody:
-        "Using RiDE78 means you agree to follow the platform's inspection process and trading etiquette, and take responsibility for any vehicle listings you post.",
+        "Using RiDE means you agree to follow the platform's inspection process and trading etiquette, and take responsibility for any vehicle listings you post.",
       personalizedTitle: 'Personalized Recommendations',
       personalizedDesc: 'Recommend vehicles and content based on your browsing history',
       processing: 'Processing...',

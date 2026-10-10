@@ -35,7 +35,7 @@ withDefaults(
         </g>
       </svg>
     </span>
-    <span class="logo-text">RiDE78</span>
+    <span class="logo-text">RiDE</span>
   </div>
 </template>
 

@@ -92,7 +92,7 @@ const isRealUser = computed(() => authStore.user !== null && !authStore.user.isA
         :restricted="!isRealUser"
       />
       <div v-if="!isRealUser" class="login-banner">
-        <p>登入 RiDE78 帳號即可查看完整照片與 AI 判定說明</p>
+        <p>登入 RiDE 帳號即可查看完整照片與 AI 判定說明</p>
         <PrimaryButton block @click="$router.push({ name: 'login' })">登入／註冊</PrimaryButton>
       </div>
     </template>
