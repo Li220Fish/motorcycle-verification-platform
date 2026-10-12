@@ -30,6 +30,10 @@ defineEmits<{ pick: [EngineTransmissionType] }>()
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   margin: var(--space-md);
+  /* This screen has no AppHeader ancestor (renders before the step flow's
+     header), so it needs its own top inset — without it, the card sits
+     flush under the status bar/notch on Android/iOS. */
+  margin-top: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)));
 }
 
 .vehicle-type-gate h2 {

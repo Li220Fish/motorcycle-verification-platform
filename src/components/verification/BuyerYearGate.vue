@@ -50,6 +50,8 @@ function submit(): void {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   margin: var(--space-md);
+  /* Same "no AppHeader ancestor" top-inset need as VehicleTypeGate.vue. */
+  margin-top: calc(var(--space-md) + var(--safe-area-inset-top, env(safe-area-inset-top)));
 }
 
 .year-gate h2 {
