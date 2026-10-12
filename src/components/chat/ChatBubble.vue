@@ -107,7 +107,7 @@ watch(() => props.message.id, loadRichContent)
 }
 
 .bubble {
-  max-width: 76%;
+  max-width: 70%;
   padding: 9px 13px;
   border-radius: 16px;
   font-size: 13px;
@@ -130,16 +130,13 @@ watch(() => props.message.id, loadRichContent)
   border-bottom-right-radius: 5px;
 }
 
-.bubble.mine:not(.image-bubble):not(.rich-card) {
-  max-width: 40vw;
-}
-
-/* `.bubble.image-bubble` (not just `.image-bubble`) to out-specificity
-   `.bubble.mine`'s solid blue fill — otherwise the 4px padding below shows
-   that color through as an unintended frame around the photo, worst on
-   `mine` (bright blue) since `them`'s background happens to be close to the
-   page background already. */
-.bubble.image-bubble {
+/* Three classes (0,3,0) beats `.bubble.mine`/`.bubble.them`'s (0,2,0)
+   regardless of source order, so the transparent fill always wins — the
+   4px padding below would otherwise show `.bubble.mine`'s solid blue (or,
+   more subtly, `.bubble.them`'s background) through as an unintended frame
+   around the photo. */
+.bubble.image-bubble.mine,
+.bubble.image-bubble.them {
   padding: 4px;
   background: transparent;
 }
