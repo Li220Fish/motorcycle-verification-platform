@@ -29,7 +29,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: '個人用戶',
     items: [
       { key: 'users', label: '使用者名冊' },
-      { key: 'behaviour', label: '行為與興趣' },
+      // { key: 'behaviour', label: '行為與興趣' },
       { key: 'garage', label: '車庫與履歷' },
     ],
   },
