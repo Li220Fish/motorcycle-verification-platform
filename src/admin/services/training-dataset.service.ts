@@ -18,6 +18,7 @@ import { getDownloadURL, ref as storageRef } from 'firebase/storage'
 
 import { db, storage } from '@/services/firebase/firebase'
 import {
+  defaultBrakeSetup,
   TRAINING_COLLECTIONS,
   yoloObbLine,
   type TrainingAnnotation,
@@ -59,6 +60,7 @@ export async function listTrainingCaptures(): Promise<TrainingCapture[]> {
         vehicleModelId: x.vehicleModelId ?? null,
         vehicleModelLabel: x.vehicleModelLabel ?? '',
         vehicleType: x.vehicleType ?? 'scooter',
+        brakes: x.brakes ?? undefined,
         shotId: x.shotId,
         partKey: x.partKey,
         view: x.view,
@@ -96,6 +98,7 @@ export async function listTrainingSessions(): Promise<TrainingSession[]> {
       vehicleModelLabel: x.vehicleModelLabel ?? '',
       vehicleType: x.vehicleType ?? 'scooter',
       hasChain: !!x.hasChain,
+      brakes: x.brakes ?? defaultBrakeSetup(x.vehicleType ?? 'scooter'),
       notes: x.notes ?? '',
       skippedShots: x.skippedShots ?? {},
       status: x.status === 'completed' ? 'completed' : 'open',

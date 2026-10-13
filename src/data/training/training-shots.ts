@@ -21,9 +21,16 @@ import {
   BASIC_HEALTH_CHECK_BASE_ITEMS,
   BASIC_HEALTH_CHECK_CHAIN_ITEM,
 } from '@/data/verification/basic-health-check-items'
-import type { ObbBox, TrainingAnnotation, VehicleType } from './training-dataset.types'
+import type {
+  BrakeSetup,
+  FrontBrakeSetup,
+  ObbBox,
+  RearBrakeSetup,
+  TrainingAnnotation,
+  VehicleType,
+} from './training-dataset.types'
 
-export const TRAINING_SHOT_PLAN_VERSION = 2
+export const TRAINING_SHOT_PLAN_VERSION = 4
 
 /** Viewfinder / stored image aspect (width / height). */
 export const TRAINING_FRAME_ASPECT = 3 / 4
@@ -74,6 +81,9 @@ export interface TrainingShotDef {
   repeatable?: boolean
   /** Only included when the bike is chain-driven. */
   chainOnly?: boolean
+  /** Only included for these brake layouts (see BrakeSetup). */
+  frontBrake?: FrontBrakeSetup[]
+  rearBrake?: RearBrakeSetup[]
 }
 
 // --- geometry helpers (viewBox units) ---
@@ -168,6 +178,12 @@ function brake(label: string, cx: number, cy: number, r: number): GuideShape[] {
   return [circle(label, cx, cy, r), hintRect('', cx + r * 1.05, cy - r * 0.25, 30, 44, 12)]
 }
 
+function drum(label: string, cx: number, cy: number, r: number): GuideShape[] {
+  // Drum hub + its brake arm (cable/rod lever), which sticks up off the
+  // backing plate toward the rear — the arm is a hint of the same class.
+  return [circle(label, cx, cy, r), hintRect('', cx + r * 0.55, cy - r * 0.95, 14, 52, 35)]
+}
+
 const LOW_ANGLE = '蹲低到輪軸高度、手機直立，鏡頭正對車身側面'
 
 /** Walk-around order: front → left side → rear → right side → extras. */
@@ -209,16 +225,27 @@ export const TRAINING_SHOTS: TrainingShotDef[] = [
     },
   },
   {
-    id: 'triple.top',
+    // 三角台 here means the LOWER triple clamp (下三角台) — scooters usually
+    // have no exposed upper clamp, but the lower one shows between the fork
+    // legs above the front fender.
+    id: 'triple.lower',
     partKey: 'triple',
-    view: 'top',
+    view: 'lower',
     stage: 'front',
-    title: '三角台（俯拍）',
+    title: '下三角台（正前方低角度）',
     instruction:
-      '站在坐墊後方往車頭俯拍，三角台與左右前叉上端落在框內。速克達被車殼包覆看不到時請標記不適用。',
+      '蹲到土除上方高度，從車頭正前方拍兩支前叉之間、土除上方的下三角台，橫框對齊下三角台，兩側細框對齊左右前叉。速克達被前車殼擋住看不到時請標記不適用。',
     guides: {
-      scooter: [rect('triple', 150, 200, 200, 80)],
-      manual: [rect('triple', 150, 200, 230, 70)],
+      scooter: [
+        rect('triple', 150, 175, 170, 46),
+        hintRect('', 82, 255, 24, 120),
+        hintRect('', 218, 255, 24, 120),
+      ],
+      manual: [
+        rect('triple', 150, 165, 200, 44),
+        hintRect('', 70, 260, 26, 150),
+        hintRect('', 230, 260, 26, 150),
+      ],
     },
     optional: true,
   },
@@ -235,17 +262,30 @@ export const TRAINING_SHOTS: TrainingShotDef[] = [
     },
   },
   {
-    id: 'frontbrake.detail',
+    id: 'frontbrake.left',
     partKey: 'frontbrake',
-    view: 'detail',
+    view: 'left',
     stage: 'left',
-    title: '前煞車（輪轂近拍）',
-    instruction:
-      '拍有卡鉗（碟煞）或煞車拉桿（鼓煞）的那一側：碟盤／鼓煞輪轂放進圓框，卡鉗或拉桿落在小斜框。',
+    title: '前煞車卡鉗（左側）',
+    instruction: '近拍左側前碟盤：碟盤放進圓框，卡鉗落在小斜框。',
     guides: {
       scooter: brake('frontbrake', 140, 230, 56),
       manual: brake('frontbrake', 140, 225, 72),
     },
+    frontBrake: ['left', 'dual'],
+  },
+  {
+    id: 'frontbrake.drum',
+    partKey: 'frontbrake',
+    view: 'drum',
+    stage: 'left',
+    title: '前鼓煞（輪轂近拍）',
+    instruction: '拍有煞車拉桿的那一側：鼓煞輪轂放進圓框，煞車拉桿落在小斜框。',
+    guides: {
+      scooter: drum('frontbrake', 145, 235, 46),
+      manual: drum('frontbrake', 145, 230, 56),
+    },
+    frontBrake: ['drum'],
   },
   {
     id: 'fronttire.side',
@@ -324,16 +364,30 @@ export const TRAINING_SHOTS: TrainingShotDef[] = [
     },
   },
   {
-    id: 'rearbrake.detail',
+    id: 'rearbrake.disc',
     partKey: 'rearbrake',
-    view: 'detail',
+    view: 'disc',
     stage: 'left',
-    title: '後煞車（輪轂近拍）',
-    instruction: '拍有卡鉗或煞車拉桿的那一側：碟盤／鼓煞輪轂放進圓框，卡鉗或拉桿落在小斜框。',
+    title: '後煞車卡鉗（碟煞）',
+    instruction: '拍有卡鉗的那一側：後碟盤放進圓框，卡鉗落在小斜框。',
     guides: {
       scooter: brake('rearbrake', 140, 230, 56),
       manual: brake('rearbrake', 140, 225, 68),
     },
+    rearBrake: ['disc'],
+  },
+  {
+    id: 'rearbrake.drum',
+    partKey: 'rearbrake',
+    view: 'drum',
+    stage: 'left',
+    title: '後鼓煞（輪轂近拍）',
+    instruction: '拍有煞車拉桿的那一側：鼓煞輪轂放進圓框，煞車拉桿落在小斜框。',
+    guides: {
+      scooter: drum('rearbrake', 145, 235, 46),
+      manual: drum('rearbrake', 145, 230, 56),
+    },
+    rearBrake: ['drum'],
   },
   {
     id: 'reartire.tread',
@@ -388,6 +442,20 @@ export const TRAINING_SHOTS: TrainingShotDef[] = [
     mirror: true,
   },
   {
+    id: 'frontbrake.right',
+    partKey: 'frontbrake',
+    view: 'right',
+    stage: 'right',
+    title: '前煞車卡鉗（右側）',
+    instruction: '近拍右側前碟盤：碟盤放進圓框，卡鉗落在小斜框。',
+    guides: {
+      scooter: brake('frontbrake', 140, 230, 56),
+      manual: brake('frontbrake', 140, 225, 72),
+    },
+    mirror: true,
+    frontBrake: ['right', 'dual'],
+  },
+  {
     id: 'othermod.detail',
     partKey: 'othermod',
     view: 'detail',
@@ -403,8 +471,22 @@ export const TRAINING_SHOTS: TrainingShotDef[] = [
   },
 ]
 
-export function trainingShotsFor(hasChain: boolean): TrainingShotDef[] {
-  return TRAINING_SHOTS.filter((s) => hasChain || !s.chainOnly)
+/** Whether `shot` belongs in the plan for a bike with this setup. */
+export function shotApplies(
+  shot: TrainingShotDef,
+  bike: { hasChain: boolean; brakes: BrakeSetup },
+): boolean {
+  if (shot.chainOnly && !bike.hasChain) return false
+  if (shot.frontBrake && !shot.frontBrake.includes(bike.brakes.front)) return false
+  if (shot.rearBrake && !shot.rearBrake.includes(bike.brakes.rear)) return false
+  return true
+}
+
+export function trainingShotsFor(bike: {
+  hasChain: boolean
+  brakes: BrakeSetup
+}): TrainingShotDef[] {
+  return TRAINING_SHOTS.filter((s) => shotApplies(s, bike))
 }
 
 export function findTrainingShot(id: string): TrainingShotDef | undefined {
@@ -460,10 +542,13 @@ export function guideAnnotationsFor(
 
 /** Ordered class list for the detector — index = YOLO class id. Never
  *  reorder; append only (existing label files depend on the indices). */
+/** Training-side label overrides — the class key stays the checklist's. */
+const TRAINING_LABEL_OVERRIDES: Record<string, string> = { triple: '下三角台' }
+
 export const TRAINING_PART_LABELS: { key: string; label: string }[] = [
   ...BASIC_HEALTH_CHECK_BASE_ITEMS,
   BASIC_HEALTH_CHECK_CHAIN_ITEM,
-].map(({ key, label }) => ({ key, label }))
+].map(({ key, label }) => ({ key, label: TRAINING_LABEL_OVERRIDES[key] ?? label }))
 
 export function partLabel(key: string): string {
   return TRAINING_PART_LABELS.find((p) => p.key === key)?.label ?? key

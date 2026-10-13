@@ -17,7 +17,9 @@ import { deleteObject, ref, uploadBytesResumable } from 'firebase/storage'
 import { ADMIN_UID } from '@/admin/services/admin-auth.service'
 import { db, storage } from '@/services/firebase/firebase'
 import {
+  defaultBrakeSetup,
   TRAINING_COLLECTIONS,
+  type BrakeSetup,
   type TrainingCapture,
   type TrainingSession,
 } from '@/data/training/training-dataset.types'
@@ -56,17 +58,28 @@ export async function listCatalogModels(): Promise<CatalogModel[]> {
     .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'))
 }
 
+function toBrakes(value: unknown, fallback: BrakeSetup): BrakeSetup {
+  const b = (value ?? {}) as Partial<BrakeSetup>
+  return {
+    front:
+      b.front && ['left', 'right', 'dual', 'drum'].includes(b.front) ? b.front : fallback.front,
+    rear: b.rear === 'disc' || b.rear === 'drum' ? b.rear : fallback.rear,
+  }
+}
+
 function toSession(id: string, data: Record<string, unknown>): TrainingSession {
+  const vehicleType: TrainingSession['vehicleType'] =
+    data.vehicleType === 'manual' || data.vehicleType === 'scooter'
+      ? data.vehicleType
+      : guessVehicleType(null, !!data.hasChain)
   return {
     id,
     collectorUid: String(data.collectorUid ?? ''),
     vehicleModelId: (data.vehicleModelId as string | null) ?? null,
     vehicleModelLabel: String(data.vehicleModelLabel ?? ''),
-    vehicleType:
-      data.vehicleType === 'manual' || data.vehicleType === 'scooter'
-        ? data.vehicleType
-        : guessVehicleType(null, !!data.hasChain),
+    vehicleType,
     hasChain: !!data.hasChain,
+    brakes: toBrakes(data.brakes, defaultBrakeSetup(vehicleType)),
     notes: String(data.notes ?? ''),
     skippedShots: (data.skippedShots as Record<string, string>) ?? {},
     status: data.status === 'completed' ? 'completed' : 'open',
@@ -78,7 +91,13 @@ function toSession(id: string, data: Record<string, unknown>): TrainingSession {
 export async function createSession(
   input: Pick<
     TrainingSession,
-    'collectorUid' | 'vehicleModelId' | 'vehicleModelLabel' | 'vehicleType' | 'hasChain' | 'notes'
+    | 'collectorUid'
+    | 'vehicleModelId'
+    | 'vehicleModelLabel'
+    | 'vehicleType'
+    | 'hasChain'
+    | 'brakes'
+    | 'notes'
   >,
 ): Promise<string> {
   const ref = await addDoc(collection(db, TRAINING_COLLECTIONS.sessions), {
@@ -105,7 +124,9 @@ export async function getSession(id: string): Promise<TrainingSession | null> {
 
 export async function updateSession(
   id: string,
-  patch: Partial<Pick<TrainingSession, 'skippedShots' | 'status' | 'notes' | 'vehicleType'>>,
+  patch: Partial<
+    Pick<TrainingSession, 'skippedShots' | 'status' | 'notes' | 'vehicleType' | 'brakes'>
+  >,
 ): Promise<void> {
   await updateDoc(doc(db, TRAINING_COLLECTIONS.sessions, id), {
     ...patch,
@@ -172,13 +193,21 @@ export async function uploadCapture(
   })
 }
 
-/** Withdraws an uploaded, still-pending photo (retake of a single shot).
- *  Already-reviewed photos are kept — the rules refuse the delete. */
-export async function withdrawCapture(capture: SessionCapture): Promise<void> {
+/** Deletes one of the caller's uploaded photos (doc + file). */
+export async function withdrawCapture(
+  capture: Pick<SessionCapture, 'id' | 'storagePath'>,
+): Promise<void> {
   await deleteDoc(doc(db, TRAINING_COLLECTIONS.captures, capture.id))
   try {
     await deleteObject(ref(storage, capture.storagePath))
   } catch (error) {
     if ((error as { code?: string }).code !== 'storage/object-not-found') throw error
   }
+}
+
+/** Deletes a whole bike: every uploaded photo, then the session doc. */
+export async function deleteSession(uid: string, sessionId: string): Promise<void> {
+  const captures = await listSessionCaptures(uid, sessionId)
+  await Promise.all(captures.map(withdrawCapture))
+  await deleteDoc(doc(db, TRAINING_COLLECTIONS.sessions, sessionId))
 }

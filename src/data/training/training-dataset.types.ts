@@ -92,6 +92,32 @@ export const VEHICLE_TYPE_LABEL: Record<VehicleType, string> = {
   manual: '檔車',
 }
 
+/** Front brake layout: disc caliper on the left / right / both legs, or drum. */
+export type FrontBrakeSetup = 'left' | 'right' | 'dual' | 'drum'
+export type RearBrakeSetup = 'disc' | 'drum'
+
+export interface BrakeSetup {
+  front: FrontBrakeSetup
+  rear: RearBrakeSetup
+}
+
+export const FRONT_BRAKE_LABEL: Record<FrontBrakeSetup, string> = {
+  left: '左卡鉗',
+  right: '右卡鉗',
+  dual: '雙卡鉗',
+  drum: '鼓煞',
+}
+
+export const REAR_BRAKE_LABEL: Record<RearBrakeSetup, string> = {
+  disc: '碟煞',
+  drum: '鼓煞',
+}
+
+/** Most scooters: left front caliper + rear drum; manual bikes: rear disc. */
+export function defaultBrakeSetup(type: VehicleType): BrakeSetup {
+  return { front: 'left', rear: type === 'scooter' ? 'drum' : 'disc' }
+}
+
 export interface CaptureQuality {
   /** Mean luminance 0–255 over the whole frame. */
   brightness: number
@@ -119,6 +145,8 @@ export interface TrainingCapture {
    *  model identity when the bike isn't in the catalog (vehicleModelId null). */
   vehicleModelLabel: string
   vehicleType: VehicleType
+  /** The session's brake layout when this photo was taken (absent on old docs). */
+  brakes?: BrakeSetup
   shotId: string
   partKey: string
   view: string
@@ -146,6 +174,8 @@ export interface TrainingSession {
   /** Picks the guide-frame template set (scooter vs. manual geometry). */
   vehicleType: VehicleType
   hasChain: boolean
+  /** Decides which brake shots are in the plan (caliper side(s) vs. drum). */
+  brakes: BrakeSetup
   notes: string
   /** shotId → reason, for shots the collector marked 不適用/看不到 (e.g. a
    *  single-shock scooter's right rear shock). A positive "this part is not

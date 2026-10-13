@@ -5,7 +5,7 @@
  */
 import { computed, reactive } from 'vue'
 
-import { uploadCapture } from './capture.service'
+import { uploadCapture, withdrawCapture } from './capture.service'
 import { pendingStore, type PendingCapture } from './pending-store'
 
 export interface QueueEntry {
@@ -21,7 +21,17 @@ export interface QueueEntry {
 const state = reactive<{ entries: QueueEntry[] }>({ entries: [] })
 const blobs = new Map<string, PendingCapture>()
 const listeners = new Set<(entry: QueueEntry) => void>()
+/** Deleted while mid-upload — withdrawn as soon as that upload settles. */
+const cancelled = new Set<string>()
 let running = false
+
+async function dropEntry(entry: QueueEntry): Promise<void> {
+  await pendingStore.remove(entry.id)
+  blobs.delete(entry.id)
+  const i = state.entries.indexOf(entry)
+  if (i !== -1) state.entries.splice(i, 1)
+  URL.revokeObjectURL(entry.thumbUrl)
+}
 
 function addEntry(item: PendingCapture): void {
   if (blobs.has(item.id)) return
@@ -49,12 +59,18 @@ async function drain(): Promise<void> {
       entry.progress = 0
       try {
         await uploadCapture(item, (f) => (entry.progress = f))
-        await pendingStore.remove(entry.id)
-        blobs.delete(entry.id)
-        state.entries.splice(state.entries.indexOf(entry), 1)
+        await dropEntry(entry)
+        if (cancelled.delete(entry.id)) {
+          await withdrawCapture({ id: entry.id, storagePath: item.doc.storagePath }).catch(
+            () => undefined,
+          )
+        }
         listeners.forEach((fn) => fn(entry))
-        URL.revokeObjectURL(entry.thumbUrl)
       } catch (error) {
+        if (cancelled.delete(entry.id)) {
+          await dropEntry(entry)
+          continue
+        }
         entry.state = 'error'
         entry.error = error instanceof Error ? error.message : '上傳失敗'
       }
@@ -90,6 +106,17 @@ export const uploadQueue = {
       }
     })
     void drain()
+  },
+
+  /** Deletes not-yet-uploaded photos; one already uploading is withdrawn
+   *  right after its upload settles. */
+  async cancel(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      const entry = state.entries.find((e) => e.id === id)
+      if (!entry) continue
+      if (entry.state === 'uploading') cancelled.add(id)
+      else await dropEntry(entry)
+    }
   },
 
   /** Called after each successful upload (doc now exists in Firestore). */

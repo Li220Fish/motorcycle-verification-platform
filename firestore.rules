@@ -764,7 +764,8 @@ service cloud.firestore {
           && resource.data.collectorUid == myUid()
           && request.resource.data.collectorUid == myUid())
         || isAdmin();
-      allow delete: if isAdmin();
+      // The collector may delete their own bike (the app deletes its photos first).
+      allow delete: if isAdmin() || (signedIn() && resource.data.collectorUid == myUid());
     }
 
     match /trainingCaptures/{captureId} {
@@ -774,10 +775,9 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.annotations == null;
       allow update: if isAdmin();
-      // A collector may withdraw their own not-yet-reviewed photo (retake of
-      // a single-shot item replaces the previous upload).
-      allow delete: if isAdmin()
-        || (signedIn() && resource.data.collectorUid == myUid() && resource.data.status == 'pending');
+      // A collector may delete their own photos (刪除 in the capture app),
+      // reviewed ones included.
+      allow delete: if isAdmin() || (signedIn() && resource.data.collectorUid == myUid());
     }
 
     match /{document=**} {

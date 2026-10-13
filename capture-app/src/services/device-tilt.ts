@@ -42,8 +42,8 @@ export async function startTilt(): Promise<void> {
   listening = true
 }
 
-/** Roll is only meaningful while the phone is roughly upright — for the
- *  top-down 三角台 shot it'd measure rotation around the wrong axis. */
+/** Roll is only meaningful while the phone is roughly upright — pointed
+ *  down at a part it'd measure rotation around the wrong axis. */
 export function effectiveRoll(): number | null {
   if (tilt.rollDeg === null || tilt.pitchDeg === null) return null
   return tilt.pitchDeg > 35 ? tilt.rollDeg : null
