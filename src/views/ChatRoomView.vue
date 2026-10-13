@@ -74,7 +74,15 @@ const TAG_LABEL_KEY: Record<string, 'filterTrading' | 'filterSystem'> = {
   交易中: 'filterTrading',
   系統: 'filterSystem',
 }
+// Same "show the vehicle instead of the generic tag" preference as
+// ConversationRow.vue's useConversationVehicleLabel — reuses the
+// contextVehicle/contextListing this view already resolves for its own
+// vehicle-context banner below, rather than fetching the same thing twice.
 const conversationTagLabel = computed(() => {
+  if (contextVehicle.value) return `${contextVehicle.value.brand} ${contextVehicle.value.model}`
+  if (contextListing.value) {
+    return `${contextListing.value.vehicleSnapshot.brand} ${contextListing.value.vehicleSnapshot.model}`
+  }
   const tag = chatStore.currentConversation?.tag
   if (!tag) return ''
   const key = TAG_LABEL_KEY[tag]

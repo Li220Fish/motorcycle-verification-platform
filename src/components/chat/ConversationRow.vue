@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import Avatar from '@/components/common/Avatar.vue'
 import { useI18n } from '@/composables/useI18n'
+import { useConversationVehicleLabel } from '@/composables/useConversationVehicleLabel'
 import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { formatRelativeTime } from '@/utils/format-time'
 import type { Conversation } from '@/services/chat/chat.types'
@@ -13,7 +16,14 @@ const TAG_LABEL_KEY: Record<string, 'filterTrading' | 'filterSystem'> = {
   系統: 'filterSystem',
 }
 
+// Every real conversation is about a specific vehicle (see
+// useConversationVehicleLabel's own doc comment) — shows that instead of
+// the generic tag text ('買家詢問' etc.) once resolved; falls back to the
+// tag while loading or for the rare conversation with no vehicle context.
+const vehicleLabel = useConversationVehicleLabel(computed(() => props.conversation.context))
+
 function tagLabel(): string {
+  if (vehicleLabel.value) return vehicleLabel.value
   const key = TAG_LABEL_KEY[props.conversation.tag]
   return key ? t('messagesList', key) : props.conversation.tag
 }
@@ -88,12 +98,20 @@ const otherPhotoUrl = useLiveAvatar(otherId, otherSnapshotPhotoUrl)
 }
 
 .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13.5px;
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
 .tag {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 700;
   padding: 1.5px 7px;
