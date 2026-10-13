@@ -30,7 +30,7 @@ struct CaptureWebView: UIViewRepresentable {
         webView.scrollView.refreshControl = refresh
         context.coordinator.webView = webView
 
-        webView.load(URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData))
+        webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
         return webView
     }
 
@@ -40,7 +40,7 @@ struct CaptureWebView: UIViewRepresentable {
         weak var webView: WKWebView?
 
         @objc func reload(_ sender: UIRefreshControl) {
-            webView?.reload()
+            webView?.reloadFromOrigin()
             sender.endRefreshing()
         }
 

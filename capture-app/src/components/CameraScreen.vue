@@ -1,13 +1,17 @@
 <script setup lang="ts">
 /**
  * Full-screen guided viewfinder for one shot of the training shot plan.
- * The stream stays open while the parent swaps `shot` (auto-advance after
- * each 使用這張), so walking the bike never re-prompts for the camera.
+ * Each shutter press hands the photo straight to the parent (no review
+ * step), which queues the upload and swaps `shot` to the next item; the
+ * stream stays open across shots, so walking the bike never re-prompts.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
+  FRONT_BRAKE_LABEL,
   obbBounds,
+  REAR_BRAKE_LABEL,
+  type BrakeSetup,
   type CaptureQuality,
   type NormalizedBox,
   type VehicleType,
@@ -44,19 +48,21 @@ export interface CapturedShot {
 const props = defineProps<{
   shot: TrainingShotDef
   vehicleType: VehicleType
+  brakes: BrakeSetup
   position: string
   alreadyTaken: number
 }>()
 const emit = defineEmits<{
   close: []
   vehicleType: [type: VehicleType]
+  brakes: [brakes: BrakeSetup]
   use: [captured: CapturedShot]
   skip: [reason: string]
   prev: []
   next: []
 }>()
 
-type Phase = 'starting' | 'live' | 'review' | 'error'
+type Phase = 'starting' | 'live' | 'error'
 const phase = ref<Phase>('starting')
 const errorMessage = ref('')
 const videoEl = ref<HTMLVideoElement | null>(null)
@@ -64,9 +70,28 @@ const facing = ref<CameraFacing>('environment')
 const hasTorch = ref(false)
 const torchOn = ref(false)
 const metrics = ref<FrameMetrics | null>(null)
-const review = ref<{ captured: CapturedShot; url: string } | null>(null)
+const saved = ref(false)
 const skipSheet = ref(false)
 const flashing = ref(false)
+
+/** Brake shots let the collector set this bike's layout right where it matters. */
+const brakeOptions = computed(() => {
+  if (props.shot.partKey === 'frontbrake') {
+    return (Object.keys(FRONT_BRAKE_LABEL) as BrakeSetup['front'][]).map((v) => ({
+      label: FRONT_BRAKE_LABEL[v],
+      active: props.brakes.front === v,
+      pick: () => emit('brakes', { ...props.brakes, front: v }),
+    }))
+  }
+  if (props.shot.partKey === 'rearbrake') {
+    return (Object.keys(REAR_BRAKE_LABEL) as BrakeSetup['rear'][]).map((v) => ({
+      label: REAR_BRAKE_LABEL[v],
+      active: props.brakes.rear === v,
+      pick: () => emit('brakes', { ...props.brakes, rear: v }),
+    }))
+  }
+  return null
+})
 
 const guides = computed(() => shotGuides(props.shot, props.vehicleType))
 /** Axis-aligned bounds of the subject guide — where sharpness is measured. */
@@ -80,31 +105,7 @@ const warnings = computed(() => frameWarnings(metrics.value, roll.value))
 const level = computed(() => roll.value !== null && Math.abs(roll.value) <= 2)
 
 let timer: number | undefined
-
-// 自動快門: fires once every check has stayed green for STEADY_MS, then
-// queues the photo straight away (no review — it already passed the checks).
-const STEADY_MS = 1000
-const COOLDOWN_MS = 1800
-const AUTO_KEY = 'ride-capture:auto-shutter'
-function readAuto(): boolean {
-  try {
-    return localStorage.getItem(AUTO_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-const autoShutter = ref(readAuto())
-let steadySince = 0
-let cooldownUntil = 0
-const steadyProgress = ref(0)
-function toggleAuto(): void {
-  autoShutter.value = !autoShutter.value
-  try {
-    localStorage.setItem(AUTO_KEY, autoShutter.value ? '1' : '0')
-  } catch {
-    /* per-viewer convenience only */
-  }
-}
+let savedTimer: number | undefined
 
 async function openCamera(): Promise<void> {
   phase.value = 'starting'
@@ -131,66 +132,38 @@ async function openCamera(): Promise<void> {
 function tick(): void {
   if (phase.value !== 'live' || !videoEl.value) return
   metrics.value = measureFrame(videoEl.value, primaryBox.value)
-
-  const now = Date.now()
-  const ready = !!metrics.value && warnings.value.length === 0 && now >= cooldownUntil
-  if (!ready) {
-    steadySince = 0
-    steadyProgress.value = 0
-    return
-  }
-  if (!steadySince) steadySince = now
-  steadyProgress.value = Math.min(1, (now - steadySince) / STEADY_MS)
-  if (autoShutter.value && !props.shot.repeatable && now - steadySince >= STEADY_MS) {
-    steadySince = 0
-    steadyProgress.value = 0
-    cooldownUntil = now + COOLDOWN_MS
-    void shutter(true)
-  }
 }
 
-async function shutter(auto = false): Promise<void> {
+let busy = false
+async function shutter(): Promise<void> {
   const video = videoEl.value
-  if (!video || phase.value !== 'live') return
+  if (!video || phase.value !== 'live' || busy) return
+  busy = true
   flashing.value = true
   setTimeout(() => (flashing.value = false), 120)
-  const snapshot = measureFrame(video, primaryBox.value) ?? metrics.value
-  const frame = await grabFrame(video)
-  const captured: CapturedShot = {
-    frame,
-    videoWidth: video.videoWidth,
-    videoHeight: video.videoHeight,
-    quality: {
-      brightness: Math.round(snapshot?.brightness ?? 0),
-      sharpness: Math.round(snapshot?.sharpness ?? 0),
-      rollDeg: roll.value === null ? null : Math.round(roll.value * 10) / 10,
-      pitchDeg: tilt.pitchDeg === null ? null : Math.round(tilt.pitchDeg * 10) / 10,
-      warnings: frameWarnings(snapshot, roll.value),
-    },
+  let captured: CapturedShot
+  try {
+    const snapshot = measureFrame(video, primaryBox.value) ?? metrics.value
+    const frame = await grabFrame(video)
+    captured = {
+      frame,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      quality: {
+        brightness: Math.round(snapshot?.brightness ?? 0),
+        sharpness: Math.round(snapshot?.sharpness ?? 0),
+        rollDeg: roll.value === null ? null : Math.round(roll.value * 10) / 10,
+        pitchDeg: tilt.pitchDeg === null ? null : Math.round(tilt.pitchDeg * 10) / 10,
+        warnings: frameWarnings(snapshot, roll.value),
+      },
+    }
+  } finally {
+    busy = false
   }
-  if (auto) {
-    emit('use', captured)
-    return
-  }
-  review.value = { captured, url: URL.createObjectURL(frame.blob) }
-  phase.value = 'review'
-}
-
-function clearReview(): void {
-  if (review.value) URL.revokeObjectURL(review.value.url)
-  review.value = null
-}
-
-function retake(): void {
-  clearReview()
-  phase.value = 'live'
-}
-
-function useShot(): void {
-  if (!review.value) return
-  emit('use', review.value.captured)
-  // Back to live for repeatable shots; for the rest the parent swaps `shot`.
-  retake()
+  emit('use', captured)
+  saved.value = true
+  window.clearTimeout(savedTimer)
+  savedTimer = window.setTimeout(() => (saved.value = false), 900)
 }
 
 async function toggleTorch(): Promise<void> {
@@ -217,8 +190,6 @@ watch(
   () => props.shot.id,
   () => {
     skipSheet.value = false
-    steadySince = 0
-    if (phase.value === 'review') retake()
   },
 )
 
@@ -230,7 +201,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.clearInterval(timer)
-  clearReview()
+  window.clearTimeout(savedTimer)
   stopCamera()
 })
 </script>
@@ -260,23 +231,12 @@ onBeforeUnmount(() => {
         >
           {{ VEHICLE_TYPE_LABEL[vehicleType] }}
         </button>
-        <button
-          class="auto-btn"
-          :class="{ on: autoShutter }"
-          :aria-pressed="autoShutter"
-          @click="toggleAuto"
-        >
-          自動
-        </button>
         <button class="icon-btn" aria-label="切換鏡頭" @click="flipCamera">⟲</button>
       </div>
     </header>
 
     <div class="viewfinder">
-      <!-- v-show, not v-if: the stream keeps running under the review still,
-           so 重拍 is instant. -->
       <video
-        v-show="phase !== 'review'"
         ref="videoEl"
         class="feed"
         :class="{ mirror: facing === 'user' }"
@@ -284,7 +244,6 @@ onBeforeUnmount(() => {
         muted
         autoplay
       ></video>
-      <img v-if="phase === 'review' && review" :src="review.url" class="feed" alt="剛拍的照片" />
 
       <GuideOverlay :guides="guides" :tone="warnings.length ? 'warn' : 'ok'" />
 
@@ -296,24 +255,13 @@ onBeforeUnmount(() => {
       ></div>
 
       <div v-if="phase === 'live'" class="ready" :class="{ ok: !warnings.length && metrics }">
-        {{ !warnings.length && metrics ? (autoShutter ? '穩住…' : '可拍攝') : '對位中' }}
-        <i
-          v-if="autoShutter && steadyProgress > 0"
-          :style="{ width: `${steadyProgress * 100}%` }"
-        ></i>
+        {{ !warnings.length && metrics ? '可拍攝' : '對位中' }}
       </div>
 
       <div v-if="phase === 'live' && warnings.length" class="warn-chips">
         <span v-for="w in warnings" :key="w" class="chip warn">{{ w }}</span>
       </div>
-      <div
-        v-else-if="phase === 'review' && review?.captured.quality.warnings.length"
-        class="warn-chips"
-      >
-        <span v-for="w in review.captured.quality.warnings" :key="w" class="chip warn">{{
-          w
-        }}</span>
-      </div>
+      <div v-if="saved" class="saved">✓ 已存，上傳中</div>
 
       <div v-if="phase === 'starting'" class="vf-msg">開啟相機中…</div>
       <div v-if="phase === 'error'" class="vf-msg">
@@ -323,34 +271,37 @@ onBeforeUnmount(() => {
       <div v-if="flashing" class="flash"></div>
     </div>
 
+    <div v-if="brakeOptions" class="brake-pick" role="group" aria-label="煞車形式">
+      <button
+        v-for="o in brakeOptions"
+        :key="o.label"
+        :class="{ on: o.active }"
+        :aria-pressed="o.active"
+        @click="o.pick()"
+      >
+        {{ o.label }}
+      </button>
+    </div>
     <p class="instruction">{{ shot.instruction }}</p>
 
     <footer class="cam-bottom">
-      <template v-if="phase === 'review'">
-        <button class="btn ghost wide" @click="retake">重拍</button>
-        <button class="btn primary wide" @click="useShot">使用這張</button>
-      </template>
-      <template v-else>
-        <div class="side">
-          <button class="nav-btn" aria-label="上一個" @click="emit('prev')">‹</button>
-          <button v-if="shot.optional" class="btn ghost sm" @click="skipSheet = true">
-            不適用
-          </button>
-        </div>
-        <button
-          class="shutter"
-          :class="{ ok: !warnings.length && metrics }"
-          :disabled="phase !== 'live'"
-          aria-label="拍照"
-          @click="shutter()"
-        >
-          <span></span>
-        </button>
-        <div class="side right">
-          <span v-if="alreadyTaken" class="taken">已拍 {{ alreadyTaken }}</span>
-          <button class="nav-btn" aria-label="下一個" @click="emit('next')">›</button>
-        </div>
-      </template>
+      <div class="side">
+        <button class="nav-btn" aria-label="上一個" @click="emit('prev')">‹</button>
+        <button v-if="shot.optional" class="btn ghost sm" @click="skipSheet = true">不適用</button>
+      </div>
+      <button
+        class="shutter"
+        :class="{ ok: !warnings.length && metrics }"
+        :disabled="phase !== 'live'"
+        aria-label="拍照"
+        @click="shutter()"
+      >
+        <span></span>
+      </button>
+      <div class="side right">
+        <span v-if="alreadyTaken" class="taken">已拍 {{ alreadyTaken }}</span>
+        <button class="nav-btn" aria-label="下一個" @click="emit('next')">›</button>
+      </div>
     </footer>
 
     <div v-if="skipSheet" class="sheet-backdrop" @click.self="skipSheet = false">
@@ -490,6 +441,30 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 
+.brake-pick {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+.brake-pick button {
+  flex: 1;
+  height: 34px;
+  border-radius: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.brake-pick button.on {
+  border-color: var(--guide);
+  background: var(--guide);
+  color: #1e1400;
+}
+
 .instruction {
   margin: 0;
   padding: 10px 16px;
@@ -597,12 +572,17 @@ onBeforeUnmount(() => {
   color: #04140a;
 }
 
-.ready i {
+.saved {
   position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  background: #04140a;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--ok);
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .shutter:disabled {

@@ -1,28 +1,33 @@
 <script setup lang="ts">
 /**
  * One bike = one session: the shot checklist (walk-around order) plus the
- * guided camera. After each 使用這張 the camera jumps straight to the next
- * shot that still needs a photo, so a full walk-around is shutter → 使用 →
- * shutter → 使用 … without returning to this list.
+ * guided camera. Each shutter press uploads in the background and jumps
+ * straight to the next shot that still needs a photo, so a full walk-around
+ * is just shutter → shutter → … without returning to this list.
  */
 import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { getDownloadURL, ref as storageRef } from 'firebase/storage'
 
 import { storage } from '@/services/firebase/firebase'
 import {
+  FRONT_BRAKE_LABEL,
+  REAR_BRAKE_LABEL,
   trainingCaptureStoragePath,
   VEHICLE_TYPE_LABEL,
+  type BrakeSetup,
   type VehicleType,
   type TrainingSession,
 } from '@/data/training/training-dataset.types'
 import {
   guideAnnotationsFor,
   TRAINING_SHOT_PLAN_VERSION,
+  shotApplies,
+  TRAINING_SHOTS,
   TRAINING_STAGE_LABEL,
-  trainingShotsFor,
   type TrainingShotDef,
 } from '@/data/training/training-shots'
 import {
+  deleteSession,
   getSession,
   listSessionCaptures,
   newCaptureId,
@@ -44,7 +49,13 @@ const loading = ref(true)
 const cameraIndex = ref<number | null>(null)
 const toast = ref('')
 
-const shots = computed(() => trainingShotsFor(session.value?.hasChain ?? false))
+/** The plan for this bike's setup, plus any shot that already has photos
+ *  (e.g. taken before the brake layout was changed) so they stay deletable. */
+const shots = computed(() => {
+  const s = session.value
+  if (!s) return []
+  return TRAINING_SHOTS.filter((shot) => shotApplies(shot, s) || takenCount(shot.id) > 0)
+})
 
 const queued = computed(() =>
   uploadQueue.entries.value.filter((e) => e.sessionId === props.sessionId),
@@ -165,9 +176,10 @@ async function handleUse(captured: CapturedShot): Promise<void> {
   if (index === null || !s) return
   const shot = shots.value[index]
 
-  // Retake of a single-shot item replaces the earlier upload. The new photo
-  // is already safe in IndexedDB before anything is withdrawn.
-  const replaced = shot.repeatable ? [] : uploadedFor(shot.id)
+  // Retake of a single-shot item replaces the earlier not-yet-reviewed
+  // upload (reviewed ones keep their annotations). The new photo is already
+  // safe in IndexedDB before anything is withdrawn.
+  const replaced = shot.repeatable ? [] : uploadedFor(shot.id).filter((c) => c.status === 'pending')
 
   const id = newCaptureId()
   await uploadQueue.enqueue({
@@ -179,6 +191,7 @@ async function handleUse(captured: CapturedShot): Promise<void> {
       vehicleModelId: s.vehicleModelId,
       vehicleModelLabel: s.vehicleModelLabel,
       vehicleType: s.vehicleType,
+      brakes: s.brakes,
       shotId: shot.id,
       partKey: shot.partKey,
       view: shot.view,
@@ -203,11 +216,45 @@ async function handleUse(captured: CapturedShot): Promise<void> {
   for (const old of replaced) {
     withdrawCapture(old)
       .then(() => (captures.value = captures.value.filter((c) => c.id !== old.id)))
-      .catch(() => undefined) // already reviewed → rules keep it; that's fine
+      .catch(() => undefined)
   }
 
   if (shot.repeatable) flash('已加入，可繼續拍下一個改裝件')
   else advanceFrom(index)
+}
+
+const deleting = ref(false)
+
+async function deleteShotPhotos(shot: TrainingShotDef): Promise<void> {
+  const uploaded = uploadedFor(shot.id)
+  const pending = queuedFor(shot.id)
+  if (!confirm(`刪除「${shot.title}」的 ${uploaded.length + pending.length} 張照片？`)) return
+  deleting.value = true
+  try {
+    await uploadQueue.cancel(pending.map((e) => e.id))
+    await Promise.all(uploaded.map(withdrawCapture))
+    captures.value = captures.value.filter((c) => c.shotId !== shot.id)
+    flash('已刪除')
+  } catch (e) {
+    alert(`刪除失敗：${e instanceof Error ? e.message : e}`)
+    await reloadCaptures()
+  } finally {
+    deleting.value = false
+  }
+}
+
+async function deleteThisBike(): Promise<void> {
+  if (!confirm('刪除這台車和它所有的照片？此動作無法復原。')) return
+  deleting.value = true
+  try {
+    await uploadQueue.cancel(queued.value.map((e) => e.id))
+    await deleteSession(props.uid, props.sessionId)
+    emit('back')
+  } catch (e) {
+    alert(`刪除失敗：${e instanceof Error ? e.message : e}`)
+  } finally {
+    deleting.value = false
+  }
 }
 
 async function handleSkip(reason: string): Promise<void> {
@@ -232,6 +279,21 @@ async function setVehicleType(t: VehicleType): Promise<void> {
   session.value.vehicleType = t
   rememberVehicleType(t)
   await updateSession(props.sessionId, { vehicleType: t })
+}
+
+/** Changing the brake layout swaps which brake shots are in the plan; the
+ *  camera stays on the same part (frontbrake/rearbrake). */
+async function setBrakes(brakes: BrakeSetup): Promise<void> {
+  const s = session.value
+  if (!s || cameraIndex.value === null) return
+  const partKey = shots.value[cameraIndex.value].partKey
+  s.brakes = brakes
+  const candidates = shots.value
+    .map((shot, i) => ({ shot, i }))
+    .filter(({ shot }) => shot.partKey === partKey && shotApplies(shot, s))
+  const target = candidates.find(({ shot }) => !isDone(shot)) ?? candidates[0]
+  if (target) cameraIndex.value = target.i
+  await updateSession(props.sessionId, { brakes })
 }
 
 const sessionTitle = computed(() =>
@@ -260,7 +322,10 @@ void load().then(() => {
       <button class="link" @click="emit('back')">‹ 車輛列表</button>
       <h1>{{ sessionTitle }}</h1>
       <p v-if="session" class="muted">
-        {{ VEHICLE_TYPE_LABEL[session.vehicleType] }} · 完成 {{ doneCount }} / {{ shots.length }}
+        {{ VEHICLE_TYPE_LABEL[session.vehicleType] }} · 前{{
+          FRONT_BRAKE_LABEL[session.brakes.front]
+        }}
+        · 後{{ REAR_BRAKE_LABEL[session.brakes.rear] }} · 完成 {{ doneCount }} / {{ shots.length }}
         <span v-if="queued.length"> · 待上傳 {{ queued.length }}</span>
         <span v-if="session.status === 'completed'"> · 已結束</span>
       </p>
@@ -286,41 +351,52 @@ void load().then(() => {
 
       <section v-for="g in stages" :key="g.stage" class="group">
         <h2>{{ g.stage }}</h2>
-        <button
-          v-for="{ shot, index } in g.items"
-          :key="shot.id"
-          class="shot-row"
-          @click="openCamera(index)"
-        >
-          <span class="thumb">
-            <img v-if="queuedFor(shot.id)[0]" :src="queuedFor(shot.id)[0].thumbUrl" alt="" />
-            <img
-              v-else-if="uploadedFor(shot.id)[0] && thumbs[uploadedFor(shot.id)[0].id]"
-              :src="thumbs[uploadedFor(shot.id)[0].id]"
-              alt=""
-            />
-          </span>
-          <span class="shot-text">
-            <strong>{{ shot.title }}</strong>
-            <small v-if="session.skippedShots[shot.id]" class="muted"
-              >不適用：{{ session.skippedShots[shot.id] }}</small
-            >
-            <small v-else-if="queuedFor(shot.id).some((e) => e.state === 'error')" class="bad"
-              >上傳失敗，將自動重試</small
-            >
-            <small v-else-if="queuedFor(shot.id).length" class="muted">
-              上傳中 {{ Math.round((queuedFor(shot.id)[0].progress ?? 0) * 100) }}%
-            </small>
-            <small v-else-if="uploadedFor(shot.id).length" class="good">
-              已上傳{{ shot.repeatable ? ` ${uploadedFor(shot.id).length} 張` : '' }}
-            </small>
-            <small v-else class="muted">{{ shot.optional ? '選拍' : '必拍' }}</small>
-          </span>
-          <span class="state" :class="{ done: isDone(shot) }">{{ isDone(shot) ? '✓' : '›' }}</span>
-        </button>
+        <div v-for="{ shot, index } in g.items" :key="shot.id" class="shot-line">
+          <button class="shot-row" @click="openCamera(index)">
+            <span class="thumb">
+              <img v-if="queuedFor(shot.id)[0]" :src="queuedFor(shot.id)[0].thumbUrl" alt="" />
+              <img
+                v-else-if="uploadedFor(shot.id)[0] && thumbs[uploadedFor(shot.id)[0].id]"
+                :src="thumbs[uploadedFor(shot.id)[0].id]"
+                alt=""
+              />
+            </span>
+            <span class="shot-text">
+              <strong>{{ shot.title }}</strong>
+              <small v-if="session.skippedShots[shot.id]" class="muted"
+                >不適用：{{ session.skippedShots[shot.id] }}</small
+              >
+              <small v-else-if="queuedFor(shot.id).some((e) => e.state === 'error')" class="bad"
+                >上傳失敗，將自動重試</small
+              >
+              <small v-else-if="queuedFor(shot.id).length" class="muted">
+                上傳中 {{ Math.round((queuedFor(shot.id)[0].progress ?? 0) * 100) }}%
+              </small>
+              <small v-else-if="uploadedFor(shot.id).length" class="good">
+                已上傳{{ shot.repeatable ? ` ${uploadedFor(shot.id).length} 張` : '' }}
+              </small>
+              <small v-else class="muted">{{ shot.optional ? '選拍' : '必拍' }}</small>
+            </span>
+            <span class="state" :class="{ done: isDone(shot) }">{{
+              isDone(shot) ? '✓' : '›'
+            }}</span>
+          </button>
+          <button
+            v-if="takenCount(shot.id)"
+            class="del-btn"
+            :disabled="deleting"
+            :aria-label="`刪除${shot.title}的照片`"
+            @click="deleteShotPhotos(shot)"
+          >
+            刪除
+          </button>
+        </div>
       </section>
 
       <button class="btn ghost block" @click="complete">結束這台車</button>
+      <button class="btn danger block" :disabled="deleting" @click="deleteThisBike">
+        刪除這台車
+      </button>
       <p v-if="session.notes" class="muted small">備註：{{ session.notes }}</p>
     </template>
 
@@ -328,7 +404,9 @@ void load().then(() => {
       v-if="cameraIndex !== null && session"
       :shot="shots[cameraIndex]"
       :vehicle-type="session.vehicleType"
+      :brakes="session.brakes"
       @vehicle-type="setVehicleType"
+      @brakes="setBrakes"
       :position="`${cameraIndex + 1} / ${shots.length}`"
       :already-taken="takenCount(shots[cameraIndex].id)"
       @close="cameraIndex = null"
@@ -369,13 +447,34 @@ void load().then(() => {
   font-weight: 600;
 }
 
+.shot-line {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.del-btn {
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--bad);
+  font: inherit;
+  font-size: 13px;
+}
+
+.del-btn:disabled {
+  opacity: 0.5;
+}
+
 .shot-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 8px 10px;
-  margin-bottom: 6px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);

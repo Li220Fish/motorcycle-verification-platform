@@ -7,7 +7,11 @@
  */
 import { ref } from 'vue'
 
-import { VEHICLE_TYPE_LABEL, type TrainingSession } from '@/data/training/training-dataset.types'
+import {
+  defaultBrakeSetup,
+  VEHICLE_TYPE_LABEL,
+  type TrainingSession,
+} from '@/data/training/training-dataset.types'
 import { createSession, isDataCollector, listMySessions } from '@capture/services/capture.service'
 import { lastVehicleType } from '@capture/services/vehicle-type-pref'
 
@@ -25,11 +29,14 @@ async function start(): Promise<void> {
   creating.value = true
   error.value = ''
   try {
+    const vehicleType = lastVehicleType()
     const id = await createSession({
       collectorUid: props.uid,
       vehicleModelId: null,
       vehicleModelLabel: '',
-      vehicleType: lastVehicleType(),
+      vehicleType,
+      // Adjusted per bike in the camera when a brake shot comes up.
+      brakes: defaultBrakeSetup(vehicleType),
       // Unknown until classified — the chain shot is offered (optional).
       hasChain: true,
       notes: '',

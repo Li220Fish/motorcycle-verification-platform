@@ -20,6 +20,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   obbCorners,
   VEHICLE_TYPE_LABEL,
+  FRONT_BRAKE_LABEL,
+  REAR_BRAKE_LABEL,
   type ObbBox,
   type TrainingAnnotation,
   type TrainingCapture,
@@ -365,6 +367,11 @@ const fmtDate = (ms: number) => (ms ? new Date(ms).toLocaleString('zh-TW', { hou
           >（{{ VEHICLE_TYPE_LABEL[capture.vehicleType] }}）</span
         >
         <span>{{ shot?.title ?? capture.shotId }}</span>
+        <span v-if="capture.brakes"
+          >前{{ FRONT_BRAKE_LABEL[capture.brakes.front] }} · 後{{
+            REAR_BRAKE_LABEL[capture.brakes.rear]
+          }}</span
+        >
         <span>拍攝 {{ fmtDate(capture.capturedAt) }}</span>
         <span class="mono">{{ capture.width }}×{{ capture.height }}</span>
         <span

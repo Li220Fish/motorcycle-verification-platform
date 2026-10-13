@@ -78,18 +78,25 @@ export interface GrabbedFrame {
   height: number
 }
 
-/** Full-resolution 3:4 still from the live <video>. */
+/** Longest side (px) of an uploaded training photo — 3:4 portrait → 960×1280. */
+export const MAX_UPLOAD_LONG_EDGE = 1280
+
+/** 3:4 still from the live <video>, scaled down to MAX_UPLOAD_LONG_EDGE. */
 export async function grabFrame(video: HTMLVideoElement): Promise<GrabbedFrame> {
   const crop = frameCrop(video.videoWidth, video.videoHeight)
+  const scale = Math.min(1, MAX_UPLOAD_LONG_EDGE / Math.max(crop.sw, crop.sh))
+  const width = Math.round(crop.sw * scale)
+  const height = Math.round(crop.sh * scale)
   const canvas = document.createElement('canvas')
-  canvas.width = crop.sw
-  canvas.height = crop.sh
+  canvas.width = width
+  canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('無法建立畫布')
-  ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh)
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height)
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/jpeg', 0.92),
   )
   if (!blob) throw new Error('影像擷取失敗')
-  return { blob, width: crop.sw, height: crop.sh }
+  return { blob, width, height }
 }
