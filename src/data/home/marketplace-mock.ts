@@ -66,9 +66,15 @@ export interface MockMarketListing {
    *  reversible via relist() — same "excluded from browse for free" effect
    *  as 'sold', just seller-initiated instead of system-triggered. */
   status: 'draft' | 'published' | 'sold' | 'delisted'
-  /** Which completed Verification(s) back this listing — empty on the
-   * seeded DEMO listings, which have no real inspection behind them.
-   * publish() flips isPublic=true on every id in here. */
+  /** Every completed 賣家驗證 for this vehicle within 6 months of publish
+   * time, newest first — [0] is "the" verification vehicleSnapshot/
+   * verificationScore were built from, the rest are purely history
+   * (MarketplaceListingView.vue's 近半年驗車紀錄 section). Snapshotted once
+   * at publish time, same as vehicleSnapshot itself — never re-derived on a
+   * later read, so it doesn't silently shrink as "6 months ago" drifts
+   * forward while the listing stays live. Empty on the seeded DEMO
+   * listings, which have no real inspection behind them. publish() flips
+   * isPublic=true on every id in here. */
   verificationIds: string[]
   priceTwd: number
   region: string

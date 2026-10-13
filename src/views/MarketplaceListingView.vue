@@ -23,6 +23,7 @@ import { chatService } from '@/services/chat/chat.service'
 import { auth } from '@/services/firebase/firebase'
 import { listingService } from '@/services/firebase/listing.service'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
+import { verificationService } from '@/services/firebase/verification.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { resolveAvailableSlots } from '@/data/home/marketplace-mock'
@@ -153,10 +154,10 @@ onUnmounted(() => {
 
 // --- 其他照片: the listing's OWN extra uploaded photos (vehicleSnapshot.
 // photos beyond the cover — always shown, verification or not) PLUS the 6
-// core appearance photos from the listing's verification report, when one
-// exists (only ever one verificationId per listing today — see
-// listingService.publish's own comment — so "最新一筆" is simply [0]). A
-// listing with no verification evidence at all (found live 2026-09) must
+// core appearance photos from the listing's PRIMARY verification report
+// ([0] — see listingService.ListingDraft.verificationIds: newest-first,
+// [0] is always the one vehicleSnapshot/verificationScore were built from).
+// A listing with no verification evidence at all (found live 2026-09) must
 // still show whatever real photos the seller separately uploaded — this
 // section is additive over both sources, never a replacement of one by the
 // other.
@@ -167,6 +168,55 @@ const otherPhotos = computed(() => {
   const uploaded = listing.value?.vehicleSnapshot.photos.slice(1) ?? []
   return [...uploaded, ...verificationPhotos.value]
 })
+
+// --- 近半年驗車紀錄: every OTHER completed 賣家驗證 within 6 months of
+// publish time (verificationIds[0] is the primary report shown above —
+// see its own comment). Each entry is `get`-by-id (verificationService.get),
+// which firestore.rules allows for any signed-in visitor once isPublic is
+// true (listingService.publish() flips it on every id here, not just [0]) —
+// a `list`/query route would NOT be allowed (see firestore.rules'
+// "get/list intentionally split" comment on verifications), so this has to
+// stay one `get` per id rather than a single query.
+interface HistoryEntry {
+  id: string
+  completedAt: number
+}
+const historyEntries = ref<HistoryEntry[]>([])
+
+async function loadHistoryEntries(ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    historyEntries.value = []
+    return
+  }
+  const fetched = await Promise.all(
+    ids.map(async (id) => {
+      const verification = await verificationService.get(id).catch(() => null)
+      if (!verification) return null
+      return { id, completedAt: verification.completedAt ?? verification.createdAt }
+    }),
+  )
+  historyEntries.value = fetched.filter((entry): entry is HistoryEntry => !!entry)
+}
+
+watch(
+  () => listing.value?.verificationIds.slice(1).join(',') ?? '',
+  (joined) => {
+    void loadHistoryEntries(joined ? joined.split(',') : [])
+  },
+  { immediate: true },
+)
+
+function formatHistoryDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('zh-TW')
+}
+
+function historyReportPath(id: string): string {
+  const snapshot = listing.value?.vehicleSnapshot
+  if (!snapshot) return `/share/${id}`
+  const params = new URLSearchParams({ brand: snapshot.brand, model: snapshot.model })
+  if (snapshot.manufactureYear) params.set('year', String(snapshot.manufactureYear))
+  return `/share/${id}?${params.toString()}`
+}
 
 // Cover photo first (matches the physical hero image above), then 其他照片 —
 // this is the exact set the lightbox filmstrip below browses.
@@ -552,6 +602,20 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>
 
+        <template v-if="historyEntries.length > 0">
+          <h3 class="section-title">{{ t('listing', 'historySection') }}</h3>
+          <button
+            v-for="entry in historyEntries"
+            :key="entry.id"
+            class="history-row"
+            @click="router.push(historyReportPath(entry.id))"
+          >
+            <span class="history-date">{{ formatHistoryDate(entry.completedAt) }}</span>
+            <span class="history-label">{{ t('listing', 'reportTitle') }}</span>
+            <ChevronRight :size="16" color="var(--color-text-disabled)" />
+          </button>
+        </template>
+
         <h3 class="section-title">{{ t('listing', 'otherPhotos') }}</h3>
         <div v-if="otherPhotos.length > 0" class="photo-grid">
           <button
@@ -906,6 +970,30 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
 .report-subtitle {
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.history-date {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.history-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .photo-grid {

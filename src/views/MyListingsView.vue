@@ -45,7 +45,9 @@ const errorMessage = ref('')
 
 interface EligibleVehicle {
   vehicle: Vehicle
-  verificationId: string
+  /** Every completed 賣家驗證 for this vehicle within the last 6 months,
+   * newest first — see listingService.ListingDraft.verificationIds. */
+  verificationIds: string[]
   verificationScore: number
 }
 const eligibleVehicles = ref<EligibleVehicle[]>([])
@@ -85,6 +87,8 @@ async function loadListings(): Promise<void> {
 // Only vehicles with a completed 車輛驗證 that aren't already listed can be
 // published — every listing on this platform is backed by a real inspection
 // (see MarketplaceListingView.vue's "已通過 RiDE 專業檢驗" framing).
+const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 182
+
 async function loadEligibleVehicles(): Promise<void> {
   loadingEligible.value = true
   try {
@@ -93,13 +97,24 @@ async function loadEligibleVehicles(): Promise<void> {
     const candidates: EligibleVehicle[] = []
     for (const vehicle of vehicleStore.vehicles) {
       if (listedVehicleIds.has(vehicle.id)) continue
+      // listByVehicle() already orders newest-first (createdAt desc), so
+      // `completed` (used for vehicleSnapshot/score) is naturally the
+      // latest one, and the 6-month-window filter below stays newest-first
+      // too — see listingService.ListingDraft.verificationIds' own comment
+      // on why [0] still has to be that latest completed verification.
       const verifications = await verificationService.listByVehicle(vehicle.id)
       const completed = verifications.find((v) => v.type === 'seller' && v.status === 'completed')
       if (!completed) continue
+      const sixMonthsAgo = Date.now() - SIX_MONTHS_MS
+      const recentVerificationIds = verifications
+        .filter(
+          (v) => v.type === 'seller' && v.status === 'completed' && v.createdAt >= sixMonthsAgo,
+        )
+        .map((v) => v.id)
       const answers = await verificationService.listAnswers(completed.id)
       const answersById = Object.fromEntries(answers.map((answer) => [answer.itemId, answer]))
       const score = computeVerificationScore(scorableAnswers(answersById, 'seller')) ?? 0
-      candidates.push({ vehicle, verificationId: completed.id, verificationScore: score })
+      candidates.push({ vehicle, verificationIds: recentVerificationIds, verificationScore: score })
     }
     eligibleVehicles.value = candidates
   } finally {
@@ -197,7 +212,7 @@ async function handleSubmit(): Promise<void> {
       mileageKm: entry.vehicle.mileage ?? 0,
       vehicleId: entry.vehicle.id,
       modelId: entry.vehicle.modelId ?? null,
-      verificationId: entry.verificationId,
+      verificationIds: entry.verificationIds,
       priceTwd: form.priceTwd as number,
       region: form.region.trim(),
       district: form.district.trim(),
@@ -219,7 +234,7 @@ async function handleSubmit(): Promise<void> {
     })
     // Stays a single-click flow for the seller even though the data model
     // stages through draft first — see listingService.publish()'s doc comment.
-    await listingService.publish(listingId, [entry.verificationId])
+    await listingService.publish(listingId, entry.verificationIds)
     showForm.value = false
     resetForm()
     await loadListings()

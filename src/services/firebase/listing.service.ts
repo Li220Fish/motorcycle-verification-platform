@@ -31,7 +31,12 @@ export interface ListingDraft {
   /** Vehicle.modelId (types/vehicle.ts), if the backing vehicle is linked to
    * a 車輛選單資訊 catalog entry — see VehicleSnapshot.modelId. */
   modelId?: string | null
-  verificationId: string
+  /** Every completed 賣家驗證 for this vehicle within the last 6 months,
+   * newest first (see MyListingsView.vue's loadEligibleVehicles) — [0] is
+   * still "the" verification vehicleSnapshot/verificationScore are built
+   * from, the rest ride along purely so the report page can show a 近半年
+   * history instead of a single pinned report. */
+  verificationIds: string[]
   brand: string
   model: string
   year: number
@@ -135,7 +140,7 @@ async function create(id: string, draft: ListingDraft): Promise<void> {
   await setDoc(doc(db, COLLECTION, id), {
     status: 'draft',
     vehicleId: draft.vehicleId,
-    verificationIds: [draft.verificationId],
+    verificationIds: draft.verificationIds,
     priceTwd: draft.priceTwd,
     region: draft.region,
     district: draft.district,
