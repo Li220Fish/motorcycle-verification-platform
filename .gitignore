@@ -49,3 +49,7 @@ capture-app/dist/
 # capture-app/ios xcodebuild output
 capture-app/ios/build/
 capture-app/ios/RiDECapture.xcodeproj/xcuserdata/
+
+# Local dev scratchpad — prototyping scripts, downloaded datasets, test
+# photos. Never meant for the repo (large binary test images/model data).
+projectTest/
