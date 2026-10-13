@@ -48,6 +48,14 @@ function openVerification(id: string): void {
   router.push(`/admin/verifications/${id}`)
 }
 
+// Same "新資料" definition as AdminDashboardView.vue's 檢驗任務 nav badge
+// (pendingVerifications) — a row gets the dot exactly when it's part of
+// that same count, so the sidebar badge and this list never disagree about
+// what counts as pending.
+function isPending(v: Verification): boolean {
+  return v.status === 'needs_review' || v.status === 'in_progress'
+}
+
 const monthCount = computed(() => {
   const now = new Date()
   return verifications.value.filter((v) => {
@@ -162,7 +170,10 @@ onMounted(async () => {
               <td class="admin-empty-cell" colspan="5">尚無資料</td>
             </tr>
             <tr v-for="v in filtered" :key="v.id" class="clickable" @click="openVerification(v.id)">
-              <td class="strong">{{ vehicleLabel(v.vehicleId) }}</td>
+              <td class="strong">
+                <span v-if="isPending(v)" class="pending-dot" aria-hidden="true"></span>
+                {{ vehicleLabel(v.vehicleId) }}
+              </td>
               <td class="dim">{{ userLabel(v.userId) }}</td>
               <td>{{ TYPE_LABEL[v.type] ?? v.type }}</td>
               <td class="dim">{{ new Date(v.createdAt).toLocaleDateString('zh-TW') }}</td>

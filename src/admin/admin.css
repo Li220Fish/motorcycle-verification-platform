@@ -498,6 +498,19 @@
   color: var(--muted);
 }
 
+/* VerifySection.vue's 複核佇列 — marks a row as part of the same
+   needs_review/in_progress count AdminDashboardView.vue's 檢驗任務 nav
+   badge already shows, so the list and the sidebar badge never disagree. */
+.pending-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--risk);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 .admin-btn {
   font: inherit;
   font-size: 13px;
