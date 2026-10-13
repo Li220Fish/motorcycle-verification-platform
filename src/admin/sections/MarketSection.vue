@@ -94,7 +94,11 @@ onMounted(async () => {
               <td class="admin-empty-cell" colspan="6">尚無資料</td>
             </tr>
             <tr v-for="l in filtered" :key="l.id">
-              <td class="strong">{{ l.vehicleSnapshot.brand }} {{ l.vehicleSnapshot.model }}</td>
+              <td class="strong">
+                <a :href="`/marketplace/${l.id}`" target="_blank" rel="noopener">
+                  {{ l.vehicleSnapshot.brand }} {{ l.vehicleSnapshot.model }}
+                </a>
+              </td>
               <td class="dim">{{ l.sellerName }}</td>
               <td>
                 <span class="admin-pill" :class="l.status === 'published' ? 'ok' : 'mute'">
