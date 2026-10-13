@@ -4,7 +4,7 @@ import { storageService } from '@/services/firebase/storage.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 
-/** The 6 core appearance photos every verification captures — fixed order
+/** The 7 core appearance photos every verification captures — fixed order
  *  matches photo-slots.ts's REQUIRED_PHOTO_SLOTS minus 'dashboard' (an
  *  odometer close-up, not an appearance photo). Shared by
  *  MarketplaceListingView.vue's buyer-facing 其他照片 and
@@ -14,7 +14,8 @@ export const CORE_VEHICLE_PHOTO_APR_ITEM_IDS = [
   'APR-left-side',
   'APR-right-side',
   'APR-rear',
-  'APR-front-suspension',
+  'APR-front-suspension-left',
+  'APR-front-suspension-right',
   'APR-engine-bottom',
   'APR-transmission-chain',
 ] as const

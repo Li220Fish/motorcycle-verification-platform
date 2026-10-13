@@ -99,8 +99,21 @@ export const REQUIRED_PHOTO_SLOTS: PhotoSlot[] = [
     highlight: { x: 5, y: 70, w: 45, h: 30 },
   },
   {
-    id: 'front-suspension',
-    label: '前避震',
+    id: 'front-suspension-left',
+    label: '左前避震',
+    description: 'AI檢查：漏油、鏽蝕、刮傷、異常噴漆及其他外觀異常。',
+    required: true,
+    aiCheck: 'appearance',
+    lowLight: true,
+    // Same side-view-silhouette limitation documented on DiagramRect above —
+    // left/right front suspension legs aren't spatially distinguishable on
+    // a single side profile, so both share this one region (same pattern as
+    // left-side/right-side sharing FULL_BODY).
+    highlight: { x: 225, y: 55, w: 35, h: 35 },
+  },
+  {
+    id: 'front-suspension-right',
+    label: '右前避震',
     description: 'AI檢查：漏油、鏽蝕、刮傷、異常噴漆及其他外觀異常。',
     required: true,
     aiCheck: 'appearance',
@@ -142,6 +155,10 @@ const RETIRED_PHOTO_SLOTS: Record<string, string> = {
   'triple-clamp': '三角台',
   seat: '坐墊外觀',
   modifications: '其他改裝品',
+  // 2026-10: split into 'front-suspension-left'/'front-suspension-right' —
+  // kept here (not just removed) so a pre-split verification's evidence/
+  // answer under this single id still resolves to a real label in admin.
+  'front-suspension': '前避震',
 }
 
 export function getRetiredPhotoSlotLabel(itemId: string): string | undefined {

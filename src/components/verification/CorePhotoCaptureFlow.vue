@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * Full-screen, camera-app-style capture for ALL 7 required core photo items
- * at once (車輛左側/右側/車尾/儀表板/前避震/引擎底部/傳動鏈條) — ONE continuous
- * live-camera session for the whole group, replacing the earlier per-item
- * LiveCameraCapture.vue (which closed and reopened the camera between every
- * single shot — explicit user feedback: "每次拍完照畫面會跳掉再重開，UI 體驗
- * 很差"). The camera opens once on mount and never closes until the user
- * leaves this screen; a filmstrip along the bottom lists all 7 items
+ * Full-screen, camera-app-style capture for ALL 8 required core photo items
+ * at once (車輛左側/右側/車尾/儀表板/左前避震/右前避震/引擎底部/傳動鏈條) — ONE
+ * continuous live-camera session for the whole group, replacing the earlier
+ * per-item LiveCameraCapture.vue (which closed and reopened the camera
+ * between every single shot — explicit user feedback: "每次拍完照畫面會跳掉
+ * 再重開，UI 體驗很差"). The camera opens once on mount and never closes
+ * until the user leaves this screen; a filmstrip along the bottom lists all
+ * 8 items
  * (captured or not) and picks which one the next shutter tap targets —
  * tapping an already-captured item selects it for an in-place retake
  * without navigating anywhere or dropping the camera.
@@ -30,7 +31,7 @@ defineEmits<{ advance: []; back: [] }>()
 const verificationStore = useVerificationStore()
 
 // 引擎底部通常要把手機塞到車身底下拍，用前鏡頭（螢幕同側）比較好對準——目前
-// 唯一需要跟其他 6 項核心照片（後鏡頭）不同鏡頭的項目。Hardcoded to this one
+// 唯一需要跟其他 7 項核心照片（後鏡頭）不同鏡頭的項目。Hardcoded to this one
 // stable business-key id rather than a new schema field, matching how this
 // codebase already special-cases one-off items elsewhere (e.g.
 // VerificationStepsView.vue's `isColdTouchSession` checking `item.id ===

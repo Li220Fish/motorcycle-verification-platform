@@ -73,7 +73,11 @@ export const AI_VISION_ITEMS: AiVisionItemMeta[] = [
     title: '車身對稱性',
     aprItemIds: ['APR-rear'],
   },
-  { id: 'front_suspension_condition', title: '前避震狀況', aprItemIds: ['APR-front-suspension'] },
+  {
+    id: 'front_suspension_condition',
+    title: '前避震狀況（左右側）',
+    aprItemIds: ['APR-front-suspension-left', 'APR-front-suspension-right'],
+  },
   {
     id: 'engine_bottom_leak_condition',
     title: '引擎底部滲漏狀況',

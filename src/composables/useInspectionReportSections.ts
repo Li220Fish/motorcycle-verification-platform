@@ -291,7 +291,12 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
       itemIds: ['ELEC-01', 'ELEC-02', 'ELEC-03'],
     },
     { key: 'signal_f', label: '前方向燈', anchor: [18, 46], itemIds: ['ELEC-06', 'ELEC-07'] },
-    { key: 'fork', label: '前避震', anchor: [23, 63], itemIds: ['APR-front-suspension'] },
+    {
+      key: 'fork',
+      label: '前避震',
+      anchor: [23, 63],
+      itemIds: ['APR-front-suspension-left', 'APR-front-suspension-right'],
+    },
     {
       key: 'brake',
       label: '煞車系統',

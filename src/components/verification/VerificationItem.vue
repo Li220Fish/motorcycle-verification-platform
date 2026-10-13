@@ -112,8 +112,8 @@ const photoEvidenceRequirements = computed(
 )
 
 const isPurePhotoItem = computed(() => props.item.type === 'photo')
-// The 7 required core photos (車輛左側/右側/車尾/儀表板/前避震/引擎底部/傳動
-// 鏈條) never reach this component at all — VerificationStepsView.vue's
+// The 8 required core photos (車輛左側/右側/車尾/儀表板/左前避震/右前避震/
+// 引擎底部/傳動鏈條) never reach this component at all — VerificationStepsView.vue's
 // isCorePhotoGroup intercepts them first and renders CorePhotoCaptureFlow.
 // vue (one consolidated live-camera session for the whole group) instead.
 // Every photo item that DOES reach here (Optional single-photo slots,

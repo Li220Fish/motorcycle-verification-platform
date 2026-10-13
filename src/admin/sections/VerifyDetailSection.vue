@@ -139,7 +139,8 @@ const CORE_VISION_ROUTE_BY_SLOT_ID: Record<string, AnalysisRouteKey> = {
   'left-side': 'coreVisionSides',
   'right-side': 'coreVisionSides',
   rear: 'coreVisionRear',
-  'front-suspension': 'coreVisionFrontSuspension',
+  'front-suspension-left': 'coreVisionFrontSuspension',
+  'front-suspension-right': 'coreVisionFrontSuspension',
   'engine-bottom': 'coreVisionEngineBottom',
   'transmission-chain': 'coreVisionEngineBottom',
 }

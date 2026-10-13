@@ -11,10 +11,12 @@
  *
  * `global-inspection-v2` is the shared prefix every one of the 4 Core Vision
  * routes concatenates onto its own group prompt (see core-vision-split
- * .service.ts) — editing it affects all 6 APR-* items those 4 routes cover
+ * .service.ts) — editing it affects all 7 APR-* items those 4 routes cover
  * together, so it lists their union. Each `core-vision-*-v1` entry below
  * only lists the item(s) that ONE specific route actually analyzes (2026-09
- * split — the original single `core-vision-v2` covered all 6 in one call).
+ * split — the original single `core-vision-v2` covered all 6 in one call;
+ * front-suspension later split into left/right, bringing the current total
+ * to 7).
  * `APR-transmission-chain` is conditional (only vehicles with an exposed
  * chain ever actually send it — see hasExposedChainSprocket) but still
  * listed under `core-vision-engine-bottom-v1`, since the prompt text applies
@@ -35,14 +37,17 @@ export const PROMPT_ITEM_MAP: Record<string, PromptItemMapping> = {
       'APR-left-side',
       'APR-right-side',
       'APR-rear',
-      'APR-front-suspension',
+      'APR-front-suspension-left',
+      'APR-front-suspension-right',
       'APR-engine-bottom',
       'APR-transmission-chain',
     ],
   },
   'core-vision-sides-v1': { itemIds: ['APR-left-side', 'APR-right-side'] },
   'core-vision-rear-v1': { itemIds: ['APR-rear'] },
-  'core-vision-front-suspension-v1': { itemIds: ['APR-front-suspension'] },
+  'core-vision-front-suspension-v1': {
+    itemIds: ['APR-front-suspension-left', 'APR-front-suspension-right'],
+  },
   'core-vision-engine-bottom-v1': { itemIds: ['APR-engine-bottom', 'APR-transmission-chain'] },
   'dashboard-ocr-v2': { itemIds: ['APR-dashboard'] },
   'cold-engine-touch-v3': { itemIds: ['ENG-02'] },

@@ -315,7 +315,10 @@ export const useVerificationStore = defineStore('verification', () => {
   }> = [
     { itemIds: ['APR-left-side', 'APR-right-side'], trigger: analyzeCoreVisionSides },
     { itemIds: ['APR-rear'], trigger: analyzeCoreVisionRear },
-    { itemIds: ['APR-front-suspension'], trigger: analyzeCoreVisionFrontSuspension },
+    {
+      itemIds: ['APR-front-suspension-left', 'APR-front-suspension-right'],
+      trigger: analyzeCoreVisionFrontSuspension,
+    },
     {
       itemIds: ['APR-engine-bottom'],
       conditionalItemId: 'APR-transmission-chain',

@@ -259,11 +259,11 @@ const needsRideTransition = computed(
 
 const isAppearanceSection = computed(() => currentFlat.value?.section.id === APPEARANCE_SECTION_ID)
 
-// The 7 required core photos (車輛左側/右側/車尾/儀表板/前避震/引擎底部/傳動
-// 鏈條) render as ONE consolidated live-camera session (CorePhotoCaptureFlow.
-// vue), same "swap in at this level" pattern as the lights/engine groups
-// above — landing on ANY of the 7 (free-jump, resume, or linear Next) shows
-// the same screen, camera never closes between shots.
+// The 8 required core photos (車輛左側/右側/車尾/儀表板/左前避震/右前避震/
+// 引擎底部/傳動鏈條) render as ONE consolidated live-camera session
+// (CorePhotoCaptureFlow.vue), same "swap in at this level" pattern as the
+// lights/engine groups above — landing on ANY of the 8 (free-jump, resume,
+// or linear Next) shows the same screen, camera never closes between shots.
 const isCorePhotoGroup = computed(
   () =>
     !!currentFlat.value &&

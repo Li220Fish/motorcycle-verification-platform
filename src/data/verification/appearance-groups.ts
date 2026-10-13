@@ -42,7 +42,12 @@ export const APPEARANCE_CAPTURE_GROUPS: AppearanceCaptureGroup[] = [
   {
     id: 'front-wheel-group',
     label: '前輪組',
-    itemIds: ['APR-front-wheel', 'APR-front-suspension', 'APR-front-brake'],
+    itemIds: [
+      'APR-front-wheel',
+      'APR-front-suspension-left',
+      'APR-front-suspension-right',
+      'APR-front-brake',
+    ],
     highlight: { x: 205, y: 78, w: 80, h: 68 },
   },
   {
