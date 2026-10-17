@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
 import BasicHealthCheck13 from '@/components/verification/BasicHealthCheck13.vue'
 import BuyerDisclosureCheck from '@/components/verification/BuyerDisclosureCheck.vue'
+import BuyerVehicleModelGate from '@/components/verification/BuyerVehicleModelGate.vue'
 import BuyerYearGate from '@/components/verification/BuyerYearGate.vue'
 import CorePhotoCaptureFlow from '@/components/verification/CorePhotoCaptureFlow.vue'
 import ElectricalLightsCheck from '@/components/verification/ElectricalLightsCheck.vue'
@@ -20,6 +21,7 @@ import VerificationHub from '@/components/verification/VerificationHub.vue'
 import VerificationItem from '@/components/verification/VerificationItem.vue'
 import VerificationLayout from '@/components/verification/VerificationLayout.vue'
 import VerificationTour from '@/components/verification/VerificationTour.vue'
+import { useI18n } from '@/composables/useI18n'
 import { getAppearanceGroup } from '@/data/verification/appearance-groups'
 // getAppearanceGroupId is only consumed by the Capture Map auto-reopen logic
 // in handleNext, which is commented out below — its import is dropped here
@@ -67,6 +69,7 @@ const props = defineProps<{ id: string }>()
 const verificationStore = useVerificationStore()
 const vehicleStore = useVehicleStore()
 const router = useRouter()
+const { t } = useI18n()
 
 const currentIndex = ref(0)
 // Guided UI main entry (Task B): every open of /verification/:id lands here
@@ -145,14 +148,41 @@ const needsYearGate = computed(() => {
   return vehicleStore.currentVehicle?.manufactureYear == null
 })
 
+// 買家複驗專屬：車型選擇關卡 — shown BEFORE BuyerYearGate (template order
+// below) whenever this verification's target vehicle has no catalog
+// modelId linked yet. Picking the real catalog model is what actually
+// unlocks 通病 (known-issue) lookup below — the year question alone can't.
+// Guarded on the live vehicle/verification actually being loaded (`!!`
+// checks) so this never flashes true for a split second before
+// vehicleStore.currentVehicle's fetch resolves, the way needsYearGate's own
+// fallback branch can.
+const modelGateDismissed = ref(false)
+const needsModelGate = computed(() => {
+  if (modelGateDismissed.value) return false
+  if (verificationStore.flowKind !== 'buyer') return false
+  const verification = verificationStore.currentVerification
+  if (!verification) return false
+  if (verification.vehicleSnapshot) return verification.vehicleSnapshot.modelId == null
+  return !!vehicleStore.currentVehicle && vehicleStore.currentVehicle.modelId == null
+})
+
 const knownIssuesChecked = ref(false)
-async function ensureBuyerKnownIssuesLoaded(): Promise<void> {
+/** `modelIdOverride` lets the two gate handlers below pass the just-picked
+ *  modelId straight through instead of reading it back off
+ *  verificationStore.currentVerification — that field is only updated once
+ *  the Firestore write's onSnapshot echo lands (subscribeVerification in
+ *  verification.store.ts), which could still be in flight the instant this
+ *  runs right after saveBuyerVehicleModelId. Falls back to the live
+ *  vehicleSnapshot/vehicleStore value for the "gate wasn't needed at all"
+ *  call site below (flowLoaded watcher), where there's nothing to race. */
+async function ensureBuyerKnownIssuesLoaded(modelIdOverride?: string | null): Promise<void> {
   const verification = verificationStore.currentVerification
   if (!verification || verificationStore.flowKind !== 'buyer') return
   if (knownIssuesChecked.value) return
   knownIssuesChecked.value = true
   if (verification.buyerKnownIssuesSnapshot) return
-  const modelId = verification.vehicleSnapshot?.modelId
+  const modelId =
+    modelIdOverride ?? verification.vehicleSnapshot?.modelId ?? vehicleStore.currentVehicle?.modelId
   if (!modelId) return
   try {
     const profile = await vehicleModelService.getProfile(modelId)
@@ -162,6 +192,23 @@ async function ensureBuyerKnownIssuesLoaded(): Promise<void> {
   } catch (error) {
     console.error('[BuyerYearGate] failed to load known issues:', error)
   }
+}
+
+async function handleConfirmModel(modelId: string | null): Promise<void> {
+  const verification = verificationStore.currentVerification
+  modelGateDismissed.value = true
+  if (modelId && verification) {
+    try {
+      if (verification.vehicleSnapshot) {
+        await verificationService.saveBuyerVehicleModelId(verification.id, modelId)
+      } else if (vehicleStore.currentVehicle) {
+        await vehicleStore.updateVehicle(vehicleStore.currentVehicle.id, { modelId })
+      }
+    } catch (error) {
+      console.error('[BuyerVehicleModelGate] failed to save model:', error)
+    }
+  }
+  await ensureBuyerKnownIssuesLoaded(modelId)
 }
 
 async function handleConfirmYear(year: number): Promise<void> {
@@ -181,13 +228,16 @@ async function handleConfirmYear(year: number): Promise<void> {
   await ensureBuyerKnownIssuesLoaded()
 }
 
-// Already-known-year buyer verifications never show the gate at all, so
-// this is the other place ensureBuyerKnownIssuesLoaded() needs to fire —
-// once flowLoaded resolves and the gate turns out not to be needed.
+// Already-linked/already-known-year buyer verifications never show either
+// gate at all, so this is the other place ensureBuyerKnownIssuesLoaded()
+// needs to fire — once flowLoaded resolves and neither gate turns out to be
+// needed.
 watch(
   () => verificationStore.flowLoaded,
   (loaded) => {
-    if (loaded && !needsYearGate.value) void ensureBuyerKnownIssuesLoaded()
+    if (loaded && !needsModelGate.value && !needsYearGate.value) {
+      void ensureBuyerKnownIssuesLoaded()
+    }
   },
 )
 
@@ -203,14 +253,16 @@ const completeError = ref('')
 // commented out below instead. Uncomment those spots to bring it back.
 const appearanceMapOpen = ref(false)
 
-const typeLabel: Record<string, string> = {
-  seller: '車輛驗證',
-  buyer: '買家複驗',
-  professional: '專業驗證',
-}
+const typeLabel = computed<Record<string, string>>(() => ({
+  seller: t('verificationHome', 'sellerTitle'),
+  buyer: t('verificationHome', 'buyerTitle'),
+  professional: t('verificationHome', 'professionalType'),
+}))
 
 const pageTitle = computed(
-  () => typeLabel[verificationStore.currentVerification?.type ?? ''] ?? '驗證',
+  () =>
+    typeLabel.value[verificationStore.currentVerification?.type ?? ''] ??
+    t('verificationSteps', 'genericTitle'),
 )
 
 const currentFlat = computed(() => verificationStore.flatItems[currentIndex.value])
@@ -333,7 +385,7 @@ const nextDisabled = computed(() => {
   return !!currentFlat.value && !verificationStore.isItemAdvanceReady(currentFlat.value)
 })
 const nextDisabledHint = computed(
-  () => currentFlat.value?.item.lockedHint ?? '請先完成本項目所需的照片／錄影／錄音，才能繼續。',
+  () => currentFlat.value?.item.lockedHint ?? t('verificationSteps', 'nextDisabledHintFallback'),
 )
 
 // Deterministic exit target instead of raw browser history — history.back()
@@ -783,7 +835,8 @@ async function handleComplete(): Promise<void> {
       router.push(`/verification/${props.id}/result`)
     }
   } catch (error) {
-    completeError.value = error instanceof Error ? error.message : '完成驗證失敗'
+    completeError.value =
+      error instanceof Error ? error.message : t('verificationSteps', 'errorCompleteFailed')
   } finally {
     completing.value = false
   }
@@ -890,6 +943,18 @@ onMounted(() => {
 <template>
   <VerificationTour v-if="showTour" @done="dismissTour" />
   <VehicleTypeGate v-else-if="needsVehicleTypeGate" @pick="handlePickVehicleType" />
+  <BuyerVehicleModelGate
+    v-else-if="needsModelGate"
+    :known-brand="
+      verificationStore.currentVerification?.vehicleSnapshot?.brand ??
+      vehicleStore.currentVehicle?.brand
+    "
+    :known-model="
+      verificationStore.currentVerification?.vehicleSnapshot?.model ??
+      vehicleStore.currentVehicle?.model
+    "
+    @confirm="handleConfirmModel"
+  />
   <BuyerYearGate v-else-if="needsYearGate" @confirm="handleConfirmYear" />
   <VerificationHub
     v-else-if="hubOpen"
@@ -921,13 +986,19 @@ onMounted(() => {
     v-else-if="currentFlat"
     :title="pageTitle"
     :section-title="
-      isLightsGroup ? `${currentFlat.section.title} · 燈具快速檢查` : currentFlat.section.title
+      isLightsGroup
+        ? `${currentFlat.section.title} · ${t('verificationSteps', 'lightsGroupSuffix')}`
+        : currentFlat.section.title
     "
     :done="currentSectionProgress.done"
     :total="currentSectionProgress.total"
     :percent="currentSectionProgress.percent"
     :can-go-prev="currentIndex > 0"
-    :next-label="currentIndex === verificationStore.flatItems.length - 1 ? '前往檢視' : '下一步'"
+    :next-label="
+      currentIndex === verificationStore.flatItems.length - 1
+        ? t('verificationSteps', 'nextLabelReview')
+        : t('verificationSteps', 'nextLabelNext')
+    "
     :next-disabled="nextDisabled"
     :next-disabled-hint="nextDisabledHint"
     :hide-footer="
@@ -1009,16 +1080,14 @@ onMounted(() => {
       <VerificationItem :verification-id="id" :item="currentFlat.item" @advance="handleNext" />
     </template>
   </VerificationLayout>
-  <p v-else class="loading-text">載入中...</p>
+  <p v-else class="loading-text">{{ t('verificationSteps', 'loading') }}</p>
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
 
   <div v-if="showLeaveEngineWarning" class="leave-engine-overlay">
     <div class="leave-engine-card">
-      <p class="leave-engine-title">確定要離開「冷車＋引擎檢查」？</p>
-      <p class="leave-engine-sub">
-        這個項目一旦開始就必須一次完成。離開會刪除目前已記錄的影片、錄音與檢測結果，下次需要從頭開始。
-      </p>
+      <p class="leave-engine-title">{{ t('verificationSteps', 'leaveEngineTitle') }}</p>
+      <p class="leave-engine-sub">{{ t('verificationSteps', 'leaveEngineBody') }}</p>
       <div class="leave-engine-actions">
         <PrimaryButton
           variant="secondary"
@@ -1026,7 +1095,7 @@ onMounted(() => {
           :disabled="resettingEngineSection"
           @click="dismissLeaveEngineWarning"
         >
-          返回繼續檢測
+          {{ t('verificationSteps', 'leaveEngineBack') }}
         </PrimaryButton>
         <PrimaryButton
           variant="danger"
@@ -1034,7 +1103,11 @@ onMounted(() => {
           :disabled="resettingEngineSection"
           @click="confirmLeaveEngineSection"
         >
-          {{ resettingEngineSection ? '刪除中...' : '離開並刪除紀錄' }}
+          {{
+            resettingEngineSection
+              ? t('verificationSteps', 'leaveEngineDeleting')
+              : t('verificationSteps', 'leaveEngineConfirmDelete')
+          }}
         </PrimaryButton>
       </div>
     </div>
@@ -1042,12 +1115,12 @@ onMounted(() => {
 
   <div v-if="showEngineSectionResetNotice" class="leave-engine-overlay">
     <div class="leave-engine-card">
-      <p class="leave-engine-title">「冷車＋引擎檢查」尚未完成</p>
-      <p class="leave-engine-sub">
-        偵測到上次未把這個項目一次做完，先前記錄的影片、錄音與檢測結果將會清除，需要重新測試。
-      </p>
+      <p class="leave-engine-title">{{ t('verificationSteps', 'engineResetTitle') }}</p>
+      <p class="leave-engine-sub">{{ t('verificationSteps', 'engineResetBody') }}</p>
       <div class="leave-engine-actions">
-        <PrimaryButton block @click="acknowledgeEngineSectionResetNotice">我知道了</PrimaryButton>
+        <PrimaryButton block @click="acknowledgeEngineSectionResetNotice">
+          {{ t('verificationSteps', 'engineResetAck') }}
+        </PrimaryButton>
       </div>
     </div>
   </div>

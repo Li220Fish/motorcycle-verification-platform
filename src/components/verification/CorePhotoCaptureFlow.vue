@@ -15,7 +15,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Check, ChevronLeft, Flashlight, MessageSquare, X } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
+import { useKnownIssueReminder } from '@/composables/useKnownIssueReminder'
+import {
+  KNOWN_ISSUE_PART_LABEL,
+  knownIssuesForAprItem,
+} from '@/data/verification/known-issue-mapping'
 import { liveCameraService, type CameraFacing } from '@/services/media/live-camera.service'
+import VerificationHelpSheet from './VerificationHelpSheet.vue'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import {
@@ -29,6 +36,7 @@ const props = defineProps<{ verificationId: string; initialItemId?: string }>()
 defineEmits<{ advance: []; back: [] }>()
 
 const verificationStore = useVerificationStore()
+const { t, tItem } = useI18n()
 
 // 引擎底部通常要把手機塞到車身底下拍，用前鏡頭（螢幕同側）比較好對準——目前
 // 唯一需要跟其他 7 項核心照片（後鏡頭）不同鏡頭的項目。Hardcoded to this one
@@ -49,7 +57,7 @@ interface CoreItem {
 const coreItems = computed<CoreItem[]>(() =>
   verificationStore.flatItems
     .filter((flat) => flat.item.type === 'photo' && flat.item.required)
-    .map((flat) => ({ id: flat.item.id, title: flat.item.title })),
+    .map((flat) => ({ id: flat.item.id, title: tItem(flat.item.id, flat.item.title) })),
 )
 
 function firstEvidenceFor(itemId: string): VerificationEvidence | undefined {
@@ -131,6 +139,32 @@ function initSelection(): void {
   selectedItemId.value = firstUncapturedItemId() ?? coreItems.value[0]?.id ?? ''
 }
 
+// 買家複驗：買家切到某張核心照片（左右側／車尾／前避震／引擎底部／傳動鏈條）
+// 時，如果系統依車型偵測到這個部位有通病，立刻跳出提醒——比起只靜靜躺在
+// BuyerDisclosureCheck.vue 那個最後才看到的總覽畫面裡，更貼近使用者原話
+// 「在檢測該部分的時候會有文字視窗做提醒」。只對買家流程生效，一個項目只跳
+// 一次（useKnownIssueReminder 自己的 shownKeys）。
+const {
+  open: knownIssueOpen,
+  activeIssues: knownIssueActiveIssues,
+  maybeShow: maybeShowKnownIssue,
+  close: closeKnownIssue,
+} = useKnownIssueReminder()
+const knownIssueTitle = computed(() => {
+  const part = knownIssueActiveIssues.value[0]?.part
+  return `系統偵測：${part ? KNOWN_ISSUE_PART_LABEL[part] : '通病'}`
+})
+const knownIssueContent = computed(() =>
+  knownIssueActiveIssues.value.map((issue) => issue.description).join('\n\n'),
+)
+watch(selectedItemId, (itemId) => {
+  if (!itemId || verificationStore.flowKind !== 'buyer') return
+  maybeShowKnownIssue(
+    itemId,
+    knownIssuesForAprItem(verificationStore.currentVerification?.buyerKnownIssuesSnapshot, itemId),
+  )
+})
+
 type Phase = 'requesting' | 'live' | 'denied'
 const phase = ref<Phase>('requesting')
 const errorMessage = ref('')
@@ -142,6 +176,21 @@ const currentFacingMode = ref<CameraFacing>('environment')
 /** True when this device's camera stream is below the resolution the analysis
  *  pipeline needs — shown once per stream, not per photo. */
 const lowResolutionCamera = ref(false)
+
+// 車輛左側／右側是唯一需要提示「橫向拍攝」的兩個核心照片項目——車身是橫向
+// 的主體，手機轉成橫向（landscape）才能讓車身完整、不浪費上下留白地入框。
+// 這裡的「水平」指的是手機方向（直向→橫向），不是水平儀量的左右傾斜角度
+// ——跟 device-tilt.service.ts（量 roll 角度）是不同概念，這兩個項目不用
+// 那支服務。方向偵測用標準 screen.orientation API，監聽 change 事件維持
+// 反應性（一次性讀值不會隨使用者轉手機更新）。
+const LEVEL_ITEM_IDS = new Set(['APR-left-side', 'APR-right-side'])
+const showLevelIndicator = computed(() => LEVEL_ITEM_IDS.has(selectedItemId.value))
+
+const orientationType = ref(typeof screen !== 'undefined' ? (screen.orientation?.type ?? '') : '')
+function updateOrientation(): void {
+  orientationType.value = typeof screen !== 'undefined' ? (screen.orientation?.type ?? '') : ''
+}
+const isLandscape = computed(() => orientationType.value.startsWith('landscape'))
 
 async function setTorch(on: boolean): Promise<void> {
   if (!torchSupported.value) return
@@ -453,9 +502,16 @@ function saveNote(): void {
 onMounted(() => {
   initSelection()
   void startCamera(facingModeFor(selectedItemId.value))
+  updateOrientation()
+  screen.orientation?.addEventListener?.('change', updateOrientation)
+  // 部分瀏覽器/WebView 不支援 screen.orientation 的 change 事件——resize 當
+  // 保底訊號，手機轉向時 innerWidth/innerHeight 一定會變。
+  window.addEventListener('resize', updateOrientation)
 })
 onBeforeUnmount(() => {
   liveCameraService.stop()
+  screen.orientation?.removeEventListener?.('change', updateOrientation)
+  window.removeEventListener('resize', updateOrientation)
   clearLongPressTimer()
 })
 </script>
@@ -472,11 +528,15 @@ onBeforeUnmount(() => {
         class="camera-feed"
       />
       <div v-else class="camera-placeholder">
-        <p v-if="phase === 'requesting'" class="placeholder-text">準備相機中...</p>
+        <p v-if="phase === 'requesting'" class="placeholder-text">
+          {{ t('corePhotoCapture', 'preparingCamera') }}
+        </p>
         <template v-else>
-          <p class="placeholder-text">需要相機權限才能拍攝</p>
+          <p class="placeholder-text">{{ t('corePhotoCapture', 'needCameraPermission') }}</p>
           <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-          <button class="retry-btn" @click="startCamera()">重試</button>
+          <button class="retry-btn" @click="startCamera()">
+            {{ t('corePhotoCapture', 'retry') }}
+          </button>
         </template>
       </div>
 
@@ -485,24 +545,44 @@ onBeforeUnmount(() => {
       </Transition>
       <div v-if="frontFlashActive" class="front-flash" />
 
+      <div v-if="phase === 'live' && showLevelIndicator" class="object-frame" />
+
+      <p
+        v-if="phase === 'live' && showLevelIndicator"
+        class="level-hint"
+        :class="{ ok: isLandscape }"
+      >
+        {{ isLandscape ? t('corePhotoCapture', 'levelOk') : t('corePhotoCapture', 'levelHint') }}
+      </p>
+
       <div class="top-overlay">
-        <button class="back-btn" aria-label="返回" @click="$emit('back')">
+        <button
+          class="back-btn"
+          :aria-label="t('corePhotoCapture', 'backAriaLabel')"
+          @click="$emit('back')"
+        >
           <ChevronLeft :size="22" />
         </button>
         <div class="top-titles">
-          <p class="top-title">{{ selectedItem?.title ?? '核心照片' }}</p>
-          <p v-if="uploading" class="top-subtitle">上傳中...</p>
-          <p v-else class="top-subtitle">請讓{{ selectedItem?.title }}完整入框</p>
+          <p class="top-title">
+            {{ selectedItem?.title ?? t('corePhotoCapture', 'defaultTitle') }}
+          </p>
+          <p v-if="uploading" class="top-subtitle">{{ t('corePhotoCapture', 'uploading') }}</p>
+          <p v-else-if="selectedItem" class="top-subtitle">
+            {{ t('corePhotoCapture', 'frameHint', { title: selectedItem.title }) }}
+          </p>
         </div>
         <button v-if="allCaptured" class="done-btn" @click="$emit('advance')">
-          <Check :size="16" /> 完成
+          <Check :size="16" /> {{ t('corePhotoCapture', 'done') }}
         </button>
       </div>
 
       <p v-if="uploadErrorMessage" class="upload-error-banner">{{ uploadErrorMessage }}</p>
-      <p v-else-if="qualityWarning" class="quality-warn-banner">{{ qualityWarning }}，建議重拍</p>
+      <p v-else-if="qualityWarning" class="quality-warn-banner">
+        {{ qualityWarning }}{{ t('corePhotoCapture', 'retakeSuggestion') }}
+      </p>
       <p v-else-if="lowResolutionCamera" class="quality-warn-banner">
-        這台裝置的相機解析度偏低，判讀精細度會受影響
+        {{ t('corePhotoCapture', 'lowResolutionWarning') }}
       </p>
 
       <div class="bottom-overlay">
@@ -512,7 +592,7 @@ onBeforeUnmount(() => {
             :key="coreItem.id"
             class="filmstrip-thumb-btn"
             :class="{ selected: coreItem.id === selectedItemId }"
-            aria-label="選擇項目，長按可加備註"
+            :aria-label="t('corePhotoCapture', 'selectItemAriaLabel')"
             @pointerdown="handleThumbPointerDown(coreItem.id)"
             @pointerup="handleThumbPointerUp"
             @pointerleave="handleThumbPointerUp"
@@ -536,7 +616,7 @@ onBeforeUnmount(() => {
             class="torch-btn"
             :class="{ on: torchOn }"
             :disabled="!torchSupported"
-            aria-label="開關手電筒"
+            :aria-label="t('corePhotoCapture', 'torchAriaLabel')"
             @click="toggleTorch"
           >
             <Flashlight :size="20" />
@@ -544,7 +624,7 @@ onBeforeUnmount(() => {
           <button
             class="shutter-btn"
             :disabled="phase !== 'live' || uploading || !!pendingReview"
-            aria-label="拍照"
+            :aria-label="t('corePhotoCapture', 'photoAriaLabel')"
             @click="capturePhoto"
           >
             <span class="shutter-inner" />
@@ -556,15 +636,17 @@ onBeforeUnmount(() => {
       <div v-if="pendingReview" class="note-overlay">
         <div class="note-card">
           <div class="note-header">
-            <p class="note-title">這張可能無法判讀</p>
+            <p class="note-title">{{ t('corePhotoCapture', 'unreadableTitle') }}</p>
           </div>
           <p class="quality-reason">{{ pendingReview.quality.message }}</p>
-          <p class="quality-hint">
-            光線不足或失焦造成的細節損失沒辦法事後補救，重拍一張會讓檢測結果可靠很多。
-          </p>
+          <p class="quality-hint">{{ t('corePhotoCapture', 'qualityHint') }}</p>
           <div class="note-actions">
-            <button class="note-cancel-btn" @click="keepPendingPhoto">仍要使用</button>
-            <button class="note-save-btn" @click="retakePendingPhoto">重拍</button>
+            <button class="note-cancel-btn" @click="keepPendingPhoto">
+              {{ t('corePhotoCapture', 'keepAnyway') }}
+            </button>
+            <button class="note-save-btn" @click="retakePendingPhoto">
+              {{ t('corePhotoCapture', 'retake') }}
+            </button>
           </div>
         </div>
       </div>
@@ -573,9 +655,17 @@ onBeforeUnmount(() => {
         <div class="note-card">
           <div class="note-header">
             <p class="note-title">
-              {{ coreItems.find((item) => item.id === noteTargetItemId)?.title }}備註
+              {{
+                t('corePhotoCapture', 'noteSuffix', {
+                  title: coreItems.find((item) => item.id === noteTargetItemId)?.title ?? '',
+                })
+              }}
             </p>
-            <button class="note-close-btn" aria-label="關閉" @click="closeNoteEditor">
+            <button
+              class="note-close-btn"
+              :aria-label="t('common', 'close')"
+              @click="closeNoteEditor"
+            >
               <X :size="18" />
             </button>
           </div>
@@ -583,16 +673,25 @@ onBeforeUnmount(() => {
             v-model="noteDraft"
             class="note-textarea"
             rows="4"
-            placeholder="針對這張照片補充說明..."
+            :placeholder="t('corePhotoCapture', 'notePlaceholder')"
           />
           <div class="note-actions">
-            <button class="note-cancel-btn" @click="closeNoteEditor">取消</button>
-            <button class="note-save-btn" @click="saveNote">儲存</button>
+            <button class="note-cancel-btn" @click="closeNoteEditor">
+              {{ t('common', 'cancel') }}
+            </button>
+            <button class="note-save-btn" @click="saveNote">{{ t('common', 'save') }}</button>
           </div>
         </div>
       </div>
     </div>
   </Teleport>
+
+  <VerificationHelpSheet
+    :open="knownIssueOpen"
+    :title="knownIssueTitle"
+    :content="knownIssueContent"
+    @close="closeKnownIssue"
+  />
 </template>
 
 <style scoped>
@@ -671,6 +770,42 @@ onBeforeUnmount(() => {
 .flash-fade-enter-from,
 .flash-fade-leave-to {
   opacity: 0;
+}
+
+/* 車輛左右側的構圖框——佔畫面 3/4，置中，純視覺輔助讓車身完整落在框內，
+   跟水平儀共用同一個 showLevelIndicator 條件顯示。 */
+.object-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  width: 75%;
+  height: 75%;
+  transform: translate(-50%, -50%);
+  border: 2px dashed rgba(255, 255, 255, 0.75);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+
+.level-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  transform: translateX(-50%);
+  z-index: 15;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.level-hint.ok {
+  color: var(--color-success, #22c55e);
 }
 
 .top-overlay {

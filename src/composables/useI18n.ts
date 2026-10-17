@@ -27,5 +27,21 @@ export function useI18n() {
     return template.replace(/\{(\w+)\}/g, (_match, name: string) => String(params[name] ?? ''))
   }
 
-  return { t }
+  /**
+   * Translates a verification checklist item's title by its stable `id`
+   * (e.g. `APR-left-side`, `BASIC-headlight`, `ENG-02`) via the `itemLabels`
+   * section, falling back to `fallback` (normally `item.title`, the Chinese
+   * string already baked into src/data/verification/*.ts at module-load
+   * time) when no translation exists yet. Deliberately non-breaking/
+   * incremental this way — the data layer itself stays untouched (it's also
+   * read by the admin backend, which is Chinese-only and must keep showing
+   * the original label), and a not-yet-covered item id just shows its
+   * Chinese title in English mode instead of a blank/missing-key error.
+   */
+  function tItem(id: string, fallback: string): string {
+    const dict = messages[localeStore.locale].itemLabels as Record<string, string>
+    return dict[id] ?? fallback
+  }
+
+  return { t, tItem }
 }

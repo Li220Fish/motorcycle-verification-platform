@@ -6,6 +6,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import BottomNavigation from '@/components/common/BottomNavigation.vue'
 import Logo from '@/components/common/Logo.vue'
 import VehicleTransferredModal from '@/components/common/VehicleTransferredModal.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useAuthStore } from '@/stores/auth.store'
 import { useChatStore } from '@/stores/chat.store'
 import { useNotificationStore } from '@/stores/notification.store'
@@ -14,6 +15,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const notificationStore = useNotificationStore()
+const { t } = useI18n()
 
 // Kept alive at the layout level (not inside MessagesView) so the unread
 // badge in the bottom nav stays correct on every page, not just /messages.
@@ -31,13 +33,15 @@ watch(
   { immediate: true },
 )
 
-const navItems = [
-  { path: '/dashboard', label: '首頁', icon: Home },
-  { path: '/marketplace', label: '市場', icon: ShoppingBag },
-  { path: '/verification', label: '檢驗', icon: ShieldCheck },
-  { path: '/messages', label: '訊息', icon: MessageCircle },
-  { path: '/discussion', label: '討論中心', icon: Users },
-]
+// 跟 BottomNavigation.vue（手機版底部導覽）同一組項目/同一組翻譯 key，桌面版
+// 側邊欄之前漏了接 i18n，中文模式下沒問題所以一直沒被發現，直到切英文才露餡。
+const navItems = computed(() => [
+  { path: '/dashboard', label: t('nav', 'home'), icon: Home },
+  { path: '/marketplace', label: t('nav', 'market'), icon: ShoppingBag },
+  { path: '/verification', label: t('nav', 'verify'), icon: ShieldCheck },
+  { path: '/messages', label: t('nav', 'messages'), icon: MessageCircle },
+  { path: '/discussion', label: t('nav', 'discussion'), icon: Users },
+])
 
 function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(`${path}/`)

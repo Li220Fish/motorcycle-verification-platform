@@ -7,12 +7,14 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import VehicleCard from '@/components/common/VehicleCard.vue'
+import { useI18n } from '@/composables/useI18n'
 import {
   listingAppointmentLookupService,
   type MyAppointmentWithListing,
 } from '@/services/firebase/listing-appointment-lookup.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useAuthStore } from '@/stores/auth.store'
+import { useLocaleStore } from '@/stores/locale.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { Verification, VerificationType } from '@/types/verification'
@@ -22,6 +24,8 @@ const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
+const localeStore = useLocaleStore()
 
 const submitting = ref(false)
 const errorMessage = ref('')
@@ -105,34 +109,33 @@ function handleConfirmAppointmentSelection(): void {
 const UPCOMING_WINDOW_MS = 30 * 60 * 1000
 const upcomingAppointments = ref<MyAppointmentWithListing[]>([])
 
-const verificationTypes: Array<{
-  type: VerificationType
-  title: string
-  subtitle: string
-  description: string
-  icon: typeof UserCheck
-}> = [
+const verificationTypes = computed<
+  Array<{
+    type: VerificationType
+    title: string
+    description: string
+    icon: typeof UserCheck
+  }>
+>(() => [
   {
     type: 'seller',
-    title: '車輛驗證',
-    subtitle: 'Vehicle Verification',
-    description: '完整檢查車況，建立可分享給買家的驗證報告。',
+    title: t('verificationHome', 'sellerTitle'),
+    description: t('verificationHome', 'sellerDescription'),
     icon: ShieldCheck,
   },
   {
     type: 'buyer',
-    title: '買家複驗',
-    subtitle: 'Buyer Re-verification',
-    description: '查看車輛驗證資料，並確認現場車況是否一致。',
+    title: t('verificationHome', 'buyerTitle'),
+    description: t('verificationHome', 'buyerDescription'),
     icon: UserCheck,
   },
-]
+])
 
 const presetTypeMeta = computed(
-  () => verificationTypes.find((item) => item.type === presetType.value) ?? null,
+  () => verificationTypes.value.find((item) => item.type === presetType.value) ?? null,
 )
 const effectiveTypeMeta = computed(
-  () => verificationTypes.find((item) => item.type === effectiveType.value) ?? null,
+  () => verificationTypes.value.find((item) => item.type === effectiveType.value) ?? null,
 )
 
 /** Same vehicle may only have ONE non-completed (draft/in_progress)
@@ -164,7 +167,7 @@ async function createVerificationRecord(
   )
   if (active) {
     if (active.userId === authStore.user?.id) return active.id
-    throw new Error('此車輛目前已有其他驗證正在進行中，請稍後再試。')
+    throw new Error(t('verificationHome', 'errorAlreadyInProgress'))
   }
 
   let relatedVerificationId = options?.relatedVerificationIdHint
@@ -205,7 +208,8 @@ async function handleStartFromAppointment(entry: MyAppointmentWithListing): Prom
     })
     router.push(`/verification/${id}`)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('verificationHome', 'errorCreateFailed')
   } finally {
     submitting.value = false
   }
@@ -219,7 +223,8 @@ async function handleStartExisting(type: VerificationType): Promise<void> {
     const id = await createVerificationRecord(existingVehicleId.value, type)
     router.push(`/verification/${id}`)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('verificationHome', 'errorCreateFailed')
   } finally {
     submitting.value = false
   }
@@ -237,7 +242,8 @@ async function handleStartWithVehicle(vehicleId: string): Promise<void> {
     const id = await createVerificationRecord(vehicleId, type)
     router.push(`/verification/${id}`)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('verificationHome', 'errorCreateFailed')
   } finally {
     submitting.value = false
   }
@@ -271,7 +277,8 @@ async function handleConfirmName(): Promise<void> {
     const id = await createVerificationRecord(vehicleId, type)
     router.push(`/verification/${id}`)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '建立驗證失敗'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('verificationHome', 'errorCreateFailed')
   } finally {
     submitting.value = false
   }
@@ -286,26 +293,27 @@ const RECENT_LIMIT = 5
 const recentVerifications = ref<Verification[]>([])
 const loadingRecent = ref(false)
 
-const typeLabel: Record<string, string> = {
-  seller: '車輛驗證',
-  buyer: '買家複驗',
-  professional: '專業驗證',
-}
+const typeLabel = computed<Record<string, string>>(() => ({
+  seller: t('verificationHome', 'sellerTitle'),
+  buyer: t('verificationHome', 'buyerTitle'),
+  professional: t('verificationHome', 'professionalType'),
+}))
 function statusMeta(status: Verification['status']): {
   label: string
   tone: 'primary' | 'neutral'
 } {
-  if (status === 'in_progress') return { label: '進行中', tone: 'primary' }
-  return { label: '草稿', tone: 'neutral' }
+  if (status === 'in_progress')
+    return { label: t('verificationHome', 'statusInProgress'), tone: 'primary' }
+  return { label: t('verificationHome', 'statusDraft'), tone: 'neutral' }
 }
 
 function vehicleLabel(vehicleId: string): string {
   const vehicle = vehicleStore.vehicles.find((candidate) => candidate.id === vehicleId)
-  return vehicle ? `${vehicle.brand} ${vehicle.model}` : '未知車輛'
+  return vehicle ? `${vehicle.brand} ${vehicle.model}` : t('verificationHome', 'unknownVehicle')
 }
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('zh-TW')
+  return new Date(timestamp).toLocaleDateString(localeStore.locale === 'en' ? 'en-US' : 'zh-TW')
 }
 
 function openRecentVerification(verification: Verification): void {
@@ -345,8 +353,8 @@ function handleRecentClick(verification: Verification): void {
 }
 
 async function handleDeleteRecent(verification: Verification): Promise<void> {
-  const label = `${vehicleLabel(verification.vehicleId)}（${typeLabel[verification.type] ?? verification.type}）`
-  if (!window.confirm(`刪除「${label}」這筆驗證紀錄？此操作無法復原。`)) {
+  const label = `${vehicleLabel(verification.vehicleId)}（${typeLabel.value[verification.type] ?? verification.type}）`
+  if (!window.confirm(t('verificationHome', 'deleteConfirm', { label }))) {
     longPressTriggered.value = false
     return
   }
@@ -357,7 +365,8 @@ async function handleDeleteRecent(verification: Verification): Promise<void> {
       (item) => item.id !== verification.id,
     )
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '刪除失敗'
+    errorMessage.value =
+      error instanceof Error ? error.message : t('verificationHome', 'errorDeleteFailed')
   } finally {
     deletingId.value = null
   }
@@ -398,13 +407,15 @@ onMounted(async () => {
 
 <template>
   <div>
-    <AppHeader :title="effectiveTypeMeta ? effectiveTypeMeta.title : '開始驗證'" />
+    <AppHeader
+      :title="effectiveTypeMeta ? effectiveTypeMeta.title : t('verificationHome', 'startTitle')"
+    />
 
     <div class="content">
       <!-- Existing vehicle (arrived via its own "開始新的驗證"), type not
            preset: pick a type, starts immediately — vehicle is already known. -->
       <template v-if="existingVehicleId && !presetType">
-        <p class="question">您要進行哪種類型的驗證？</p>
+        <p class="question">{{ t('verificationHome', 'typeQuestion') }}</p>
         <div class="type-list">
           <button
             v-for="item in verificationTypes"
@@ -418,7 +429,6 @@ onMounted(async () => {
             </div>
             <div class="type-info">
               <p class="type-title">{{ item.title }}</p>
-              <p class="type-subtitle">{{ item.subtitle }}</p>
               <p class="type-description">{{ item.description }}</p>
             </div>
             <ChevronRight :size="20" color="var(--color-text-disabled)" />
@@ -442,14 +452,14 @@ onMounted(async () => {
           :disabled="submitting"
           @click="handleStartExisting(presetTypeMeta.type)"
         >
-          {{ submitting ? '處理中...' : '開始' }}
+          {{ submitting ? t('verificationHome', 'processing') : t('verificationHome', 'start') }}
         </PrimaryButton>
       </template>
 
       <!-- No existing vehicle, type not chosen yet: pick a type (doesn't
            start yet — the naming step comes next). -->
       <template v-else-if="!effectiveType">
-        <p class="question">您要進行哪種類型的驗證？</p>
+        <p class="question">{{ t('verificationHome', 'typeQuestion') }}</p>
         <div class="type-list">
           <button
             v-for="item in verificationTypes"
@@ -462,7 +472,6 @@ onMounted(async () => {
             </div>
             <div class="type-info">
               <p class="type-title">{{ item.title }}</p>
-              <p class="type-subtitle">{{ item.subtitle }}</p>
               <p class="type-description">{{ item.description }}</p>
             </div>
             <ChevronRight :size="20" color="var(--color-text-disabled)" />
@@ -489,7 +498,7 @@ onMounted(async () => {
         </div>
 
         <template v-if="showVehiclePicker">
-          <p class="question">選擇要驗證的車輛</p>
+          <p class="question">{{ t('verificationHome', 'pickVehicleQuestion') }}</p>
           <div class="vehicle-list">
             <div
               v-for="vehicle in vehicleStore.vehicles"
@@ -504,17 +513,19 @@ onMounted(async () => {
               <VehicleCard :vehicle="vehicle" />
             </div>
           </div>
-          <button class="back-link" @click="creatingNewVehicle = true">+ 新增車輛</button>
+          <button class="back-link" @click="creatingNewVehicle = true">
+            {{ t('verificationHome', 'addVehicle') }}
+          </button>
         </template>
 
         <!-- 買家複驗：下拉選單選要驗哪台車，來源是買家自己有預約看車的
              listing，不是買家自己的車庫（requirement 2）。 -->
         <template v-else-if="showBuyerDropdown">
-          <p class="question">選擇要驗證的車輛</p>
+          <p class="question">{{ t('verificationHome', 'pickVehicleQuestion') }}</p>
           <label class="field">
-            <span>與賣家的預約</span>
+            <span>{{ t('verificationHome', 'appointmentLabel') }}</span>
             <select v-model="selectedAppointmentListingId" class="appointment-select">
-              <option value="" disabled>請選擇</option>
+              <option value="" disabled>{{ t('verificationHome', 'pleaseSelect') }}</option>
               <option
                 v-for="entry in bookableAppointments"
                 :key="entry.listingId"
@@ -531,20 +542,20 @@ onMounted(async () => {
             :disabled="!selectedAppointmentListingId || submitting"
             @click="handleConfirmAppointmentSelection"
           >
-            {{ submitting ? '處理中...' : '開始' }}
+            {{ submitting ? t('verificationHome', 'processing') : t('verificationHome', 'start') }}
           </PrimaryButton>
           <button class="back-link" @click="creatingNewVehicle = true">
-            還沒有預約？手動輸入車輛名稱
+            {{ t('verificationHome', 'noAppointmentYet') }}
           </button>
         </template>
 
         <template v-else>
           <label class="field">
-            <span>幫這次驗車取個名字</span>
+            <span>{{ t('verificationHome', 'nameVerificationLabel') }}</span>
             <input
               v-model="verificationName"
               type="text"
-              placeholder="例如：小紅、我的勁戰六代"
+              :placeholder="t('verificationHome', 'nameVerificationPlaceholder')"
               maxlength="30"
             />
           </label>
@@ -556,26 +567,31 @@ onMounted(async () => {
             class="back-link"
             @click="creatingNewVehicle = false"
           >
-            ‹ {{ effectiveType === 'buyer' ? '選擇預約的車輛' : '選擇現有車輛' }}
+            ‹
+            {{
+              effectiveType === 'buyer'
+                ? t('verificationHome', 'pickAppointedVehicle')
+                : t('verificationHome', 'pickExistingVehicle')
+            }}
           </button>
 
           <PrimaryButton block :disabled="!canStartNamed" @click="handleConfirmName">
-            {{ submitting ? '處理中...' : '開始' }}
+            {{ submitting ? t('verificationHome', 'processing') : t('verificationHome', 'start') }}
           </PrimaryButton>
         </template>
 
         <button v-if="!presetType" class="back-link" @click="selectedType = null">
-          ‹ 重新選擇類型
+          {{ t('verificationHome', 'reselectType') }}
         </button>
       </template>
 
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-      <p class="hint">完整驗證約需 20～30 分鐘</p>
+      <p class="hint">{{ t('verificationHome', 'durationHint') }}</p>
 
       <div v-if="upcomingAppointments.length > 0" class="recent-section">
         <div class="recent-header">
-          <h3 class="recent-title">與賣家預約看車時間！</h3>
+          <h3 class="recent-title">{{ t('verificationHome', 'upcomingAppointmentTitle') }}</h3>
         </div>
         <div class="recent-list">
           <button
@@ -589,7 +605,11 @@ onMounted(async () => {
                 {{ entry.vehicleSnapshot.brand }} {{ entry.vehicleSnapshot.model }}
               </p>
               <p class="recent-meta">
-                約定時間 {{ formatAppointmentDateTime(entry.appointment.scheduledAt) }}
+                {{
+                  t('verificationHome', 'scheduledAt', {
+                    time: formatAppointmentDateTime(entry.appointment.scheduledAt),
+                  })
+                }}
               </p>
             </div>
             <ChevronRight :size="18" color="var(--color-text-disabled)" />
@@ -599,8 +619,8 @@ onMounted(async () => {
 
       <div v-if="recentVerifications.length > 0" class="recent-section">
         <div class="recent-header">
-          <h3 class="recent-title">尚未完成的驗證</h3>
-          <span class="recent-hint">長按可刪除</span>
+          <h3 class="recent-title">{{ t('verificationHome', 'unfinishedTitle') }}</h3>
+          <span class="recent-hint">{{ t('verificationHome', 'longPressToDelete') }}</span>
         </div>
         <div class="recent-list">
           <button
@@ -754,12 +774,6 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 700;
   color: var(--color-text-primary);
-}
-
-.type-subtitle {
-  font-size: 12px;
-  color: var(--color-text-disabled);
-  margin-top: 1px;
 }
 
 .type-description {

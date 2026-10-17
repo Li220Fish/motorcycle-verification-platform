@@ -216,6 +216,14 @@ async function saveBuyerVehicleYear(id: string, manufactureYear: number): Promis
   await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.manufactureYear': manufactureYear })
 }
 
+/** BuyerVehicleModelGate.vue — only reached when vehicleSnapshot.modelId was
+ *  null (the listing's brand/model were free text, never matched to a
+ *  vehicleModels/{id} catalog entry). Same dot-notation single-field update
+ *  as saveBuyerVehicleYear above. */
+async function saveBuyerVehicleModelId(id: string, modelId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.modelId': modelId })
+}
+
 /** Taken once, right after BuyerYearGate.vue resolves — see
  *  Verification['buyerKnownIssuesSnapshot']'s own doc comment for why this
  *  is a snapshot rather than a live read. */
@@ -319,6 +327,7 @@ export const verificationService = {
   complete,
   saveTransactionDecision,
   saveBuyerVehicleYear,
+  saveBuyerVehicleModelId,
   saveBuyerKnownIssuesSnapshot,
   saveAnswer,
   listAnswers,

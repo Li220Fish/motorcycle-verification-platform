@@ -15,12 +15,21 @@
  * revisiting the tab shows prior taps instead of resetting.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Check, X } from 'lucide-vue-next'
+import { Camera, Check, X } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+import { useKnownIssueReminder } from '@/composables/useKnownIssueReminder'
 import { useTapConfirmItem } from '@/composables/useTapConfirmItem'
+import { guessVehicleType } from '@/data/training/training-shots'
+import {
+  KNOWN_ISSUE_PART_LABEL,
+  knownIssuesForBasicHealthCheckKey,
+} from '@/data/verification/known-issue-mapping'
 import { BIKE_REFERENCE_PHOTO } from './basic-health-check-photo'
+import HealthCheckIssuePhotoCapture from './HealthCheckIssuePhotoCapture.vue'
+import VerificationHelpSheet from './VerificationHelpSheet.vue'
 import {
   BASIC_HEALTH_CHECK_BASE_ITEMS,
   BASIC_HEALTH_CHECK_CHAIN_ITEM,
@@ -30,6 +39,7 @@ import {
   type HealthCheckAnchor,
 } from '@/data/verification/basic-health-check-items'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
+import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 
 const props = defineProps<{
@@ -72,6 +82,16 @@ const props = defineProps<{
  *  same as every other consolidated capture group. */
 const emit = defineEmits<{ back: []; advance: [] }>()
 const verificationStore = useVerificationStore()
+const vehicleStore = useVehicleStore()
+const { tItem } = useI18n()
+
+// 「異常」的證據照對 scooter/manual 用不同的引導框幾何（training-shots.ts
+// 早就依 part key 分好了兩套），沒有強型別的 transmission 欄位可以直接讀，
+// 借用 guessVehicleType 從既有的 transmission 自由文字＋hasChain 猜一個
+// 合理預設——跟採集 App 判斷同一台車該用哪套引導框的邏輯一致。
+const vehicleType = computed(() =>
+  guessVehicleType(vehicleStore.currentVehicle?.transmission ?? null, props.hasChain ?? false),
+)
 
 interface ChecklistItem {
   key: string
@@ -201,6 +221,51 @@ const {
   closePicker,
 } = useTapConfirmItem(saveResult)
 
+// 買家複驗：第一次點到某個有通病的項目（前避震/三角台/鏈條/尾燈——見
+// known-issue-mapping.ts 的配置與理由）時跳出提醒，呼應使用者原話「在檢測該
+// 部分的時候會有文字視窗做提醒」。掛在 pointerdown（長按跟快點都會先觸發這
+// 個）上，一個項目只跳一次。
+const {
+  open: knownIssueOpen,
+  activeIssues: knownIssueActiveIssues,
+  maybeShow: maybeShowKnownIssue,
+  close: closeKnownIssue,
+} = useKnownIssueReminder()
+const knownIssueTitle = computed(() => {
+  const part = knownIssueActiveIssues.value[0]?.part
+  return `系統偵測：${part ? KNOWN_ISSUE_PART_LABEL[part] : '通病'}`
+})
+const knownIssueContent = computed(() =>
+  knownIssueActiveIssues.value.map((issue) => issue.description).join('\n\n'),
+)
+function handleItemPointerDown(key: string): void {
+  handlePointerDown(key)
+  if (props.previewMode || verificationStore.flowKind !== 'buyer') return
+  maybeShowKnownIssue(
+    key,
+    knownIssuesForBasicHealthCheckKey(
+      verificationStore.currentVerification?.buyerKnownIssuesSnapshot,
+      key,
+    ),
+  )
+}
+
+/** Which item's 證據照 camera is open, or null when closed. Opened only via
+ *  the long-press picker's 相機 button now — marking 打叉(fail) used to
+ *  force this open automatically, but photo-taking and pass/fail marking
+ *  are now two separate choices in the picker (叉叉不會再轉跳到拍照). */
+const issuePhotoKey = ref<string | null>(null)
+function openIssuePhoto(key: string): void {
+  closePicker()
+  if (!props.previewMode) issuePhotoKey.value = key
+}
+function closeIssuePhoto(): void {
+  issuePhotoKey.value = null
+}
+function issuePhotoLabel(key: string): string {
+  return tItem(basicHealthCheckItemId(key), ITEMS.value.find((it) => it.key === key)?.label ?? key)
+}
+
 // Hydrate from whatever this verification already has saved (revisiting the
 // tab, or resuming a draft) — without this, reopening the tab would silently
 // wipe every prior tap back to 尚未確認 even though it's already persisted.
@@ -303,7 +368,7 @@ const pickerAnchor = computed<[number, number]>(() => {
               },
             ]"
             :style="{ left: it.anchor[0] + '%', top: it.anchor[1] + '%' }"
-            @pointerdown="handlePointerDown(it.key)"
+            @pointerdown="handleItemPointerDown(it.key)"
             @pointerup="handlePointerUpOrLeave"
             @pointerleave="handlePointerUpOrLeave"
             @pointercancel="handlePointerUpOrLeave"
@@ -342,6 +407,13 @@ const pickerAnchor = computed<[number, number]>(() => {
             >
               <X :size="18" />
             </button>
+            <button
+              class="reaction-btn camera"
+              aria-label="拍攝證據照"
+              @click="openIssuePhoto(pickerKey)"
+            >
+              <Camera :size="18" />
+            </button>
           </div>
         </div>
 
@@ -358,7 +430,7 @@ const pickerAnchor = computed<[number, number]>(() => {
             <div
               class="result-row"
               :class="{ pass: state[it.key] === 'pass', fail: state[it.key] === 'fail' }"
-              @pointerdown="handlePointerDown(it.key)"
+              @pointerdown="handleItemPointerDown(it.key)"
               @pointerup="handlePointerUpOrLeave"
               @pointerleave="handlePointerUpOrLeave"
               @pointercancel="handlePointerUpOrLeave"
@@ -410,6 +482,23 @@ const pickerAnchor = computed<[number, number]>(() => {
         <PrimaryButton block @click="emit('advance')">下一步</PrimaryButton>
       </template>
     </div>
+
+    <HealthCheckIssuePhotoCapture
+      v-if="issuePhotoKey && verificationStore.currentVerification"
+      :verification-id="verificationStore.currentVerification.id"
+      :item-key="issuePhotoKey"
+      :item-label="issuePhotoLabel(issuePhotoKey)"
+      :vehicle-type="vehicleType"
+      @captured="closeIssuePhoto"
+      @skip="closeIssuePhoto"
+    />
+
+    <VerificationHelpSheet
+      :open="knownIssueOpen"
+      :title="knownIssueTitle"
+      :content="knownIssueContent"
+      @close="closeKnownIssue"
+    />
   </div>
 </template>
 
@@ -590,6 +679,11 @@ const pickerAnchor = computed<[number, number]>(() => {
 
 .reaction-btn.fail {
   background: var(--color-danger);
+}
+
+.reaction-btn.camera {
+  background: var(--color-warning, #f5b100);
+  color: #14181f;
 }
 
 .result-list {

@@ -24,11 +24,11 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import MultiPhotoEvidenceCapture from './MultiPhotoEvidenceCapture.vue'
 import { useTapConfirmItem } from '@/composables/useTapConfirmItem'
+import { KNOWN_ISSUE_PART_LABEL } from '@/data/verification/known-issue-mapping'
 import { SELLER_VERIFICATION_SECTIONS } from '@/data/verification/seller-verification'
 import { storageService } from '@/services/firebase/storage.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useVerificationStore } from '@/stores/verification.store'
-import type { VehicleModelKnownIssuePart } from '@/services/firebase/vehicle-model.service'
 import type { VerificationAnswer } from '@/types/verification-evidence'
 
 const emit = defineEmits<{ back: []; advance: [] }>()
@@ -37,14 +37,6 @@ const verificationStore = useVerificationStore()
 const DISCLOSURE_SECTION_ID = 'seller-phase4-disclosure'
 const disclosureItemDefs =
   SELLER_VERIFICATION_SECTIONS.find((section) => section.id === DISCLOSURE_SECTION_ID)?.items ?? []
-
-const PART_LABEL: Record<VehicleModelKnownIssuePart, string> = {
-  sides: '左右側外觀',
-  rear: '車尾',
-  front_suspension: '前避震',
-  engine_bottom: '引擎底部／傳動',
-  general: '其他',
-}
 
 interface DisclosureRow {
   key: string
@@ -115,7 +107,7 @@ async function load(): Promise<void> {
     for (const issue of verification.buyerKnownIssuesSnapshot ?? []) {
       result.push({
         key: `buyer-disclosure-knownissue-${issue.id}`,
-        label: `系統偵測：${PART_LABEL[issue.part] ?? '其他'}`,
+        label: `系統偵測：${KNOWN_ISSUE_PART_LABEL[issue.part] ?? '其他'}`,
         description: issue.description,
         sellerPhotoUrls: [],
         isKnownIssue: true,

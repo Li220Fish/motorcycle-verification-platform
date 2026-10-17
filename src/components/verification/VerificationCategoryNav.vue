@@ -2,7 +2,10 @@
 import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
 import { Check, ChevronDown, Lock } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
 import type { VerificationSection } from '@/data/verification'
+
+const { t, tItem } = useI18n()
 
 const props = defineProps<{
   sections: VerificationSection[]
@@ -74,7 +77,7 @@ function selectItem(itemId: string): void {
         :class="{ active: section.id === activeSection?.id }"
         @click="selectSection(section)"
       >
-        <span class="tab-title">{{ section.title }}</span>
+        <span class="tab-title">{{ tItem(section.id, section.title) }}</span>
         <span class="tab-count">{{ sectionDone(section) }}/{{ section.items.length }}</span>
       </button>
     </div>
@@ -86,8 +89,12 @@ function selectItem(itemId: string): void {
       @click="activeSection.lockedOrder ? undefined : (listOpen = !listOpen)"
     >
       <Lock v-if="activeSection.lockedOrder" :size="13" />
-      <span class="item-toggle-label">{{ currentItem?.title ?? activeSection.title }}</span>
-      <span v-if="activeSection.lockedOrder" class="item-toggle-hint">依序完成，不可跳步</span>
+      <span class="item-toggle-label">{{
+        currentItem ? tItem(currentItem.id, currentItem.title) : tItem(activeSection.id, activeSection.title)
+      }}</span>
+      <span v-if="activeSection.lockedOrder" class="item-toggle-hint">
+        {{ t('verificationCategoryNav', 'lockedOrderHint') }}
+      </span>
       <ChevronDown v-else :size="16" class="chevron" :class="{ open: listOpen }" />
     </button>
 
@@ -108,7 +115,7 @@ function selectItem(itemId: string): void {
           <span class="row-status" :class="{ done: answeredSet.has(stepItem.id) }">
             <Check v-if="answeredSet.has(stepItem.id)" :size="12" />
           </span>
-          <span class="row-title">{{ stepItem.title }}</span>
+          <span class="row-title">{{ tItem(stepItem.id, stepItem.title) }}</span>
         </button>
       </div>
     </Transition>

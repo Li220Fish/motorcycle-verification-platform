@@ -15,6 +15,7 @@ import VerificationItemHeader from './VerificationItemHeader.vue'
 import VerificationResultSelector from './VerificationResultSelector.vue'
 import VideoEvidenceCapture from './VideoEvidenceCapture.vue'
 import VoltageEvidenceCapture from './VoltageEvidenceCapture.vue'
+import { useI18n } from '@/composables/useI18n'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationItem as VerificationItemData } from '@/data/verification'
 import type { AnswerResultValue } from '@/types/verification-evidence'
@@ -27,6 +28,14 @@ const props = defineProps<{
 const emit = defineEmits<{ advance: [] }>()
 
 const verificationStore = useVerificationStore()
+const { t, tItem } = useI18n()
+
+/** Translated display title for this item — see useI18n's tItem() doc
+ *  comment: the underlying `item.title` (from src/data/verification/*.ts)
+ *  stays untouched Chinese, this just overlays an English title in English
+ *  mode when one is registered for this item's id, falling back to the
+ *  original otherwise. */
+const displayTitle = computed(() => tItem(props.item.id, props.item.title))
 
 const result = ref<AnswerResultValue | null>(null)
 const note = ref('')
@@ -160,20 +169,24 @@ function handleUnflagIssue(): void {
     v-if="item.multiPhoto"
     :verification-id="verificationId"
     :item-id="item.id"
-    :label="item.title"
+    :label="displayTitle"
     @advance="$emit('advance')"
   />
   <div v-else class="verification-item">
     <Transition name="success-flash-fade">
-      <div v-if="showSuccessFlash" class="success-flash">✓ 已拍攝</div>
+      <div v-if="showSuccessFlash" class="success-flash">
+        {{ t('verificationItem', 'capturedFlash') }}
+      </div>
     </Transition>
     <VerificationItemHeader
-      :title="item.title"
+      :title="displayTitle"
       :description="item.description"
       :instruction="item.instruction"
       :severity="item.severity"
     >
-      <button class="help-trigger" @click="helpOpen = true">不知道怎麼看？</button>
+      <button class="help-trigger" @click="helpOpen = true">
+        {{ t('verificationItem', 'helpTrigger') }}
+      </button>
     </VerificationItemHeader>
 
     <div v-if="item.type === 'form'" class="evidence-block">
@@ -187,7 +200,7 @@ function handleUnflagIssue(): void {
       <VideoEvidenceCapture
         :verification-id="verificationId"
         :item-id="item.id"
-        :label="item.evidence?.[0]?.label ?? item.title"
+        :label="item.evidence?.[0]?.label ?? displayTitle"
       />
     </div>
     <div v-else-if="item.type === 'audio'" class="evidence-block">
@@ -197,7 +210,7 @@ function handleUnflagIssue(): void {
       <VoltageEvidenceCapture
         :verification-id="verificationId"
         :item-id="item.id"
-        :label="item.title"
+        :label="displayTitle"
       />
     </div>
     <div v-else-if="item.type === 'document'" class="evidence-block">
@@ -207,7 +220,7 @@ function handleUnflagIssue(): void {
       <MotionEvidenceCapture
         :verification-id="verificationId"
         :item-id="item.id"
-        :label="item.title"
+        :label="displayTitle"
       />
     </div>
 
@@ -234,9 +247,11 @@ function handleUnflagIssue(): void {
     />
 
     <div v-if="isPurePhotoItem && !flaggingIssue" class="photo-done-row">
-      <span v-if="result" class="photo-done-badge">✓ 已完成</span>
-      <span v-else class="photo-done-hint">拍攝完成後自動標記完成</span>
-      <button class="flag-issue-btn" @click="handleFlagIssue">標記異常</button>
+      <span v-if="result" class="photo-done-badge">{{ t('verificationItem', 'doneBadge') }}</span>
+      <span v-else class="photo-done-hint">{{ t('verificationItem', 'doneHint') }}</span>
+      <button class="flag-issue-btn" @click="handleFlagIssue">
+        {{ t('verificationItem', 'flagIssue') }}
+      </button>
     </div>
     <template v-else-if="isPurePhotoItem">
       <VerificationResultSelector
@@ -244,7 +259,9 @@ function handleUnflagIssue(): void {
         :model-value="result"
         @update:model-value="handleResultChange"
       />
-      <button class="flag-issue-btn ghost" @click="handleUnflagIssue">取消異常標記</button>
+      <button class="flag-issue-btn ghost" @click="handleUnflagIssue">
+        {{ t('verificationItem', 'unflagIssue') }}
+      </button>
     </template>
     <DisclosureMultiSelect
       v-else-if="item.disclosureOptions"
@@ -265,13 +282,15 @@ function handleUnflagIssue(): void {
       :item-id="item.id"
     />
 
-    <button v-if="!noteOpen" class="add-note-btn" @click="noteOpen = true">＋新增備註</button>
+    <button v-if="!noteOpen" class="add-note-btn" @click="noteOpen = true">
+      {{ t('verificationItem', 'addNote') }}
+    </button>
     <label v-else class="note-field">
-      <span>備註（選填）</span>
+      <span>{{ t('verificationItem', 'noteLabel') }}</span>
       <textarea
         v-model="note"
         rows="1"
-        placeholder="補充說明..."
+        :placeholder="t('verificationItem', 'notePlaceholder')"
         autofocus
         @blur="handleNoteBlur"
       />
@@ -279,7 +298,7 @@ function handleUnflagIssue(): void {
 
     <VerificationHelpSheet
       :open="helpOpen"
-      :title="item.title"
+      :title="displayTitle"
       :content="item.helpText ?? `${item.description} ${item.instruction ?? ''}`.trim()"
       @close="helpOpen = false"
     />

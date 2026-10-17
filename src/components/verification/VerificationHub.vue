@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Check, Circle, Loader2, Lock } from 'lucide-vue-next'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
 import type { MissingRequiredItem, SectionProgress } from '@/stores/verification.store'
 import type { VerificationSection } from '@/data/verification'
+
+const { t, tItem } = useI18n()
 
 const props = defineProps<{
   sections: VerificationSection[]
@@ -30,17 +34,17 @@ const emit = defineEmits<{
 // without surfacing these separately "分析從沒真的跑過" looks identical to
 // "分析已確認正常" to the user (see verification.store.ts's
 // REQUIRED_ANALYSIS_KEYS comment for why the gate alone isn't enough).
-const ANALYSIS_LABELS: Record<string, string> = {
-  coreVisionSides: '外觀影像判定（左右側）',
-  coreVisionRear: '外觀影像判定（車尾／對稱性）',
-  coreVisionFrontSuspension: '前避震影像判定',
-  coreVisionEngineBottom: '引擎底部／鏈條影像判定',
-  dashboardOcr: '儀表板里程 OCR',
-  coldCheck: '冷車觸感檢查',
-  engineSensorSession: '引擎音訊／震動判定',
-  hotEngineSensorSession: '熱車音訊／震動判定',
-}
-const analysisLabel = (key: string) => ANALYSIS_LABELS[key] ?? key
+const ANALYSIS_LABELS = computed<Record<string, string>>(() => ({
+  coreVisionSides: t('verificationHub', 'analysisCoreVisionSides'),
+  coreVisionRear: t('verificationHub', 'analysisCoreVisionRear'),
+  coreVisionFrontSuspension: t('verificationHub', 'analysisCoreVisionFrontSuspension'),
+  coreVisionEngineBottom: t('verificationHub', 'analysisCoreVisionEngineBottom'),
+  dashboardOcr: t('verificationHub', 'analysisDashboardOcr'),
+  coldCheck: t('verificationHub', 'analysisColdCheck'),
+  engineSensorSession: t('verificationHub', 'analysisEngineSensorSession'),
+  hotEngineSensorSession: t('verificationHub', 'analysisHotEngineSensorSession'),
+}))
+const analysisLabel = (key: string) => ANALYSIS_LABELS.value[key] ?? key
 
 function progressFor(sectionId: string): SectionProgress | undefined {
   return props.sectionProgress.find((entry) => entry.sectionId === sectionId)
@@ -54,9 +58,9 @@ function statusFor(sectionId: string): 'not_started' | 'in_progress' | 'done' {
 }
 
 function statusLabel(status: ReturnType<typeof statusFor>): string {
-  if (status === 'done') return '已完成'
-  if (status === 'in_progress') return '進行中'
-  return '未開始'
+  if (status === 'done') return t('verificationHub', 'statusDone')
+  if (status === 'in_progress') return t('verificationHub', 'statusInProgress')
+  return t('verificationHub', 'statusNotStarted')
 }
 
 function handleSelect(section: VerificationSection): void {
@@ -69,19 +73,21 @@ function handleSelect(section: VerificationSection): void {
 // isn't available yet and where to go (回到上方分類).
 function hintText(): string | null {
   if (props.missingRequiredItems.length > 0) {
-    return `尚有 ${props.missingRequiredItems.length} 項必填未完成，請回到上方分類完成。`
+    return t('verificationHub', 'hintMissingRequired', {
+      count: props.missingRequiredItems.length,
+    })
   }
   if (props.failedRequiredUploads.length > 0) {
-    return '部分必填照片／影音上傳失敗，請回到上方分類重試。'
+    return t('verificationHub', 'hintFailedUploads')
   }
   if (props.pendingRequiredUploads.length > 0) {
-    return '正在完成最後幾筆資料上傳，請稍候…'
+    return t('verificationHub', 'hintPendingUploads')
   }
   if (props.failedRequiredAnalysis.length > 0) {
-    return 'AI 分析失敗，請點選下方重試。'
+    return t('verificationHub', 'hintFailedAnalysis')
   }
   if (props.pendingRequiredAnalysis.length > 0) {
-    return 'AI 正在分析中，請稍候…'
+    return t('verificationHub', 'hintPendingAnalysis')
   }
   return null
 }
@@ -96,8 +102,8 @@ const canSubmit = () =>
 
 <template>
   <div class="verification-hub">
-    <h2>驗車進度</h2>
-    <p class="hint">選擇一個車輛部位開始拍攝</p>
+    <h2>{{ t('verificationHub', 'hubTitle') }}</h2>
+    <p class="hint">{{ t('verificationHub', 'hubHint') }}</p>
 
     <div class="section-grid">
       <button
@@ -109,7 +115,7 @@ const canSubmit = () =>
         @click="handleSelect(section)"
       >
         <div class="card-top">
-          <span class="card-title">{{ section.title }}</span>
+          <span class="card-title">{{ tItem(section.id, section.title) }}</span>
           <Lock v-if="section.lockedOrder" :size="14" class="lock-icon" />
         </div>
         <p class="card-desc">{{ section.shortDescription }}</p>
@@ -137,18 +143,20 @@ const canSubmit = () =>
     >
       {{ hintText() }}
     </p>
-    <p v-else class="progress-hint all-done">所有必填項目已完成。</p>
+    <p v-else class="progress-hint all-done">{{ t('verificationHub', 'allDone') }}</p>
 
     <div v-if="failedRequiredAnalysis.length > 0" class="analysis-retry-list">
       <div v-for="key in failedRequiredAnalysis" :key="key" class="analysis-retry-row">
         <span>{{ analysisLabel(key) }}</span>
-        <button class="analysis-retry-btn" @click="emit('retryAnalysis', key)">重試</button>
+        <button class="analysis-retry-btn" @click="emit('retryAnalysis', key)">
+          {{ t('verificationHub', 'retry') }}
+        </button>
       </div>
     </div>
 
     <PrimaryButton block :disabled="completing || !canSubmit()" @click="emit('complete')">
       <Loader2 v-if="completing" :size="16" class="spin" />
-      {{ completing ? '處理中...' : '完成驗證' }}
+      {{ completing ? t('verificationHome', 'processing') : t('verificationHub', 'completeVerification') }}
     </PrimaryButton>
   </div>
 </template>
