@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { assertOwnsVehicle } from '../services/auth.service'
 import { notifyUser } from '../services/notification-dispatch.service'
+import { describeTransferParty } from '../services/transfer-party.service'
 
 // 6 碼，0-9/A-Z 各碼獨立隨機抽取（因此允許同碼重複），48 小時後失效即需重新
 // 產生 — exact spec from MyListingManageView.vue's "轉移號碼" (the same code
@@ -132,8 +133,9 @@ async function loadValidInvite(
 /**
  * Step 1 of redeeming — validates the code and returns just enough of the
  * vehicle's public identity (brand/model/year/first photo) for the new
- * owner to confirm "是這台車" before actually redeeming. Never returns
- * anything about the current owner's identity.
+ * owner to confirm "是這台車" before actually redeeming, plus who is
+ * transferring it — display name and a masked uid only (中間以 * 隱藏),
+ * never the full uid or any contact details.
  */
 export const peekVehicleTransferInvite = onCall({}, async (request) => {
   const data = request.data as { code?: string }
@@ -152,6 +154,7 @@ export const peekVehicleTransferInvite = onCall({}, async (request) => {
   const vehicleSnap = await db.collection('vehicles').doc(invite.vehicleId).get()
   if (!vehicleSnap.exists) throw new HttpsError('not-found', '找不到這台車輛。')
   const vehicle = vehicleSnap.data() as VehicleDoc
+  const fromUser = await describeTransferParty(invite.createdBy)
 
   return {
     vehicleId: invite.vehicleId,
@@ -159,6 +162,7 @@ export const peekVehicleTransferInvite = onCall({}, async (request) => {
     model: vehicle.model ?? '',
     manufactureYear: vehicle.manufactureYear ?? null,
     photo: vehicle.photos?.[0] ?? null,
+    fromUser,
   }
 })
 
@@ -241,5 +245,20 @@ export const redeemVehicleTransferInvite = onCall({}, async (request) => {
   const body = `你的「${vehicleLabel}」已經轉移給新車主。`
   await notifyUser(invite.createdBy, { type: 'vehicle_transferred', title, body }, { title, body })
 
-  return { vehicleId: invite.vehicleId }
+  // And the NEW owner — who transferred it to them (name + masked id).
+  const fromUser = await describeTransferParty(invite.createdBy)
+  const receivedTitle = '你收到一台轉移的車輛'
+  const receivedBody = `${fromUser.displayName}（用戶 ID：${fromUser.maskedId}）已將「${vehicleLabel}」轉移給你。`
+  await notifyUser(
+    uid,
+    {
+      type: 'vehicle_received',
+      title: receivedTitle,
+      body: receivedBody,
+      link: `/vehicles/${invite.vehicleId}`,
+    },
+    { title: receivedTitle, body: receivedBody },
+  ).catch((error) => console.error('[redeemVehicleTransferInvite] notify new owner failed:', error))
+
+  return { vehicleId: invite.vehicleId, fromUser }
 })

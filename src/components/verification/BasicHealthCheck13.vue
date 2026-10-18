@@ -15,7 +15,7 @@
  * revisiting the tab shows prior taps instead of resetting.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Camera, Check, X } from 'lucide-vue-next'
+import { Camera, Check, RotateCcw, X } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
@@ -23,10 +23,7 @@ import { useI18n } from '@/composables/useI18n'
 import { useKnownIssueReminder } from '@/composables/useKnownIssueReminder'
 import { useTapConfirmItem } from '@/composables/useTapConfirmItem'
 import { guessVehicleType } from '@/data/training/training-shots'
-import {
-  KNOWN_ISSUE_PART_LABEL,
-  knownIssuesForBasicHealthCheckKey,
-} from '@/data/verification/known-issue-mapping'
+import { knownIssuesForBasicHealthCheckKey } from '@/data/verification/known-issue-mapping'
 import { BIKE_REFERENCE_PHOTO } from './basic-health-check-photo'
 import HealthCheckIssuePhotoCapture from './HealthCheckIssuePhotoCapture.vue'
 import VerificationHelpSheet from './VerificationHelpSheet.vue'
@@ -38,9 +35,11 @@ import {
   DEFAULT_HEALTH_CHECK_ANCHORS,
   type HealthCheckAnchor,
 } from '@/data/verification/basic-health-check-items'
+import { storageService } from '@/services/firebase/storage.service'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
+import type { VerificationEvidence } from '@/types/verification-evidence'
 
 const props = defineProps<{
   hasChain?: boolean | null
@@ -83,7 +82,7 @@ const props = defineProps<{
 const emit = defineEmits<{ back: []; advance: [] }>()
 const verificationStore = useVerificationStore()
 const vehicleStore = useVehicleStore()
-const { tItem } = useI18n()
+const { tItem, t } = useI18n()
 
 // 「異常」的證據照對 scooter/manual 用不同的引導框幾何（training-shots.ts
 // 早就依 part key 分好了兩套），沒有強型別的 transmission 欄位可以直接讀，
@@ -186,8 +185,8 @@ interface NoteItem {
 const NOTE_ITEMS: NoteItem[] = [
   {
     key: 'othermod',
-    label: '其他改裝品說明',
-    placeholder: '請說明其他改裝項目，例如：更換排氣管、外殼貼膜……',
+    label: 'otherModLabel',
+    placeholder: 'otherModPlaceholder',
   },
 ]
 const NOTE_BY_KEY = new Map(NOTE_ITEMS.map((n) => [n.key, n]))
@@ -233,7 +232,9 @@ const {
 } = useKnownIssueReminder()
 const knownIssueTitle = computed(() => {
   const part = knownIssueActiveIssues.value[0]?.part
-  return `系統偵測：${part ? KNOWN_ISSUE_PART_LABEL[part] : '通病'}`
+  return t('ui', 'knownIssueTitle', {
+    part: part ? t('knownIssuePart', part) : t('ui', 'knownIssueFallback'),
+  })
 })
 const knownIssueContent = computed(() =>
   knownIssueActiveIssues.value.map((issue) => issue.description).join('\n\n'),
@@ -261,6 +262,60 @@ function openIssuePhoto(key: string): void {
 }
 function closeIssuePhoto(): void {
   issuePhotoKey.value = null
+}
+
+// 已拍攝的證據照 — result-row 右側的相機 icon，點了展開照片小卡（tooltip），
+// 卡片底下的「重新拍攝」回到拍照模式；新照片拍好後才刪除舊的那張，取消重拍
+// 則保留原照片。
+function evidenceFor(key: string): VerificationEvidence[] {
+  return (verificationStore.evidenceByItem[basicHealthCheckItemId(key)] ?? []).filter(
+    (evidence) => evidence.type === 'photo',
+  )
+}
+// `remoteUrl` is a Storage path, not a URL — resolve it once; `localUri`
+// (a blob: URL) only works in the session that took the photo.
+const resolvedEvidenceUrls = reactive<Record<string, string>>({})
+watch(
+  () => verificationStore.evidenceByItem,
+  (byItem) => {
+    for (const list of Object.values(byItem)) {
+      for (const evidence of list) {
+        if (evidence.type !== 'photo' || !evidence.remoteUrl) continue
+        if (evidence.id in resolvedEvidenceUrls) continue
+        resolvedEvidenceUrls[evidence.id] = ''
+        storageService
+          .resolveDownloadUrl(evidence.remoteUrl)
+          .then((url) => (resolvedEvidenceUrls[evidence.id] = url))
+          .catch(() => {})
+      }
+    }
+  },
+  { deep: true, immediate: true },
+)
+function evidenceThumbUrl(evidence: VerificationEvidence): string | undefined {
+  return resolvedEvidenceUrls[evidence.id] || evidence.localUri || undefined
+}
+const photoPopoverKey = ref<string | null>(null)
+function togglePhotoPopover(key: string): void {
+  photoPopoverKey.value = photoPopoverKey.value === key ? null : key
+}
+function retakePhoto(key: string): void {
+  photoPopoverKey.value = null
+  if (!props.previewMode) issuePhotoKey.value = key
+}
+/** Each item keeps exactly ONE photo — whichever way the camera was opened
+ *  (long-press 相機 or 重新拍攝), the newly captured photo replaces every
+ *  older one (deleted from Firestore + Storage too). Runs only after the new
+ *  photo is saved, so cancelling the camera never loses the existing one. */
+async function handleIssuePhotoCaptured(): Promise<void> {
+  const key = issuePhotoKey.value
+  closeIssuePhoto()
+  if (!key) return
+  const itemId = basicHealthCheckItemId(key)
+  const photos = [...evidenceFor(key)].sort((a, b) => a.createdAt - b.createdAt)
+  for (const old of photos.slice(0, -1)) {
+    await verificationStore.removeEvidence(itemId, old.id).catch(() => {})
+  }
 }
 function issuePhotoLabel(key: string): string {
   return tItem(basicHealthCheckItemId(key), ITEMS.value.find((it) => it.key === key)?.label ?? key)
@@ -328,32 +383,34 @@ const pickerAnchor = computed<[number, number]>(() => {
   <div>
     <AppHeader
       v-if="!embedded"
-      title="基本12項健檢"
+      :title="t('basicCheck', 'title')"
       :back="!previewMode"
       custom-back
       @back="emit('back')"
     />
 
     <div v-if="loadingModel" class="content">
-      <p class="intro">載入中...</p>
+      <p class="intro">{{ t('ui', 'loading') }}</p>
     </div>
 
     <div v-else-if="notAnnotated" class="content">
       <div class="empty-state">
-        <p>此車款尚未設定健檢標記位置，請聯繫客服協助處理。</p>
-        <PrimaryButton v-if="!previewMode" block @click="emit('back')">返回</PrimaryButton>
+        <p>{{ t('basicCheck', 'notAnnotated') }}</p>
+        <PrimaryButton v-if="!previewMode" block @click="emit('back')">{{
+          t('ui', 'back')
+        }}</PrimaryButton>
       </div>
     </div>
 
     <div v-else class="content">
       <p class="intro">
-        點擊車輛照片上的項目標籤快速標示打勾（正常），長按則可選擇打勾或打叉（異常）。
+        {{ t('basicCheck', 'intro') }}
       </p>
 
       <div class="bike-card">
         <div class="bike-img-wrap" :class="{ mirrored: isMirrored }">
           <div class="bike-photo">
-            <img :src="photoUrl" class="bike-illustration" alt="車輛參考圖" />
+            <img :src="photoUrl" class="bike-illustration" :alt="t('basicCheck', 'photoAlt')" />
           </div>
           <button
             v-for="it in pageItems"
@@ -379,7 +436,7 @@ const pickerAnchor = computed<[number, number]>(() => {
               <Check v-if="state[it.key] === 'pass'" :size="11" />
               <X v-else-if="state[it.key] === 'fail'" :size="11" />
             </span>
-            <span class="label">{{ it.label }}</span>
+            <span class="label">{{ tItem(basicHealthCheckItemId(it.key), it.label) }}</span>
           </button>
 
           <div
@@ -395,21 +452,21 @@ const pickerAnchor = computed<[number, number]>(() => {
           >
             <button
               class="reaction-btn pass"
-              aria-label="打勾（正常）"
+              :aria-label="t('basicCheck', 'pickPass')"
               @click="pick(pickerKey, 'pass')"
             >
               <Check :size="18" />
             </button>
             <button
               class="reaction-btn fail"
-              aria-label="打叉（異常）"
+              :aria-label="t('basicCheck', 'pickFail')"
               @click="pick(pickerKey, 'fail')"
             >
               <X :size="18" />
             </button>
             <button
               class="reaction-btn camera"
-              aria-label="拍攝證據照"
+              :aria-label="t('basicCheck', 'pickCamera')"
               @click="openIssuePhoto(pickerKey)"
             >
               <Camera :size="18" />
@@ -418,9 +475,19 @@ const pickerAnchor = computed<[number, number]>(() => {
         </div>
 
         <div class="page-nav">
-          <button :disabled="currentPage === 1" aria-label="上一頁" @click="goPage(-1)">‹</button>
+          <button
+            :disabled="currentPage === 1"
+            :aria-label="t('basicCheck', 'prevPage')"
+            @click="goPage(-1)"
+          >
+            ‹
+          </button>
           <span class="count">{{ currentPage }} / {{ PAGE_COUNT }}</span>
-          <button :disabled="currentPage === PAGE_COUNT" aria-label="下一頁" @click="goPage(1)">
+          <button
+            :disabled="currentPage === PAGE_COUNT"
+            :aria-label="t('basicCheck', 'nextPage')"
+            @click="goPage(1)"
+          >
             ›
           </button>
         </div>
@@ -438,20 +505,51 @@ const pickerAnchor = computed<[number, number]>(() => {
               @click="handleClick(it.key)"
             >
               <span class="result-label"
-                >{{ it.label }}<span v-if="it.required" class="req-mark">＊</span></span
+                >{{ tItem(basicHealthCheckItemId(it.key), it.label)
+                }}<span v-if="it.required" class="req-mark">＊</span></span
               >
               <span class="result-status">
-                <template v-if="state[it.key] === 'pass'"><Check :size="13" />正常</template>
-                <template v-else-if="state[it.key] === 'fail'"><X :size="13" />異常</template>
-                <template v-else>待確認</template>
+                <template v-if="state[it.key] === 'pass'"
+                  ><Check :size="13" />{{ t('ui', 'pass') }}</template
+                >
+                <template v-else-if="state[it.key] === 'fail'"
+                  ><X :size="13" />{{ t('ui', 'fail') }}</template
+                >
+                <template v-else>{{ t('ui', 'pending') }}</template>
+                <button
+                  v-if="evidenceFor(it.key).length > 0"
+                  type="button"
+                  class="photo-indicator"
+                  :class="{ active: photoPopoverKey === it.key }"
+                  :aria-label="t('basicCheck', 'viewPhoto')"
+                  @pointerdown.stop
+                  @click.stop="togglePhotoPopover(it.key)"
+                >
+                  <Camera :size="15" />
+                </button>
               </span>
             </div>
             <Transition name="note-pop">
+              <div v-if="photoPopoverKey === it.key" class="photo-popover" @click.stop>
+                <div class="photo-popover-grid">
+                  <img
+                    v-for="evidence in evidenceFor(it.key)"
+                    :key="evidence.id"
+                    :src="evidenceThumbUrl(evidence)"
+                    :alt="t('basicCheck', 'viewPhoto')"
+                  />
+                </div>
+                <button type="button" class="retake-btn" @click="retakePhoto(it.key)">
+                  <RotateCcw :size="14" /> {{ t('basicCheck', 'retakePhoto') }}
+                </button>
+              </div>
+            </Transition>
+            <Transition name="note-pop">
               <div v-if="NOTE_BY_KEY.has(it.key) && state[it.key] !== undefined" class="note-card">
-                <label>{{ NOTE_BY_KEY.get(it.key)!.label }}</label>
+                <label>{{ t('basicCheck', 'otherModLabel') }}</label>
                 <textarea
                   v-model="notes[it.key]"
-                  :placeholder="NOTE_BY_KEY.get(it.key)!.placeholder"
+                  :placeholder="t('basicCheck', 'otherModPlaceholder')"
                   @blur="saveNote(it.key)"
                 />
               </div>
@@ -462,7 +560,7 @@ const pickerAnchor = computed<[number, number]>(() => {
 
       <div class="progress-card">
         <div class="progress-head">
-          <span>檢查進度</span>
+          <span>{{ t('basicCheck', 'progress') }}</span>
           <span class="progress-count"
             >{{ doneCount }}<span class="of">/{{ ITEMS.length }}</span></span
           >
@@ -475,11 +573,11 @@ const pickerAnchor = computed<[number, number]>(() => {
 
     <div v-if="!previewMode && !loadingModel && !notAnnotated" class="bottom-bar">
       <PrimaryButton v-if="!finished" block :disabled="!allRequiredDone" @click="finish">
-        完成基本12項健檢
+        {{ t('basicCheck', 'finish') }}
       </PrimaryButton>
       <template v-else>
-        <p class="done-message">已完成基本12項健檢 ✓</p>
-        <PrimaryButton block @click="emit('advance')">下一步</PrimaryButton>
+        <p class="done-message">{{ t('basicCheck', 'finished') }}</p>
+        <PrimaryButton block @click="emit('advance')">{{ t('ui', 'next') }}</PrimaryButton>
       </template>
     </div>
 
@@ -489,7 +587,7 @@ const pickerAnchor = computed<[number, number]>(() => {
       :item-key="issuePhotoKey"
       :item-label="issuePhotoLabel(issuePhotoKey)"
       :vehicle-type="vehicleType"
-      @captured="closeIssuePhoto"
+      @captured="handleIssuePhotoCaptured"
       @skip="closeIssuePhoto"
     />
 
@@ -723,6 +821,85 @@ const pickerAnchor = computed<[number, number]>(() => {
   font-size: 12px;
   font-weight: 700;
   color: var(--color-text-disabled);
+}
+
+.photo-indicator {
+  width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-warning-bg, #fff4d6);
+  color: var(--color-warning, #b45309);
+  cursor: pointer;
+}
+
+.photo-indicator.active {
+  background: var(--color-warning, #f5b100);
+  color: #14181f;
+}
+
+/* Tooltip-style card under the row, arrow pointing at the camera icon. */
+.photo-popover {
+  position: relative;
+  align-self: flex-end;
+  width: min(260px, 100%);
+  margin: 2px 0 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: 0 6px 20px rgba(20, 24, 31, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform-origin: top right;
+}
+
+.photo-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  transform: rotate(45deg);
+}
+
+.photo-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.photo-popover-grid img {
+  width: 100%;
+  max-height: 200px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+}
+
+.retake-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .result-row.pass .result-status {

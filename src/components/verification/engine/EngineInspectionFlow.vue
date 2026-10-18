@@ -61,6 +61,9 @@ import {
 } from '@/data/verification/engine-session'
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 /** `mode: 'hot'` — 熱車檢查 (buyer-verification.ts's HOT-04..07, reached after
  *  上路/RideTransition.vue): the exact same consolidated single-recording UI
@@ -84,22 +87,36 @@ const sessionDurationMs = computed(() =>
 const sessionPhases = computed(() =>
   isHot.value ? HOT_ENGINE_SESSION_PHASES : ENGINE_SESSION_PHASES,
 )
-const instructionAt = (elapsedSeconds: number): string =>
-  isHot.value
+const INSTRUCTION_KEYS: Record<string, 'instrStart' | 'instrIdle' | 'instrRev'> = {
+  請現在發動引擎: 'instrStart',
+  請保持怠速: 'instrIdle',
+  請依提示拉動油門: 'instrRev',
+}
+const instructionAt = (elapsedSeconds: number): string => {
+  const label = isHot.value
     ? hotEngineSessionInstructionAt(elapsedSeconds)
     : engineSessionInstructionAt(elapsedSeconds)
+  const key = INSTRUCTION_KEYS[label]
+  return key ? t('engineFlow', key) : label
+}
 const sessionDurationSeconds = computed(() => sessionDurationMs.value / 1000)
 const sessionDurationLabel = computed(
   () => `00:${String(sessionDurationSeconds.value).padStart(2, '0')}`,
 )
-const screenTitle = computed(() => (isHot.value ? '熱車檢查' : '引擎檢測'))
+const screenTitle = computed(() =>
+  isHot.value ? t('engineFlow', 'hotTitle') : t('engineFlow', 'coldTitle'),
+)
 const readyCopy = computed(() =>
   isHot.value
-    ? `依畫面提示保持怠速、再依提示拉動油門，系統會自動判斷各階段並在 ${sessionDurationSeconds.value} 秒後自動停止。`
-    : `依畫面提示發動引擎、保持怠速、再依提示拉動油門，系統會自動判斷各階段並在 ${sessionDurationSeconds.value} 秒後自動停止。`,
+    ? t('engineFlow', 'hotReady', { seconds: sessionDurationSeconds.value })
+    : t('engineFlow', 'coldReady', { seconds: sessionDurationSeconds.value }),
 )
-const startButtonLabel = computed(() => (isHot.value ? '開始熱車檢查' : '開始引擎檢測'))
-const finishButtonLabel = computed(() => (isHot.value ? '完成熱車檢查' : '完成引擎檢測'))
+const startButtonLabel = computed(() =>
+  isHot.value ? t('engineFlow', 'startHot') : t('engineFlow', 'startCold'),
+)
+const finishButtonLabel = computed(() =>
+  isHot.value ? t('engineFlow', 'finishHot') : t('engineFlow', 'finishCold'),
+)
 const AUDIO_ITEM_IDS = computed(() =>
   isHot.value
     ? [HOT_ENGINE_IDLE_ITEM_IDS[0], HOT_ENGINE_REV_ITEM_IDS[0]]
@@ -309,14 +326,14 @@ async function finishRecording(): Promise<void> {
     sessionFiles.value = [
       {
         kind: 'audio',
-        label: isHot.value ? '引擎音訊（怠速＋油門）' : '引擎音訊（啟動＋怠速＋油門）',
+        label: isHot.value ? t('engineFlow', 'audioHot') : t('engineFlow', 'audioCold'),
         filename: `engine_audio_${Date.now()}.aac`,
         durationSeconds: Math.round(result.durationMs / 1000),
         sizeBytes: result.blob.size,
       },
       {
         kind: 'imu',
-        label: '引擎震動（怠速＋油門）',
+        label: t('engineFlow', 'vibration'),
         filename: `engine_imu_${Date.now()}.json`,
         durationSeconds: Math.round(result.durationMs / 1000),
         sizeBytes: imuSizeBytes,
@@ -427,31 +444,33 @@ onBeforeUnmount(() => {
   <div class="engine-flow">
     <!-- Phone placement (before the single 23s recording) -->
     <template v-if="phase === 'placement'">
-      <h2>放置手機</h2>
+      <h2>{{ t('engineFlow', 'placePhone') }}</h2>
       <template v-if="!vehicleType">
-        <p class="main-copy">請選擇車輛類型</p>
+        <p class="main-copy">{{ t('engineFlow', 'chooseType') }}</p>
         <div class="type-pick">
-          <PrimaryButton variant="secondary" block @click="pickVehicleType('scooter')"
-            >速可達</PrimaryButton
-          >
-          <PrimaryButton variant="secondary" block @click="pickVehicleType('manual')"
-            >檔車</PrimaryButton
-          >
+          <PrimaryButton variant="secondary" block @click="pickVehicleType('scooter')">{{
+            t('engineFlow', 'scooter')
+          }}</PrimaryButton>
+          <PrimaryButton variant="secondary" block @click="pickVehicleType('manual')">{{
+            t('engineFlow', 'manual')
+          }}</PrimaryButton>
         </div>
       </template>
       <template v-else>
         <EnginePlacementGuide :vehicle-type="vehicleType" />
-        <PrimaryButton block @click="handlePlacementConfirmed">我已放好</PrimaryButton>
+        <PrimaryButton block @click="handlePlacementConfirmed">{{
+          t('engineFlow', 'placed')
+        }}</PrimaryButton>
       </template>
     </template>
 
     <template v-else-if="phase === 'placement-precheck'">
-      <p class="checking">正在確認手機狀態…</p>
+      <p class="checking">{{ t('engineFlow', 'checkingPhone') }}</p>
       <ul class="tips">
-        <li>✓ 手機方向</li>
-        <li>✓ 手機保持穩定</li>
-        <li>✓ 麥克風已準備</li>
-        <li v-if="motionSupported">✓ 動作感測器已準備</li>
+        <li>{{ t('engineFlow', 'okOrientation') }}</li>
+        <li>{{ t('engineFlow', 'okStable') }}</li>
+        <li>{{ t('engineFlow', 'okMic') }}</li>
+        <li v-if="motionSupported">{{ t('engineFlow', 'okMotion') }}</li>
       </ul>
     </template>
 
@@ -461,17 +480,19 @@ onBeforeUnmount(() => {
         <div class="top-card-header">
           <div class="icon-chip"><Activity :size="20" /></div>
           <div class="top-card-titles">
-            <p class="eyebrow">目前檢測項目</p>
+            <p class="eyebrow">{{ t('ui', 'currentItem') }}</p>
             <h2>{{ screenTitle }}</h2>
           </div>
         </div>
-        <p class="subhead">共 {{ sessionDurationSeconds }} 秒，時間由系統自動控制</p>
+        <p class="subhead">
+          {{ t('engineFlow', 'duration', { seconds: sessionDurationSeconds }) }}
+        </p>
         <p class="main-copy">{{ readyCopy }}</p>
         <div class="tips-box">
           <ul class="tips">
-            <li>手機放穩，不要手持或移動</li>
-            <li>麥克風不要被遮住</li>
-            <li>周圍盡量保持安靜</li>
+            <li>{{ t('engineFlow', 'tipStill') }}</li>
+            <li>{{ t('engineFlow', 'tipMic') }}</li>
+            <li>{{ t('engineFlow', 'tipQuiet') }}</li>
           </ul>
         </div>
       </div>
@@ -488,16 +509,16 @@ onBeforeUnmount(() => {
         <template v-else-if="phase === 'recording'">
           <div class="recording-header">
             <span class="rec-dot" />
-            <span class="rec-label">正在檢測中</span>
+            <span class="rec-label">{{ t('engineFlow', 'recording') }}</span>
             <span class="rec-elapsed">{{ formatElapsed() }} / {{ sessionDurationLabel }}</span>
           </div>
           <EngineWaveform :active="true" :magnitude="liveMagnitude" />
           <p class="live-instruction">{{ instructionAt(elapsedMs / 1000) }}</p>
-          <button class="cancel-btn" @click="requestCancel">取消</button>
+          <button class="cancel-btn" @click="requestCancel">{{ t('common', 'cancel') }}</button>
         </template>
 
         <template v-else-if="phase === 'completed'">
-          <p class="section-label">已錄製檔案</p>
+          <p class="section-label">{{ t('ui', 'recordedFiles') }}</p>
           <div class="file-list">
             <EngineRecordedFileCard
               v-for="file in sessionFiles"
@@ -514,27 +535,31 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="phase === 'permission-denied'">
-      <h2>需要麥克風權限</h2>
-      <p class="main-copy">{{ screenTitle }}需要錄製聲音。請允許 RiDE 使用麥克風。</p>
+      <h2>{{ t('engineFlow', 'micTitle') }}</h2>
+      <p class="main-copy">{{ t('engineFlow', 'micBody', { title: screenTitle }) }}</p>
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-      <PrimaryButton block @click="phase = 'ready'">允許麥克風</PrimaryButton>
+      <PrimaryButton block @click="phase = 'ready'">{{
+        t('engineFlow', 'allowMic')
+      }}</PrimaryButton>
     </template>
 
     <template v-else-if="phase === 'capture-failed'">
-      <h2>本次檢測已中斷</h2>
-      <p class="main-copy">請重新進行本次檢測。</p>
-      <PrimaryButton block @click="retryAfterFailure">重新開始</PrimaryButton>
+      <h2>{{ t('ui', 'interruptedTitle') }}</h2>
+      <p class="main-copy">{{ t('ui', 'interruptedBody') }}</p>
+      <PrimaryButton block @click="retryAfterFailure">{{ t('ui', 'restart') }}</PrimaryButton>
     </template>
 
     <div v-if="showCancelConfirm" class="confirm-overlay">
       <div class="confirm-card">
-        <p>確定要取消本次檢測嗎？</p>
-        <p class="confirm-sub">本次錄音不會保存。</p>
+        <p>{{ t('engineFlow', 'confirmCancel') }}</p>
+        <p class="confirm-sub">{{ t('engineFlow', 'confirmCancelSub') }}</p>
         <div class="confirm-actions">
-          <PrimaryButton variant="secondary" block @click="dismissCancelConfirm"
-            >返回</PrimaryButton
-          >
-          <PrimaryButton variant="danger" block @click="confirmCancel">取消本次檢測</PrimaryButton>
+          <PrimaryButton variant="secondary" block @click="dismissCancelConfirm">{{
+            t('ui', 'back')
+          }}</PrimaryButton>
+          <PrimaryButton variant="danger" block @click="confirmCancel">{{
+            t('engineFlow', 'cancelSession')
+          }}</PrimaryButton>
         </div>
       </div>
     </div>

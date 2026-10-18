@@ -34,7 +34,7 @@ const props = defineProps<{ id: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
-const { t } = useI18n()
+const { t, tRegion, tSpec, formatPrice, formatDate, localeTag } = useI18n()
 
 // Plain synchronous statement during setup() — NOT inside onMounted() —
 // specifically so it starts before the `watch(() => props.id, loadListing,
@@ -207,7 +207,7 @@ watch(
 )
 
 function formatHistoryDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('zh-TW')
+  return formatDate(timestamp)
 }
 
 function historyReportPath(id: string): string {
@@ -398,7 +398,7 @@ function handleOpenBooking(): void {
 }
 
 function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString('zh-TW', {
+  return new Date(timestamp).toLocaleString(localeTag(), {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -523,11 +523,12 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
         </div>
 
         <div class="price-row">
-          <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
+          <span class="price">{{ formatPrice(listing.priceTwd) }}</span>
         </div>
 
         <p class="meta-row">
-          {{ listing.region }}・{{ listing.district }} ・ {{ t('listing', 'sellerPrefix') }}
+          {{ tRegion(listing.region) }}・{{ tRegion(listing.district) }} ・
+          {{ t('listing', 'sellerPrefix') }}
           {{ listing.sellerName }}
           <button
             class="favorite-inline-btn"
@@ -550,7 +551,7 @@ async function handleBookingSubmit(payload: { scheduledAt: number }): Promise<vo
           </div>
           <div class="info-row">
             <span>{{ t('listing', 'transmission') }}</span>
-            <span>{{ listing.vehicleSnapshot.transmission }}</span>
+            <span>{{ tSpec(listing.vehicleSnapshot.transmission) }}</span>
           </div>
           <div class="info-row">
             <span>{{ t('listing', 'color') }}</span>

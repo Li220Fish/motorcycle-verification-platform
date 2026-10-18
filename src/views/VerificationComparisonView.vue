@@ -12,6 +12,9 @@ import { verificationService } from '@/services/firebase/verification.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { ComparisonItem } from '@/services/verification/comparison.service'
 import type { TransactionDecision } from '@/types/verification'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
@@ -65,14 +68,14 @@ onMounted(load)
 
 <template>
   <div>
-    <AppHeader title="差異比對" back />
+    <AppHeader :title="t('comparison', 'pageTitle')" back />
 
     <div class="content">
-      <p v-if="loading">載入中...</p>
+      <p v-if="loading">{{ t('ui', 'loading') }}</p>
       <EmptyState
         v-else-if="!hasSellerLink"
-        title="未連結車輛驗證報告"
-        description="這台車目前沒有已完成的車輛驗證報告可供比對，僅顯示風險摘要與交易決策。"
+        :title="t('comparison', 'noLinkTitle')"
+        :description="t('comparison', 'noLinkDesc')"
       />
       <ComparisonSummary
         v-if="!loading"
@@ -89,7 +92,7 @@ onMounted(load)
         variant="secondary"
         @click="router.push(`/verification/${props.id}/report`)"
       >
-        查看完整報告
+        {{ t('ui', 'viewFullReport') }}
       </PrimaryButton>
     </div>
   </div>

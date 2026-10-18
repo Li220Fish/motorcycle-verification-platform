@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 /**
  * Phone-placement screen shown once before the Idle session (spec §11-14) —
@@ -13,29 +16,33 @@ defineProps<{ vehicleType: EngineTransmissionType }>()
 
 <template>
   <div class="placement-guide">
-    <p class="direction">螢幕朝上，手機頂端朝向車頭</p>
+    <p class="direction">{{ t('placementGuide', 'direction') }}</p>
     <div class="diagram">
-      <p class="vehicle-head">車頭 ↑</p>
-      <div v-if="vehicleType === 'manual'" class="fuel-tank">油箱</div>
+      <p class="vehicle-head">{{ t('placementGuide', 'vehicleHead') }}</p>
+      <div v-if="vehicleType === 'manual'" class="fuel-tank">
+        {{ t('placementGuide', 'fuelTank') }}
+      </div>
       <div class="phone-box">
         <span class="phone-emoji">📱</span>
-        <span class="phone-caption">手機頂端朝前</span>
+        <span class="phone-caption">{{ t('placementGuide', 'phoneCaption') }}</span>
       </div>
       <p class="placement-label">
-        {{ vehicleType === 'scooter' ? '中央腳踏板' : '前座坐墊' }}
+        {{
+          vehicleType === 'scooter' ? t('placementGuide', 'footboard') : t('placementGuide', 'seat')
+        }}
       </p>
     </div>
     <p class="main-copy">
       {{
         vehicleType === 'scooter'
-          ? '請將手機平放在中央腳踏板。'
-          : '請將手機平放在前座坐墊中央偏前的位置。'
+          ? t('placementGuide', 'scooterCopy')
+          : t('placementGuide', 'manualCopy')
       }}
     </p>
     <ul class="tips">
-      <li>✓ 手機保持固定</li>
-      <li>✓ 不要遮住麥克風</li>
-      <li>✓ 檢測中不要移動手機</li>
+      <li>{{ t('placementGuide', 'tipFixed') }}</li>
+      <li>{{ t('placementGuide', 'tipMic') }}</li>
+      <li>{{ t('placementGuide', 'tipNoMove') }}</li>
     </ul>
   </div>
 </template>

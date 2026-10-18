@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 /**
  * Forced "車輛已轉移" acknowledgment — shown from AppLayout.vue whenever the
  * signed-in user has an unread `vehicle_transferred` notification (see
@@ -21,7 +24,7 @@ defineEmits<{ ack: [] }>()
       <div class="card">
         <h3>{{ title }}</h3>
         <p>{{ body }}</p>
-        <button class="ack-button" @click="$emit('ack')">了解</button>
+        <button class="ack-button" @click="$emit('ack')">{{ t('ui', 'understood') }}</button>
       </div>
     </div>
   </Teleport>

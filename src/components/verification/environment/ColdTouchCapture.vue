@@ -18,6 +18,9 @@ import { storageService } from '@/services/firebase/storage.service'
 import { analyzeColdEngineTouchCheck } from '@/services/firebase/ai-analysis.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ verificationId: string }>()
 const emit = defineEmits<{ recordingActive: [boolean] }>()
@@ -211,44 +214,45 @@ onBeforeUnmount(() => {
       <div class="top-card-header">
         <div class="icon-chip"><Hand :size="20" /></div>
         <div class="top-card-titles">
-          <p class="eyebrow">目前檢測項目</p>
-          <h2>冷車狀態確認</h2>
+          <p class="eyebrow">{{ t('ui', 'currentItem') }}</p>
+          <h2>{{ t('coldTouch', 'title') }}</h2>
         </div>
       </div>
-      <p class="subhead">請先不要發動車輛</p>
+      <p class="subhead">{{ t('coldTouch', 'subhead') }}</p>
       <p class="main-copy">
-        請將鏡頭對準您要觸碰的引擎外部位置。開始後系統會倒數 3 秒，接著請用手指持續觸碰該位置滿 5
-        秒，過程全程由系統計時，請勿提前移開。
+        {{ t('coldTouch', 'body') }}
       </p>
       <div class="tips-box">
         <ul class="tips">
-          <li>手機／鏡頭保持穩定</li>
-          <li>觸碰位置全程入鏡</li>
-          <li>倒數開始後請勿提前移開手指</li>
+          <li>{{ t('coldTouch', 'tipSteady') }}</li>
+          <li>{{ t('coldTouch', 'tipInFrame') }}</li>
+          <li>{{ t('coldTouch', 'tipHold') }}</li>
         </ul>
       </div>
     </div>
 
     <template v-if="phase === 'intro'">
       <div class="panel-card">
-        <PrimaryButton block @click="handleStart">開始冷車檢測</PrimaryButton>
-        <p class="min-hint">共約 9 秒，時間由系統自動控制</p>
+        <PrimaryButton block @click="handleStart">{{ t('coldTouch', 'start') }}</PrimaryButton>
+        <p class="min-hint">{{ t('coldTouch', 'duration') }}</p>
       </div>
     </template>
 
     <template v-else-if="phase === 'checking'">
       <div class="panel-card">
-        <p class="checking">準備中…</p>
-        <button class="remeasure-btn" @click="handleCancelChecking">取消</button>
+        <p class="checking">{{ t('ui', 'preparing') }}</p>
+        <button class="remeasure-btn" @click="handleCancelChecking">
+          {{ t('common', 'cancel') }}
+        </button>
       </div>
     </template>
 
     <template v-else-if="phase === 'permission-denied'">
       <div class="panel-card">
-        <h2>需要相機與麥克風權限</h2>
-        <p class="main-copy">冷車狀態確認需要錄影。請允許 RiDE 使用相機與麥克風。</p>
+        <h2>{{ t('coldTouch', 'permTitle') }}</h2>
+        <p class="main-copy">{{ t('coldTouch', 'permBody') }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-        <PrimaryButton block @click="handleStart">允許相機與麥克風</PrimaryButton>
+        <PrimaryButton block @click="handleStart">{{ t('coldTouch', 'allow') }}</PrimaryButton>
       </div>
     </template>
 
@@ -261,39 +265,47 @@ onBeforeUnmount(() => {
           <p class="countdown-number">
             {{ Math.max(1, Math.ceil((PRE_ROLL_MS - elapsedMs) / 1000)) }}
           </p>
-          <p class="stage-hint">準備開始…</p>
+          <p class="stage-hint">{{ t('coldTouch', 'getReady') }}</p>
         </template>
         <template v-else-if="phase === 'contact'">
           <div class="recording-header">
             <span class="rec-dot" />
-            <span class="rec-label">請開始觸碰並保持不動</span>
+            <span class="rec-label">{{ t('coldTouch', 'touchNow') }}</span>
           </div>
           <EngineWaveform :active="true" :magnitude="null" />
           <p class="stage-hint">
-            剩餘
-            {{ Math.max(0, Math.ceil((PRE_ROLL_MS + CONTACT_WINDOW_MS - elapsedMs) / 1000)) }} 秒
+            {{
+              t('coldTouch', 'remaining', {
+                seconds: Math.max(
+                  0,
+                  Math.ceil((PRE_ROLL_MS + CONTACT_WINDOW_MS - elapsedMs) / 1000),
+                ),
+              })
+            }}
           </p>
         </template>
         <template v-else>
-          <p class="stage-hint done-mark">✓ 完成，即將結束錄影…</p>
+          <p class="stage-hint done-mark">{{ t('coldTouch', 'endingSoon') }}</p>
         </template>
       </div>
     </template>
 
     <template v-else-if="phase === 'saving'">
       <div class="panel-card">
-        <p class="checking">正在儲存…</p>
+        <p class="checking">{{ t('ui', 'savingNow') }}</p>
       </div>
     </template>
 
     <template v-else-if="phase === 'done'">
       <div class="panel-card">
-        <p v-if="coldCheckStatus === 'completed'" class="done-mark">✓ 冷車檢測已完成，AI 已確認</p>
+        <p v-if="coldCheckStatus === 'completed'" class="done-mark">
+          {{ t('coldTouch', 'aiDone') }}
+        </p>
         <p v-else-if="coldCheckStatus === 'failed'" class="error-text">
-          AI 判定失敗，請重新送出（不會需要重新錄影）。
+          {{ t('coldTouch', 'aiFailed') }}
         </p>
         <p v-else class="checking">
-          <Loader2 :size="16" class="spin" /> 冷車檢測已完成，AI 判定中，請稍候…
+          <Loader2 :size="16" class="spin" /> {{ t('coldTouch', 'aiPending') }}
         </p>
         <button
           v-if="coldCheckStatus === 'failed'"
@@ -301,18 +313,18 @@ onBeforeUnmount(() => {
           :disabled="retryingAnalysis"
           @click="handleRetryAnalysis"
         >
-          {{ retryingAnalysis ? '送出中…' : '↻ 重新送出 AI 判定' }}
+          {{ retryingAnalysis ? t('coldTouch', 'submitting') : t('coldTouch', 'resubmit') }}
         </button>
-        <button class="remeasure-btn" @click="handleRemeasure">↻ 重新測量</button>
+        <button class="remeasure-btn" @click="handleRemeasure">{{ t('ui', 'remeasure') }}</button>
       </div>
     </template>
 
     <template v-else-if="phase === 'failed'">
       <div class="panel-card">
-        <h2>本次檢測已中斷</h2>
-        <p class="main-copy">請重新進行本次檢測。</p>
+        <h2>{{ t('ui', 'interruptedTitle') }}</h2>
+        <p class="main-copy">{{ t('ui', 'interruptedBody') }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-        <PrimaryButton block @click="handleRetry">重新開始</PrimaryButton>
+        <PrimaryButton block @click="handleRetry">{{ t('ui', 'restart') }}</PrimaryButton>
       </div>
     </template>
   </div>

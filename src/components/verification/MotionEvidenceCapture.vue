@@ -8,6 +8,9 @@ import {
 import type { MotionSample } from '@/services/motion/motion-capture.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -30,7 +33,7 @@ async function handleStart(): Promise<void> {
     setTimeout(handleStop, durationSeconds * 1000)
   } catch (error) {
     supported.value = false
-    errorMessage.value = error instanceof Error ? error.message : '此裝置暫不支援動態感測'
+    errorMessage.value = error instanceof Error ? error.message : t('motionEvidence', 'unsupported')
   }
 }
 
@@ -60,7 +63,7 @@ async function handleStop(): Promise<void> {
   }
   await useVerificationStore().addEvidence(evidence)
   if (!hasSamples) {
-    errorMessage.value = '此裝置未回傳震動資料，已記錄為無法感測，請依觸感／觀察判斷後繼續下一步。'
+    errorMessage.value = t('motionEvidence', 'noData')
   }
 }
 
@@ -78,19 +81,25 @@ function latestReading(): { avgMagnitude: number; stddevMagnitude: number } | nu
 <template>
   <div class="motion-capture">
     <template v-if="!supported">
-      <p class="hint">此裝置暫不支援動態感測，可直接依觸感／觀察判斷後繼續下一步。</p>
+      <p class="hint">{{ t('motionEvidence', 'unsupportedHint') }}</p>
     </template>
     <template v-else>
       <p class="hint">
-        將手機平放於踏板或穩固支架上，再開始收集 {{ durationSeconds }} 秒震動資料。
+        {{ t('motionEvidence', 'instructions', { seconds: durationSeconds }) }}
       </p>
       <button v-if="!recording" class="capture-button" @click="handleStart">
-        開始收集震動資料
+        {{ t('motionEvidence', 'start') }}
       </button>
-      <p v-else class="recording">收集中...（{{ durationSeconds }} 秒）</p>
+      <p v-else class="recording">
+        {{ t('motionEvidence', 'collecting', { seconds: durationSeconds }) }}
+      </p>
       <p v-if="latestReading()" class="captured">
-        已記錄：平均震動 {{ latestReading()?.avgMagnitude }}，波動
-        {{ latestReading()?.stddevMagnitude }}
+        {{
+          t('motionEvidence', 'recorded', {
+            avg: latestReading()?.avgMagnitude ?? '',
+            std: latestReading()?.stddevMagnitude ?? '',
+          })
+        }}
       </p>
     </template>
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>

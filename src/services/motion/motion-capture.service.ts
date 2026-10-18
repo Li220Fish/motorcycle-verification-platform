@@ -1,3 +1,4 @@
+import { lt } from '@/i18n/locale-text'
 export interface MotionSample {
   timestamp: number
   x: number
@@ -34,14 +35,14 @@ class MotionCaptureService {
 
   async start(onSample: (sample: MotionSample) => void): Promise<void> {
     if (!this.isSupported()) {
-      throw new Error('此裝置暫不支援動態感測')
+      throw new Error(lt('此裝置暫不支援動態感測', "This device doesn't support motion sensing"))
     }
 
     const ctor = DeviceMotionEvent as DeviceMotionEventWithPermission
     if (typeof ctor.requestPermission === 'function') {
       const permission = await ctor.requestPermission()
       if (permission !== 'granted') {
-        throw new Error('此裝置暫不支援動態感測')
+        throw new Error(lt('此裝置暫不支援動態感測', "This device doesn't support motion sensing"))
       }
     }
 

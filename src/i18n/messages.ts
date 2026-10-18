@@ -1,3 +1,5 @@
+import { uiMessages } from './messages-ui'
+
 /**
  * Translation dictionary for RiDE's static UI chrome — labels, buttons,
  * headers, placeholders, empty states. Deliberately does NOT cover
@@ -13,7 +15,7 @@
  * subsystem — VerificationStepsView.vue plus ~20 components under
  * src/components/verification/).
  */
-export const messages = {
+const baseMessages = {
   zh: {
     nav: {
       home: '首頁',
@@ -78,7 +80,8 @@ export const messages = {
       termsS2Item1: '使用者須年滿法定成年年齡，並提供真實、正確的註冊資訊。',
       termsS2Item2:
         '帳號僅供本人使用，不得轉讓、出借或與他人共用；因帳號遭不當使用所生之損害，由帳號使用者自行承擔。',
-      termsS2Item3: '本服務得於發現違反本條款、提供虛偽資料，或有其他正當理由時，暫停或終止使用者之帳號。',
+      termsS2Item3:
+        '本服務得於發現違反本條款、提供虛偽資料，或有其他正當理由時，暫停或終止使用者之帳號。',
       termsS3Title: '三、驗車服務的性質與限制',
       termsS3Body1:
         '驗車報告之內容（含核心照片、基本檢查項目、引擎檢測數值、主動揭露資訊等）係由賣家與買家依流程指引自行拍攝、填寫或確認所產生，本服務提供拍攝引導、資料記錄與比對功能，<strong>並不保證</strong>報告內容之絕對真實性或車輛實際狀況與報告完全一致。使用者於交易前仍應自行實地檢視車輛、審慎判斷，本服務不對任何交易結果負擔保責任。',
@@ -169,7 +172,8 @@ export const messages = {
 
       contactIntro:
         '使用上有任何問題、發現功能異常，或想申請行使個人資料權利，歡迎透過以下方式與我們聯繫，我們會儘快回覆。',
-      contactNote: '服務時間：週一至週五 09:00–18:00（國定假日除外），我們通常會在 2 個工作日內回覆。',
+      contactNote:
+        '服務時間：週一至週五 09:00–18:00（國定假日除外），我們通常會在 2 個工作日內回覆。',
     },
     /** Verification checklist item titles, keyed by the item's stable id —
      *  looked up via useI18n's tItem(), never t() directly (see that
@@ -254,6 +258,11 @@ export const messages = {
       durationHint: '完整驗證約需 20～30 分鐘',
       upcomingAppointmentTitle: '與賣家預約看車時間！',
       scheduledAt: '約定時間 {time}',
+      resumeTitle: '這台車已有未完成的驗證',
+      resumeBody:
+        '你之前已開始這台車的買家驗證（目前狀態：{status}）。要接續上次的進度，還是重新開始一份新的驗證？重新開始會刪除舊的那份。',
+      resumeContinue: '接續上次的驗證',
+      resumeRestart: '重新開始新的驗證',
       unfinishedTitle: '尚未完成的驗證',
       longPressToDelete: '長按可刪除',
       unknownVehicle: '未知車輛',
@@ -283,6 +292,13 @@ export const messages = {
         '偵測到上次未把這個項目一次做完，先前記錄的影片、錄音與檢測結果將會清除，需要重新測試。',
       engineResetAck: '我知道了',
       errorCompleteFailed: '完成驗證失敗',
+      loadFailed: '載入驗證資料失敗，請返回後重試',
+      attemptCountdown: '⏱ {time} 內完成拍照＋引擎',
+      attemptExpiredTitle: '已超過 5 分鐘',
+      attemptExpiredBody:
+        '未在 5 分鐘內完成拍照與引擎檢測，這份驗證已退回草稿，所有內容都已清除，請重新開始。',
+      attemptExpiredOk: '我知道了',
+      sealLocked: '拍照與引擎檢測已完成並鎖定，無法再開啟修改或重新拍攝／錄製。',
     },
     corePhotoCapture: {
       preparingCamera: '準備相機中...',
@@ -298,8 +314,7 @@ export const messages = {
       selectItemAriaLabel: '選擇項目，長按可加備註',
       photoAriaLabel: '拍照',
       unreadableTitle: '這張可能無法判讀',
-      qualityHint:
-        '光線不足或失焦造成的細節損失沒辦法事後補救，重拍一張會讓檢測結果可靠很多。',
+      qualityHint: '光線不足或失焦造成的細節損失沒辦法事後補救，重拍一張會讓檢測結果可靠很多。',
       keepAnyway: '仍要使用',
       retake: '重拍',
       noteSuffix: '{title}備註',
@@ -599,11 +614,13 @@ export const messages = {
       saveFailed: '儲存失敗，請稍後再試',
       slotsTitle: '設定可預約時段',
       slotsHint:
-        '先設定一組時段，再選擇這組時段適用的日期——不同日期可以各自設定完全不同的時段組合（例如明天 15:00-18:00、後天卻是 12:00-16:00），新增規則後可以再新增下一組。',
+        '日曆上有藍點的日期代表已開放預約，點選日期即可查看、移除當天的時段。新增時段時，若選到已經有時段的日期，會自動合併進去。',
       noSlotsYet: '還沒有設定任何可預約時段。',
-      editRule: '編輯',
-      deleteRule: '刪除',
-      addRule: '新增時段規則',
+      dayTimesTitle: '{date} 的可預約時段',
+      noTimesThisDay: '這天沒有開放預約時段。',
+      deleteDay: '清除這天所有時段',
+      tapDateHint: '點選有藍點的日期查看當天時段。',
+      addRule: '新增可預約時段',
       step1: 'Step 1・設定時段',
       noTimesYet: '還沒有設定任何時段。',
       removeTime: '移除此時段',
@@ -611,7 +628,8 @@ export const messages = {
       newTimeAria: '新增時段',
       addTime: '新增時段',
       step2: 'Step 2・選擇適用日期',
-      step2Hint: '點選日曆上的日期（可複選），這些日期都會套用上方這組時段。',
+      step2Hint:
+        '點選日曆上的日期（可複選），這些日期都會加入上方的時段；原本已有時段的日期會保留原時段並合併新時段。',
       cancel: '取消',
       saveThisRule: '儲存這組時段',
       slotsUpdated: '已更新可預約時段',
@@ -789,8 +807,7 @@ export const messages = {
       pleaseWait: '請稍候...',
       orOtherWays: '或使用其他方式',
       googleLogin: 'Google 登入',
-      appleLogin: 'Apple 登入',
-      unavailableLogin: '{provider} 登入尚未啟用',
+      googleLoginFailed: 'Google 登入失敗，請稍後再試',
       quickLoginDivider: '測試帳號快速登入（僅限開發環境）',
     },
     reports: {
@@ -917,6 +934,9 @@ export const messages = {
       emptyDesc: '車輛選單資訊建檔後就會出現在這裡。',
       noMatchTitle: '找不到符合的車輛',
       noMatchDesc: '換個廠牌或車系關鍵字試試。',
+      searchPromptTitle: '輸入關鍵字搜尋車款',
+      searchPromptDesc:
+        '請在上方輸入廠牌、車系或車款名稱（例如：YAMAHA、勁戰），即可查看該車款的車輛資訊。',
       unknownYear: '年式未知',
     },
     registration: {
@@ -940,6 +960,9 @@ export const messages = {
       checking: '查詢中...',
       checkButton: '查詢邀請碼',
       confirmHint: '確認是這台車後即可完成轉移，這台車會轉移到你的「我的車輛」。',
+      fromUserLabel: '轉移人',
+      fromUserId: '用戶 ID：{id}',
+      receivedModalTitle: '你收到一台車輛',
       transferring: '轉移中...',
       confirmButton: '確認轉移',
       reenter: '重新輸入邀請碼',
@@ -1011,40 +1034,45 @@ export const messages = {
       termsS1Body:
         'RiDE ("the Service") provides motorcycle condition verification, verification report generation, used-motorcycle listings and matching, and in-app chat and viewing appointments between buyers and sellers. Please read these Terms in full before using the Service; registering or signing in means you have read, understood, and agreed to be bound by them.',
       termsS2Title: '2. Accounts and Eligibility',
-      termsS2Item1: 'Users must be of legal adult age and must provide true and accurate registration information.',
+      termsS2Item1:
+        'Users must be of legal adult age and must provide true and accurate registration information.',
       termsS2Item2:
-        'An account is for the registered user\'s own use only and may not be transferred, lent, or shared; the account holder bears responsibility for any damage arising from improper use of their account.',
+        "An account is for the registered user's own use only and may not be transferred, lent, or shared; the account holder bears responsibility for any damage arising from improper use of their account.",
       termsS2Item3:
         'The Service may suspend or terminate an account upon discovering a violation of these Terms, submission of false information, or for other legitimate reasons.',
       termsS3Title: '3. Nature and Limits of the Verification Service',
       termsS3Body1:
-        'Verification report content (including core photos, basic inspection items, engine measurement values, and voluntary disclosures) is captured, filled in, or confirmed by the seller and buyer themselves, following the Service\'s guided flow. The Service provides capture guidance, data recording, and comparison features, but <strong>does not guarantee</strong> that the report content is absolutely accurate or that the vehicle\'s actual condition fully matches the report. Users should still inspect the vehicle in person and exercise their own judgment before any transaction; the Service bears no warranty liability for transaction outcomes.',
+        "Verification report content (including core photos, basic inspection items, engine measurement values, and voluntary disclosures) is captured, filled in, or confirmed by the seller and buyer themselves, following the Service's guided flow. The Service provides capture guidance, data recording, and comparison features, but <strong>does not guarantee</strong> that the report content is absolutely accurate or that the vehicle's actual condition fully matches the report. Users should still inspect the vehicle in person and exercise their own judgment before any transaction; the Service bears no warranty liability for transaction outcomes.",
       termsS3Body2:
-        'Registration document verification only confirms that basic information such as the engine number can be recognized from the uploaded registration photo. It is <strong>not equivalent</strong> to an official inspection by the motor vehicle authority, and does not constitute any guarantee by the Service regarding the vehicle\'s legality or title status.',
+        "Registration document verification only confirms that basic information such as the engine number can be recognized from the uploaded registration photo. It is <strong>not equivalent</strong> to an official inspection by the motor vehicle authority, and does not constitute any guarantee by the Service regarding the vehicle's legality or title status.",
       termsS4Title: '4. Listings and Transactions',
       termsS4Item1:
         'Before a vehicle can be listed, it must have a completed verification record of the "vehicle verification" type; listing content must match the verification record and the vehicle\'s actual condition, and must not be false, duplicated, or misleading.',
       termsS4Item2:
-        'Viewing appointments (requesting, accepting/declining/canceling) and post-sale vehicle transfer all take place through the Service\'s own in-app flow. The Service does not take part in price negotiation or the exchange of money between buyer and seller; transaction security and payment risk are negotiated and borne by the parties themselves.',
+        "Viewing appointments (requesting, accepting/declining/canceling) and post-sale vehicle transfer all take place through the Service's own in-app flow. The Service does not take part in price negotiation or the exchange of money between buyer and seller; transaction security and payment risk are negotiated and borne by the parties themselves.",
       termsS4Item3:
-        'Once a seller confirms a vehicle transfer in the system, ownership of that vehicle is transferred to the buyer and cannot be unilaterally reversed — please verify the buyer\'s identity and the transaction details again before confirming.',
+        "Once a seller confirms a vehicle transfer in the system, ownership of that vehicle is transferred to the buyer and cannot be unilaterally reversed — please verify the buyer's identity and the transaction details again before confirming.",
       termsS5Title: '5. User Content',
       termsS5Body:
         'Text, photos, videos, and other content users upload in chat, the discussion center, and similar features ("User Content") remain the property of the user; however, the user grants the Service a license to store, display, and process that content as necessary to provide, operate, and improve the Service. Users must ensure their uploaded content does not infringe the intellectual property, privacy, or other lawful rights of others, and must not contain unlawful, harassing, discriminatory, or otherwise inappropriate content.',
       termsS6Title: '6. Prohibited Conduct',
-      termsS6Item1: 'Uploading a falsified registration document, fabricated vehicle condition data, or otherwise misleading other users.',
-      termsS6Item2: 'Circumventing or disrupting the normal operation of the Service\'s verification, notification, rating, or other mechanisms.',
-      termsS6Item3: 'Using automated tools to bulk-scrape data from the Service, or engaging in any conduct that may harm system stability.',
-      termsS6Item4: 'Using the Service to engage in any activity that violates the laws of the Republic of China.',
+      termsS6Item1:
+        'Uploading a falsified registration document, fabricated vehicle condition data, or otherwise misleading other users.',
+      termsS6Item2:
+        "Circumventing or disrupting the normal operation of the Service's verification, notification, rating, or other mechanisms.",
+      termsS6Item3:
+        'Using automated tools to bulk-scrape data from the Service, or engaging in any conduct that may harm system stability.',
+      termsS6Item4:
+        'Using the Service to engage in any activity that violates the laws of the Republic of China.',
       termsS7Title: '7. Disclaimer and Limitation of Liability',
       termsS7Body:
         'The Service is provided "as is," without any warranty that it will be uninterrupted, error-free, or fully meet any user\'s specific needs. To the maximum extent permitted by law, the Service is not liable for any direct, indirect, incidental, or consequential damages arising from the use of, or inability to use, the Service; in any case, the Service\'s total liability shall not exceed the fees (if any) the user paid to use the Service in the twelve months prior to the event.',
       termsS8Title: '8. Changes to These Terms and Termination',
       termsS8Body:
-        'The Service may revise these Terms as needed and will post the revised version on this page; material changes will also be announced via an in-app notification. Continued use of the Service after a revision constitutes acceptance of the revised Terms. Users may stop using the Service at any time; the Service may also suspend or terminate a user\'s account for violating these Terms.',
+        "The Service may revise these Terms as needed and will post the revised version on this page; material changes will also be announced via an in-app notification. Continued use of the Service after a revision constitutes acceptance of the revised Terms. Users may stop using the Service at any time; the Service may also suspend or terminate a user's account for violating these Terms.",
       termsS9Title: '9. Governing Law and Jurisdiction',
       termsS9Body:
-        'These Terms are governed by and construed in accordance with the laws of the Republic of China. Any dispute shall be submitted to the district court with jurisdiction over the Service\'s place of operation as the court of first instance, as agreed by both parties.',
+        "These Terms are governed by and construed in accordance with the laws of the Republic of China. Any dispute shall be submitted to the district court with jurisdiction over the Service's place of operation as the court of first instance, as agreed by both parties.",
 
       privacyS1Title: '1. Scope',
       privacyS1Body:
@@ -1058,37 +1086,42 @@ export const messages = {
       privacyS2Item4:
         '<strong>Device and technical data:</strong> the device identifier required for push notifications (FCM token), app version, operating system, and other basic technical information.',
       privacyS2Note:
-        'The Service does not actively collect your real-time location; a vehicle\'s listed area is only the free-text description the user enters when creating the listing.',
+        "The Service does not actively collect your real-time location; a vehicle's listed area is only the free-text description the user enters when creating the listing.",
       privacyS3Title: '3. Purposes of Use',
       privacyS3Item1: 'Providing account registration, sign-in, and identity verification.',
-      privacyS3Item2: 'Generating verification reports and comparing the buyer\'s and seller\'s verification results.',
-      privacyS3Item3: 'Providing used-motorcycle listing, search, viewing appointment, and in-app chat matching features.',
-      privacyS3Item4: 'Sending system notifications related to your account and, for categories you\'ve consented to, push notifications.',
-      privacyS3Item5: 'Operating, debugging, and improving the Service\'s features and user experience.',
-      privacyS3Item6: 'Responding to legal requirements or lawful requests from competent authorities.',
+      privacyS3Item2:
+        "Generating verification reports and comparing the buyer's and seller's verification results.",
+      privacyS3Item3:
+        'Providing used-motorcycle listing, search, viewing appointment, and in-app chat matching features.',
+      privacyS3Item4:
+        "Sending system notifications related to your account and, for categories you've consented to, push notifications.",
+      privacyS3Item5:
+        "Operating, debugging, and improving the Service's features and user experience.",
+      privacyS3Item6:
+        'Responding to legal requirements or lawful requests from competent authorities.',
       privacyS4Title: '4. Third-Party Service Providers',
       privacyS4Body:
-        'The Service uses third-party cloud service providers (for example, infrastructure services for account authentication, database and file storage, and push notifications) to help process the data described above. These providers process data only to the extent necessary to provide their services and are bound by their own data protection policies as well as the Service\'s requirements. The Service does not sell your personal data to third parties, nor does it use your data for advertising purposes unrelated to the Service.',
+        "The Service uses third-party cloud service providers (for example, infrastructure services for account authentication, database and file storage, and push notifications) to help process the data described above. These providers process data only to the extent necessary to provide their services and are bound by their own data protection policies as well as the Service's requirements. The Service does not sell your personal data to third parties, nor does it use your data for advertising purposes unrelated to the Service.",
       privacyS5Title: '5. Data Storage and Security',
       privacyS5Body:
-        'Your data is stored in a cloud database with access controls, with read permissions set according to the nature of the data (for example, the original registration document photo is accessible only to the system\'s verification process and to you; the visibility of a published verification report is determined by your own settings). The Service takes reasonable technical and organizational measures to protect data security, but cannot guarantee that unauthorized access will never occur; in the event of a significant security incident, affected users will be notified as required by law.',
+        "Your data is stored in a cloud database with access controls, with read permissions set according to the nature of the data (for example, the original registration document photo is accessible only to the system's verification process and to you; the visibility of a published verification report is determined by your own settings). The Service takes reasonable technical and organizational measures to protect data security, but cannot guarantee that unauthorized access will never occur; in the event of a significant security incident, affected users will be notified as required by law.",
       privacyS6Title: '6. Data Retention',
       privacyS6Body:
         'The data described above is retained for as long as you use the Service in order to provide it. After an account is terminated, the Service will delete or de-identify personal data that is no longer needed within a reasonable period; however, data that must be retained by law (such as transaction records) or that is still needed for a legitimate business purpose will be retained for the period required by law.',
       privacyS7Title: '7. Your Rights',
       privacyS7Body:
         'You may, as permitted by law, request to query, review, copy, supplement, or correct your personal data, or request that the Service stop collecting, processing, or using it, or request its deletion. Some data related to transaction records or security audits may not be deletable immediately due to legal requirements or legitimate business needs. To exercise the rights above, please contact us using the methods listed under "Contact Us" on this page.',
-      privacyS8Title: '8. Children\'s Privacy',
+      privacyS8Title: "8. Children's Privacy",
       privacyS8Body:
         'The Service does not intend to collect personal data from anyone under the legal age of majority. If the Service becomes aware that a minor has registered using false information, it may terminate that account and delete the related data.',
       privacyS9Title: '9. Changes to This Policy',
       privacyS9Body:
         'This Policy may be revised in response to changes in the Service or in applicable law; the revised version will be posted on this page, and material changes will also be announced via an in-app notification.',
 
-      faqQ1: 'Why can\'t I start a verification right after adding a vehicle?',
+      faqQ1: "Why can't I start a verification right after adding a vehicle?",
       faqA1:
         'Before a vehicle\'s first verification, it must pass "registration document verification" — photographing the registration document so the system can match the engine number. This ensures the verification report corresponds to a real vehicle actually owned by the vehicle\'s owner; once it passes, "Start a new verification" unlocks.',
-      faqQ2: 'How is a buyer\'s re-verification different from the seller\'s own verification?',
+      faqQ2: "How is a buyer's re-verification different from the seller's own verification?",
       faqA2:
         'Core photos, the 12 basic items, and the cold-engine check work exactly the same way; the difference is the "voluntary disclosure" step — the buyer sees the items the seller actually disclosed at the time, plus common known issues for that model that the system adds automatically, for the buyer to confirm one by one. None of these items are required, so they can be skipped without affecting completion of the verification.',
       faqQ3: 'Where do I accept, decline, or cancel after requesting a viewing appointment?',
@@ -1100,13 +1133,15 @@ export const messages = {
       faqQ5: 'If I turn off notifications, will I still receive messages?',
       faqA5:
         'In "Settings › Notifications," each notification category can be toggled independently — turning off a category means RiDE will no longer create any notifications for it (they also won\'t appear in the list). "Push notifications" is a separate master switch that only controls whether your phone shows system push alerts; it\'s independent of whether notifications are recorded in the list itself.',
-      faqQ6: 'What\'s the difference between a vehicle transfer invite code and listing a vehicle for sale?',
+      faqQ6:
+        "What's the difference between a vehicle transfer invite code and listing a vehicle for sale?",
       faqA6:
-        'Listing a vehicle for sale is a public listing that goes through the full flow of viewing appointments and verification. A vehicle transfer invite code is a time-limited 6-digit code the owner generates themselves and hands directly to the next owner to redeem privately — there\'s no listing, appointment, or verification step, making it suited to gifting a vehicle or a private sale that doesn\'t need the public marketplace.',
+        "Listing a vehicle for sale is a public listing that goes through the full flow of viewing appointments and verification. A vehicle transfer invite code is a time-limited 6-digit code the owner generates themselves and hands directly to the next owner to redeem privately — there's no listing, appointment, or verification step, making it suited to gifting a vehicle or a private sale that doesn't need the public marketplace.",
 
       contactIntro:
-        'If you run into any issues, notice something not working correctly, or want to exercise your personal data rights, feel free to reach us using the methods below — we\'ll get back to you as soon as we can.',
-      contactNote: 'Support hours: Monday–Friday, 09:00–18:00 (excluding public holidays). We typically reply within 2 business days.',
+        "If you run into any issues, notice something not working correctly, or want to exercise your personal data rights, feel free to reach us using the methods below — we'll get back to you as soon as we can.",
+      contactNote:
+        'Support hours: Monday–Friday, 09:00–18:00 (excluding public holidays). We typically reply within 2 business days.',
     },
     itemLabels: {
       'PREP-01': 'Service History',
@@ -1168,7 +1203,8 @@ export const messages = {
       sellerDescription:
         'A full condition check that builds a verification report you can share with buyers.',
       buyerTitle: 'Buyer Re-verification',
-      buyerDescription: "Review the vehicle's verification data and confirm it matches the vehicle in person.",
+      buyerDescription:
+        "Review the vehicle's verification data and confirm it matches the vehicle in person.",
       processing: 'Processing...',
       start: 'Start',
       addVehicle: '+ Add Vehicle',
@@ -1182,8 +1218,13 @@ export const messages = {
       pickExistingVehicle: 'Select an existing vehicle',
       reselectType: '‹ Choose type again',
       durationHint: 'A full verification takes about 20–30 minutes',
-      upcomingAppointmentTitle: "You have a viewing appointment with the seller!",
+      upcomingAppointmentTitle: 'You have a viewing appointment with the seller!',
       scheduledAt: 'Scheduled for {time}',
+      resumeTitle: 'This vehicle has an unfinished verification',
+      resumeBody:
+        "You've already started a buyer verification for this vehicle (status: {status}). Continue where you left off, or start a new one? Starting over deletes the old one.",
+      resumeContinue: 'Continue Previous Verification',
+      resumeRestart: 'Start a New Verification',
       unfinishedTitle: 'Unfinished Verifications',
       longPressToDelete: 'Press and hold to delete',
       unknownVehicle: 'Unknown Vehicle',
@@ -1206,15 +1247,23 @@ export const messages = {
         'Please finish the photo/video/audio this item needs before continuing.',
       leaveEngineTitle: 'Leave "Cold Start + Engine Check"?',
       leaveEngineBody:
-        'This item must be completed in one go once started. Leaving will delete the video, audio, and measurements recorded so far — you\'ll need to start over next time.',
+        "This item must be completed in one go once started. Leaving will delete the video, audio, and measurements recorded so far — you'll need to start over next time.",
       leaveEngineBack: 'Back to the check',
       leaveEngineDeleting: 'Deleting...',
       leaveEngineConfirmDelete: 'Leave and delete record',
       engineResetTitle: '"Cold Start + Engine Check" wasn\'t finished',
       engineResetBody:
-        'We noticed this item wasn\'t completed in one sitting last time. The video, audio, and measurements already recorded will be cleared, and you\'ll need to test again.',
+        "We noticed this item wasn't completed in one sitting last time. The video, audio, and measurements already recorded will be cleared, and you'll need to test again.",
       engineResetAck: 'Got it',
       errorCompleteFailed: 'Failed to complete verification',
+      loadFailed: 'Failed to load this verification. Please go back and try again.',
+      attemptCountdown: '⏱ {time} for photos + engine',
+      attemptExpiredTitle: '5 minutes have passed',
+      attemptExpiredBody:
+        'Photos and the engine check were not both finished within 5 minutes, so this verification was reset to a draft and all its content was deleted. Please start again.',
+      attemptExpiredOk: 'Got it',
+      sealLocked:
+        'Photos and the engine check are complete and locked — they can no longer be opened, retaken or re-recorded.',
     },
     corePhotoCapture: {
       preparingCamera: 'Preparing camera...',
@@ -1244,7 +1293,8 @@ export const messages = {
     healthCheckIssuePhoto: {
       eyebrow: 'Photograph the Issue',
       skip: "Skip, don't take a photo",
-      instruction: 'Line up with the dashed frame, hold your phone level, and take a clear photo of the issue',
+      instruction:
+        'Line up with the dashed frame, hold your phone level, and take a clear photo of the issue',
       uploadFailed: 'Upload failed — please retake the photo',
     },
     verificationItem: {
@@ -1283,7 +1333,7 @@ export const messages = {
       analysisHotEngineSensorSession: 'Hot Engine Audio / Vibration Analysis',
     },
     verificationCategoryNav: {
-      lockedOrderHint: 'Complete in order, steps can\'t be skipped',
+      lockedOrderHint: "Complete in order, steps can't be skipped",
     },
     common: {
       cancel: 'Cancel',
@@ -1538,11 +1588,13 @@ export const messages = {
       saveFailed: 'Save failed, please try again later',
       slotsTitle: 'Set Available Viewing Times',
       slotsHint:
-        'Set a group of times, then pick which dates they apply to — different dates can use completely different time groups (e.g. tomorrow 15:00-18:00, the day after 12:00-16:00). Add as many rules as you need.',
+        'Dates with a blue dot are open for viewing — tap a date to see or remove its times. When adding times, any date that already has times keeps them and the new ones are merged in.',
       noSlotsYet: 'No viewing times set yet.',
-      editRule: 'Edit',
-      deleteRule: 'Delete',
-      addRule: 'Add Time Rule',
+      dayTimesTitle: 'Viewing times on {date}',
+      noTimesThisDay: 'No viewing times on this day.',
+      deleteDay: 'Clear all times on this day',
+      tapDateHint: 'Tap a date with a blue dot to see its times.',
+      addRule: 'Add Viewing Times',
       step1: 'Step 1 · Set Times',
       noTimesYet: 'No times set yet.',
       removeTime: 'Remove this time',
@@ -1551,7 +1603,7 @@ export const messages = {
       addTime: 'Add Time',
       step2: 'Step 2 · Choose Dates',
       step2Hint:
-        'Tap dates on the calendar (multi-select) — they will all use the time group above.',
+        'Tap dates on the calendar (multi-select) — the times above are added to each. Dates that already have times keep them and merge in the new ones.',
       cancel: 'Cancel',
       saveThisRule: 'Save This Rule',
       slotsUpdated: 'Viewing times updated',
@@ -1737,8 +1789,7 @@ export const messages = {
       pleaseWait: 'Please wait...',
       orOtherWays: 'Or continue with',
       googleLogin: 'Sign in with Google',
-      appleLogin: 'Sign in with Apple',
-      unavailableLogin: '{provider} sign-in is not available yet',
+      googleLoginFailed: 'Google sign-in failed. Please try again later.',
       quickLoginDivider: 'Quick test login (dev only)',
     },
     reports: {
@@ -1866,6 +1917,9 @@ export const messages = {
       emptyDesc: 'Vehicle catalog entries will appear here once added.',
       noMatchTitle: 'No matching vehicles',
       noMatchDesc: 'Try a different brand or series keyword.',
+      searchPromptTitle: 'Search for a model',
+      searchPromptDesc:
+        'Type a brand, series or model name above (e.g. YAMAHA, Cygnus) to see that model’s vehicle information.',
       unknownYear: 'Year unknown',
     },
     registration: {
@@ -1892,6 +1946,9 @@ export const messages = {
       checkButton: 'Check Code',
       confirmHint:
         'Confirming this is the right vehicle completes the transfer into your "My Vehicles".',
+      fromUserLabel: 'Transferred by',
+      fromUserId: 'User ID: {id}',
+      receivedModalTitle: 'You received a vehicle',
       transferring: 'Transferring...',
       confirmButton: 'Confirm Transfer',
       reenter: 'Enter a Different Code',
@@ -1901,5 +1958,10 @@ export const messages = {
     },
   },
 } as const
+
+export const messages = {
+  zh: { ...baseMessages.zh, ...uiMessages.zh },
+  en: { ...baseMessages.en, ...uiMessages.en },
+}
 
 export type MessageKey = typeof messages.zh

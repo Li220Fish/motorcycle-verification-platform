@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Bike, Store } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 defineProps<{ listing: MockMarketListing }>()
+const { t, formatPrice } = useI18n()
 </script>
 
 <template>
@@ -25,18 +27,22 @@ defineProps<{ listing: MockMarketListing }>()
            their own badge instead (see marketplace-mock.ts). Icon-only and
            inline with the title (not its own row) so it never crowds out
            the price/mileage rows within the card's fixed height. -->
-      <span v-if="listing.sellerType === 'dealer'" class="dealer-badge" title="認證車商">
+      <span
+        v-if="listing.sellerType === 'dealer'"
+        class="dealer-badge"
+        :title="t('marketCard', 'dealer')"
+      >
         <Store :size="11" />
       </span>
     </div>
     <p class="year">{{ listing.vehicleSnapshot.manufactureYear }}</p>
     <div class="stat-row">
-      <span class="stat-label">里程</span>
+      <span class="stat-label">{{ t('marketCard', 'mileage') }}</span>
       <span class="stat-value">{{ listing.vehicleSnapshot.mileage.toLocaleString() }} km</span>
     </div>
     <div class="stat-row">
-      <span class="stat-label">價格</span>
-      <span class="stat-value price">${{ listing.priceTwd.toLocaleString() }}</span>
+      <span class="stat-label">{{ t('marketCard', 'price') }}</span>
+      <span class="stat-value price">{{ formatPrice(listing.priceTwd) }}</span>
     </div>
   </div>
 </template>

@@ -13,6 +13,7 @@ import type {
   ConversationContext,
   MemberSnapshot,
 } from '@/services/chat/chat.types'
+import { lt } from '@/i18n/locale-text'
 
 export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore()
@@ -47,7 +48,10 @@ export const useChatStore = defineStore('chat', () => {
   function mySnapshot(): MemberSnapshot | undefined {
     const user = authStore.user
     if (!user) return undefined
-    return { displayName: user.displayName ?? user.email ?? '使用者', photoUrl: user.photoUrl }
+    return {
+      displayName: user.displayName ?? user.email ?? lt('使用者', 'User'),
+      photoUrl: user.photoUrl,
+    }
   }
 
   /** Call once per session (e.g. from the messages/home shell) — idempotent per uid. */
@@ -121,7 +125,7 @@ export const useChatStore = defineStore('chat', () => {
         mySnapshot(),
       )
     } catch (error) {
-      sendError.value = error instanceof Error ? error.message : '傳送失敗'
+      sendError.value = error instanceof Error ? error.message : lt('傳送失敗', 'Failed to send')
       throw error
     }
   }
@@ -152,7 +156,8 @@ export const useChatStore = defineStore('chat', () => {
         mySnapshot(),
       )
     } catch (error) {
-      sendError.value = error instanceof Error ? error.message : '圖片上傳失敗'
+      sendError.value =
+        error instanceof Error ? error.message : lt('圖片上傳失敗', 'Image upload failed')
       throw error
     }
   }

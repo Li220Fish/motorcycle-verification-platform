@@ -11,6 +11,9 @@
 import { ref } from 'vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{ verificationId: string }>()
 const emit = defineEmits<{ advance: [] }>()
@@ -42,17 +45,17 @@ async function handleDone(): Promise<void> {
       <img
         v-if="!gifFailed"
         :src="gifSrc"
-        alt="騎車示意動畫"
+        :alt="t('rideTransition', 'gifAlt')"
         class="ride-gif"
         @error="gifFailed = true"
       />
       <div v-else class="gif-fallback">🏍️</div>
     </div>
-    <h2>請開始上路測試</h2>
+    <h2>{{ t('rideTransition', 'title') }}</h2>
     <p class="main-copy">
-      請依平常騎乘方式上路一小段路程，讓引擎進入熱車狀態。完成後回到此畫面，點擊下方按鈕繼續熱車檢查。
+      {{ t('rideTransition', 'body') }}
     </p>
-    <PrimaryButton block @click="handleDone">已完成上路，開始熱車檢查</PrimaryButton>
+    <PrimaryButton block @click="handleDone">{{ t('rideTransition', 'done') }}</PrimaryButton>
   </div>
 </template>
 

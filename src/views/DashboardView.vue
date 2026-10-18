@@ -15,7 +15,10 @@ const router = useRouter()
 const { t } = useI18n()
 
 const displayName = computed(
-  () => authStore.user?.displayName || authStore.user?.email?.split('@')[0] || '朋友',
+  () =>
+    authStore.user?.displayName ||
+    authStore.user?.email?.split('@')[0] ||
+    t('settingsExtra', 'friend'),
 )
 </script>
 

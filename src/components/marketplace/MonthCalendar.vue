@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
+import { useI18n } from '@/composables/useI18n'
+
 const props = defineProps<{
   /** 'YYYY-MM-DD' dates to render highlighted (available). */
   highlightedDates: string[]
@@ -12,10 +14,24 @@ const props = defineProps<{
    *  left unset; both can render together since a day-cell's "selected"
    *  style just checks membership in either. */
   selectedDates?: string[]
+  /** Dates that get a small blue dot under the day number (seller's
+   *  MyListingManageView.vue overview: "this day has open viewing times"). */
+  dottedDates?: string[]
 }>()
 const emit = defineEmits<{ selectDate: [string] }>()
 
-const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+const { t, localeTag } = useI18n()
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+const weekdayLabels = computed(() => WEEKDAY_KEYS.map((key) => t('calendar', key)))
+const monthLabel = computed(() =>
+  t('calendar', 'monthLabel', {
+    year: viewYear.value,
+    month: viewMonth.value + 1,
+    monthName: new Date(viewYear.value, viewMonth.value, 1).toLocaleString(localeTag(), {
+      month: 'long',
+    }),
+  }),
+)
 
 const today = new Date()
 const todayKey = toKey(today.getFullYear(), today.getMonth(), today.getDate())
@@ -32,6 +48,7 @@ function toKey(year: number, month: number, day: number): string {
 
 const highlightedSet = computed(() => new Set(props.highlightedDates))
 const selectedSet = computed(() => new Set(props.selectedDates ?? []))
+const dottedSet = computed(() => new Set(props.dottedDates ?? []))
 
 interface DayCell {
   day: number
@@ -75,17 +92,17 @@ function handleNextMonth(): void {
 <template>
   <div class="calendar">
     <div class="calendar-head">
-      <button class="nav-btn" aria-label="上個月" @click="handlePrevMonth">
+      <button class="nav-btn" :aria-label="t('calendar', 'prevMonth')" @click="handlePrevMonth">
         <ChevronLeft :size="18" />
       </button>
-      <span class="month-label">{{ viewYear }}年 {{ viewMonth + 1 }}月</span>
-      <button class="nav-btn" aria-label="下個月" @click="handleNextMonth">
+      <span class="month-label">{{ monthLabel }}</span>
+      <button class="nav-btn" :aria-label="t('calendar', 'nextMonth')" @click="handleNextMonth">
         <ChevronRight :size="18" />
       </button>
     </div>
 
     <div class="weekday-row">
-      <span v-for="label in WEEKDAY_LABELS" :key="label">{{ label }}</span>
+      <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
     </div>
 
     <div class="day-grid">
@@ -103,6 +120,7 @@ function handleNextMonth(): void {
           @click="emit('selectDate', cell.key)"
         >
           {{ cell.day }}
+          <span v-if="dottedSet.has(cell.key)" class="day-dot" />
         </button>
       </template>
     </div>
@@ -189,5 +207,24 @@ function handleNextMonth(): void {
 .day-cell.selected {
   background: var(--color-primary);
   color: #fff;
+}
+
+.day-cell {
+  position: relative;
+}
+
+.day-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  transform: translateX(-50%);
+}
+
+.day-cell.selected .day-dot {
+  background: #fff;
 }
 </style>

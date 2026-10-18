@@ -53,12 +53,20 @@ export async function createVehicleTransferInvite(
   return response.data
 }
 
+/** Who is transferring the vehicle — display name + uid with its middle
+ *  masked (e.g. "Ab12******Mn34"); the full uid is never sent. */
+export interface VehicleTransferParty {
+  displayName: string
+  maskedId: string
+}
+
 export interface PeekVehicleTransferInviteResult {
   vehicleId: string
   brand: string
   model: string
   manufactureYear: number | null
   photo: string | null
+  fromUser?: VehicleTransferParty
 }
 
 export async function peekVehicleTransferInvite(

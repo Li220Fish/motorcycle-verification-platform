@@ -7,7 +7,7 @@ import { useI18n } from '@/composables/useI18n'
 import type { MissingRequiredItem, SectionProgress } from '@/stores/verification.store'
 import type { VerificationSection } from '@/data/verification'
 
-const { t, tItem } = useI18n()
+const { t, tItem, tItemText } = useI18n()
 
 const props = defineProps<{
   sections: VerificationSection[]
@@ -118,7 +118,9 @@ const canSubmit = () =>
           <span class="card-title">{{ tItem(section.id, section.title) }}</span>
           <Lock v-if="section.lockedOrder" :size="14" class="lock-icon" />
         </div>
-        <p class="card-desc">{{ section.shortDescription }}</p>
+        <p class="card-desc">
+          {{ tItemText(section.id, 'description', section.shortDescription) }}
+        </p>
         <div class="card-status">
           <Check v-if="statusFor(section.id) === 'done'" :size="14" class="status-icon done" />
           <Circle
@@ -156,7 +158,11 @@ const canSubmit = () =>
 
     <PrimaryButton block :disabled="completing || !canSubmit()" @click="emit('complete')">
       <Loader2 v-if="completing" :size="16" class="spin" />
-      {{ completing ? t('verificationHome', 'processing') : t('verificationHub', 'completeVerification') }}
+      {{
+        completing
+          ? t('verificationHome', 'processing')
+          : t('verificationHub', 'completeVerification')
+      }}
     </PrimaryButton>
   </div>
 </template>

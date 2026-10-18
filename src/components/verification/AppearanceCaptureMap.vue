@@ -5,6 +5,9 @@ import { Check, ChevronRight } from 'lucide-vue-next'
 import MotorcycleDiagram from './MotorcycleDiagram.vue'
 import { APPEARANCE_CAPTURE_GROUPS } from '@/data/verification/appearance-groups'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ selectGroup: [string] }>()
 
@@ -36,7 +39,8 @@ const overallTotal = computed(() =>
 <template>
   <div class="capture-map">
     <p class="lead">
-      點選部位開始拍攝 <span class="count">{{ overallDone }}/{{ overallTotal }}</span>
+      {{ t('appearanceMap', 'lead') }}
+      <span class="count">{{ overallDone }}/{{ overallTotal }}</span>
     </p>
 
     <MotorcycleDiagram

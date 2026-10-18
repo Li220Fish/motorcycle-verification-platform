@@ -8,7 +8,7 @@ import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import type { VehicleModelProfile } from '@/services/firebase/vehicle-model.service'
 
 const props = defineProps<{ modelId: string }>()
-const { t } = useI18n()
+const { t, tSpec } = useI18n()
 
 const model = ref<VehicleModelProfile | null>(null)
 const loaded = ref(false)
@@ -32,7 +32,7 @@ const specRows = computed<SpecRow[]>(() => {
     rows.push({ label: t('vehicleKnowledge', 'displacement'), value: `${displacementCc} c.c.` })
   }
   if (transmission) {
-    rows.push({ label: t('vehicleKnowledge', 'transmission'), value: transmission })
+    rows.push({ label: t('vehicleKnowledge', 'transmission'), value: tSpec(transmission) })
   }
   if (specs.maxPowerHp != null) {
     rows.push({ label: t('vehicleKnowledge', 'maxPower'), value: `${specs.maxPowerHp} ps` })
@@ -96,7 +96,7 @@ onMounted(async () => {
           <span v-if="model.modelYear" class="tag">
             {{ t('vehicleKnowledge', 'modelYear', { year: model.modelYear }) }}
           </span>
-          <span v-if="model.bodyType" class="tag">{{ model.bodyType }}</span>
+          <span v-if="model.bodyType" class="tag">{{ tSpec(model.bodyType) }}</span>
           <span class="tag">{{
             model.powerType === 'electric'
               ? t('vehicleKnowledge', 'electric')

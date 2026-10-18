@@ -10,7 +10,7 @@ import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { t } = useI18n()
+const { t, formatPrice } = useI18n()
 
 // Was previously collapsed to just published/"審核中" for everything else —
 // wrongly implied a moderation queue that doesn't exist (listingService
@@ -79,7 +79,7 @@ onMounted(async () => {
           {{ listing.vehicleSnapshot.manufactureYear }} {{ listing.vehicleSnapshot.brand }}
           {{ listing.vehicleSnapshot.model }}
         </p>
-        <p class="price">${{ listing.priceTwd.toLocaleString() }}</p>
+        <p class="price">{{ formatPrice(listing.priceTwd) }}</p>
         <p class="interest">
           <Heart :size="12" /> {{ t('home', 'reviewCount', { count: listing.sellerReviewCount }) }}
         </p>

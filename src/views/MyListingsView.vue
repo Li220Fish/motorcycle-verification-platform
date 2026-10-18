@@ -26,7 +26,7 @@ import type { Vehicle } from '@/types/vehicle'
 const router = useRouter()
 const authStore = useAuthStore()
 const vehicleStore = useVehicleStore()
-const { t } = useI18n()
+const { t, tRegion, formatPrice } = useI18n()
 
 const NON_PUBLISHED_STATUS_KEY: Record<
   string,
@@ -306,7 +306,7 @@ async function handleSubmit(): Promise<void> {
               <select v-model="form.region" required>
                 <option value="" disabled>{{ t('myListings', 'selectRegion') }}</option>
                 <option v-for="region in TAIWAN_REGIONS" :key="region.name" :value="region.name">
-                  {{ region.name }}
+                  {{ tRegion(region.name) }}
                 </option>
               </select>
             </label>
@@ -315,7 +315,7 @@ async function handleSubmit(): Promise<void> {
               <select v-model="form.district" required :disabled="!form.region">
                 <option value="" disabled>{{ t('myListings', 'selectRegionFirst') }}</option>
                 <option v-for="district in availableDistricts" :key="district" :value="district">
-                  {{ district }}
+                  {{ tRegion(district) }}
                 </option>
               </select>
             </label>
@@ -435,7 +435,7 @@ async function handleSubmit(): Promise<void> {
                 }}
               </span>
             </span>
-            <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
+            <span class="price">{{ formatPrice(listing.priceTwd) }}</span>
           </span>
           <ChevronRight :size="18" color="var(--color-text-disabled)" />
         </button>

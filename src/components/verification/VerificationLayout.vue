@@ -4,6 +4,9 @@ import { ClipboardList } from 'lucide-vue-next'
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VerificationProgress from './VerificationProgress.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 withDefaults(
   defineProps<{
@@ -54,11 +57,11 @@ defineEmits<{ back: []; prev: []; next: []; review: [] }>()
     <div v-if="!hideFooter" class="footer">
       <p v-if="nextDisabled && nextDisabledHint" class="locked-hint">🔒 {{ nextDisabledHint }}</p>
       <div class="footer-buttons">
-        <PrimaryButton variant="secondary" :disabled="!canGoPrev" @click="$emit('prev')"
-          >上一步</PrimaryButton
-        >
+        <PrimaryButton variant="secondary" :disabled="!canGoPrev" @click="$emit('prev')">{{
+          t('ui', 'prev')
+        }}</PrimaryButton>
         <PrimaryButton block :disabled="nextDisabled" @click="$emit('next')">
-          {{ nextLabel ?? '下一步' }}
+          {{ nextLabel ?? t('ui', 'next') }}
         </PrimaryButton>
       </div>
     </div>

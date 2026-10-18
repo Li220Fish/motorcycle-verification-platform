@@ -30,6 +30,9 @@ import { storageService } from '@/services/firebase/storage.service'
 import { verificationService } from '@/services/firebase/verification.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationAnswer } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t, tItem } = useI18n()
 
 const emit = defineEmits<{ back: []; advance: [] }>()
 const verificationStore = useVerificationStore()
@@ -95,7 +98,7 @@ async function load(): Promise<void> {
           .filter((path): path is string => !!path)
         result.push({
           key: `buyer-disclosure-seller-${def.id}`,
-          label: def.title,
+          label: tItem(def.id, def.title),
           description: def.description,
           sellerNote: answer?.note,
           sellerPhotoUrls: await resolveUrls(evidencePaths),
@@ -107,7 +110,9 @@ async function load(): Promise<void> {
     for (const issue of verification.buyerKnownIssuesSnapshot ?? []) {
       result.push({
         key: `buyer-disclosure-knownissue-${issue.id}`,
-        label: `系統偵測：${KNOWN_ISSUE_PART_LABEL[issue.part] ?? '其他'}`,
+        label: t('ui', 'knownIssueTitle', {
+          part: t('knownIssuePart', issue.part in KNOWN_ISSUE_PART_LABEL ? issue.part : 'general'),
+        }),
         description: issue.description,
         sellerPhotoUrls: [],
         isKnownIssue: true,
@@ -164,15 +169,17 @@ const verificationId = computed(() => verificationStore.currentVerification?.id 
 
 <template>
   <div>
-    <AppHeader title="其他主動揭露" back custom-back @back="emit('back')" />
+    <AppHeader :title="t('buyerDisclosure', 'title')" back custom-back @back="emit('back')" />
 
     <div class="content">
       <p class="intro">
-        以下是賣家主動揭露的項目，以及系統依車型偵測到的常見通病，點擊確認現場狀況是否一致（全部選填，不影響完成驗證）。
+        {{ t('buyerDisclosure', 'intro') }}
       </p>
 
-      <p v-if="loading" class="empty-hint">載入中...</p>
-      <p v-else-if="rows.length === 0" class="empty-hint">這台車沒有需要額外確認的揭露項目。</p>
+      <p v-if="loading" class="empty-hint">{{ t('ui', 'loading') }}</p>
+      <p v-else-if="rows.length === 0" class="empty-hint">
+        {{ t('buyerDisclosure', 'empty') }}
+      </p>
 
       <div v-else class="row-list">
         <div v-for="row in rows" :key="row.key" class="disclosure-row">
@@ -188,27 +195,39 @@ const verificationId = computed(() => verificationStore.currentVerification?.id 
           >
             <span class="row-label">{{ row.label }}</span>
             <span class="row-status">
-              <template v-if="state[row.key] === 'pass'"><Check :size="13" />一致</template>
-              <template v-else-if="state[row.key] === 'fail'"><X :size="13" />不一致</template>
-              <template v-else>待確認</template>
+              <template v-if="state[row.key] === 'pass'"
+                ><Check :size="13" />{{ t('ui', 'match') }}</template
+              >
+              <template v-else-if="state[row.key] === 'fail'"
+                ><X :size="13" />{{ t('ui', 'mismatch') }}</template
+              >
+              <template v-else>{{ t('ui', 'pending') }}</template>
             </span>
           </div>
           <button class="row-expand-toggle" @click="toggleExpand(row.key)">
             <ChevronDown :size="14" :class="{ rotated: expandedKey === row.key }" />
-            {{ expandedKey === row.key ? '收合' : '查看詳情' }}
+            {{ expandedKey === row.key ? t('ui', 'collapse') : t('ui', 'viewDetails') }}
           </button>
 
           <div v-if="expandedKey === row.key" class="row-detail">
             <p class="row-description">{{ row.description }}</p>
-            <p v-if="row.sellerNote" class="row-seller-note">賣家備註：{{ row.sellerNote }}</p>
+            <p v-if="row.sellerNote" class="row-seller-note">
+              {{ t('buyerDisclosure', 'sellerNote', { note: row.sellerNote }) }}
+            </p>
             <div v-if="row.sellerPhotoUrls.length > 0" class="row-photo-grid">
-              <img v-for="url in row.sellerPhotoUrls" :key="url" :src="url" alt="賣家提供照片" />
+              <img
+                v-for="url in row.sellerPhotoUrls"
+                :key="url"
+                :src="url"
+                :alt="t('buyerDisclosure', 'sellerPhotoAlt')"
+              />
             </div>
           </div>
 
           <div v-if="state[row.key] !== undefined" class="row-answered-actions">
             <button class="row-photo-btn" @click="openPhotoCapture(row.key)">
-              拍照存證{{
+              {{ t('buyerDisclosure', 'photoEvidence')
+              }}{{
                 (verificationStore.evidenceByItem[row.key]?.length ?? 0) > 0
                   ? `（${verificationStore.evidenceByItem[row.key].length}）`
                   : ''
@@ -223,10 +242,18 @@ const verificationId = computed(() => verificationStore.currentVerification?.id 
             @touchstart.prevent="closePicker"
           />
           <div v-if="pickerKey === row.key" class="inline-picker">
-            <button class="reaction-btn pass" aria-label="一致" @click="pick(row.key, 'pass')">
+            <button
+              class="reaction-btn pass"
+              :aria-label="t('ui', 'match')"
+              @click="pick(row.key, 'pass')"
+            >
               <Check :size="18" />
             </button>
-            <button class="reaction-btn fail" aria-label="不一致" @click="pick(row.key, 'fail')">
+            <button
+              class="reaction-btn fail"
+              :aria-label="t('ui', 'mismatch')"
+              @click="pick(row.key, 'fail')"
+            >
               <X :size="18" />
             </button>
           </div>
@@ -235,14 +262,14 @@ const verificationId = computed(() => verificationStore.currentVerification?.id 
     </div>
 
     <div v-if="!loading" class="bottom-bar">
-      <PrimaryButton block @click="emit('advance')">下一步</PrimaryButton>
+      <PrimaryButton block @click="emit('advance')">{{ t('ui', 'next') }}</PrimaryButton>
     </div>
 
     <MultiPhotoEvidenceCapture
       v-if="activePhotoKey"
       :verification-id="verificationId"
       :item-id="activePhotoKey"
-      label="拍照存證"
+      :label="t('buyerDisclosure', 'photoEvidence')"
       @advance="closePhotoCapture"
     />
   </div>

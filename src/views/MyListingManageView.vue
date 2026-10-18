@@ -30,7 +30,7 @@ const props = defineProps<{ id: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
-const { t } = useI18n()
+const { t, localeTag } = useI18n()
 
 const listing = ref<MockMarketListing | null>(null)
 const loading = ref(true)
@@ -113,7 +113,7 @@ const transferSuccessMessage = ref('')
 
 function formatBuyerLabel(verification: Verification): string {
   const date = new Date(verification.completedAt ?? verification.createdAt).toLocaleDateString(
-    'zh-TW',
+    localeTag(),
   )
   return t('listingManage', 'buyerLabel', { uid: verification.userId.slice(0, 8), date })
 }
@@ -395,52 +395,31 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
 // UX 保留，只是現在可以重複做很多次，各自套用到不同日期。
 const workingSlots = ref<Record<string, string[]>>({})
 
-interface SlotRule {
-  key: string
-  times: string[]
-  dates: string[]
-}
-
-const rules = computed<SlotRule[]>(() => {
-  const byTimesKey = new Map<string, { times: string[]; dates: string[] }>()
-  for (const [date, times] of Object.entries(workingSlots.value)) {
-    if (!times || times.length === 0) continue
-    const sortedTimes = [...times].sort()
-    const key = sortedTimes.join(',')
-    const entry = byTimesKey.get(key) ?? { times: sortedTimes, dates: [] }
-    entry.dates.push(date)
-    byTimesKey.set(key, entry)
-  }
-  return [...byTimesKey.values()]
-    .map((entry) => ({ key: entry.times.join(','), times: entry.times, dates: entry.dates.sort() }))
-    .sort((a, b) => (a.dates[0] ?? '').localeCompare(b.dates[0] ?? ''))
-})
-
+// 日曆總覽 — 有時段的日期在日曆上顯示藍點，點日期就在下方列出當天時段（可
+// 個別移除或整天清除）。取代原本「依相同時段分組成一條條規則」的清單：使用
+// 者回饋那種清單很難一眼看出哪天開了哪些時段。
 const highlightedDates = computed(() =>
   Object.keys(workingSlots.value).filter((date) => (workingSlots.value[date]?.length ?? 0) > 0),
 )
-
-function formatRuleDates(dates: string[]): string {
-  return dates
-    .map((date) => {
-      const [, month, day] = date.split('-').map(Number)
-      return `${month}/${day}`
-    })
-    .join('、')
+const viewingDate = ref<string | null>(null)
+const viewingDateTimes = computed(() =>
+  viewingDate.value ? [...(workingSlots.value[viewingDate.value] ?? [])].sort() : [],
+)
+function selectViewingDate(date: string): void {
+  viewingDate.value = viewingDate.value === date ? null : date
+}
+function formatDayLabel(date: string): string {
+  const [, month, day] = date.split('-').map(Number)
+  return `${month}/${day}`
 }
 
-// null = editor closed; NEW_RULE_KEY = adding a fresh rule; any other string
-// = editing that existing rule (matches SlotRule.key, i.e. its joined times).
-const NEW_RULE_KEY = '__new__'
-const editingRuleKey = ref<string | null>(null)
-const editingOriginalDates = ref<string[]>([])
+const isEditorOpen = ref(false)
 const draftTimes = ref<string[]>([])
 const draftDates = ref<Set<string>>(new Set())
 const newTimeInput = ref('')
 const savingRule = ref(false)
 const ruleMessage = ref('')
 
-const isEditorOpen = computed(() => editingRuleKey.value !== null)
 const draftDatesArray = computed(() => [...draftDates.value])
 
 // A seller who keeps the same handful of viewing times (e.g. always 10:00 /
@@ -475,23 +454,14 @@ function rememberTime(time: string): void {
 }
 
 function openNewRule(): void {
-  editingRuleKey.value = NEW_RULE_KEY
-  editingOriginalDates.value = []
+  isEditorOpen.value = true
   draftTimes.value = []
   draftDates.value = new Set()
   newTimeInput.value = ''
 }
 
-function openEditRule(rule: SlotRule): void {
-  editingRuleKey.value = rule.key
-  editingOriginalDates.value = rule.dates
-  draftTimes.value = [...rule.times]
-  draftDates.value = new Set(rule.dates)
-  newTimeInput.value = ''
-}
-
 function closeEditor(): void {
-  editingRuleKey.value = null
+  isEditorOpen.value = false
 }
 
 function addDraftTime(time: string = newTimeInput.value): void {
@@ -528,20 +498,15 @@ async function saveRule(): Promise<void> {
   ruleMessage.value = ''
   try {
     const next = { ...workingSlots.value }
-    // A date this rule used to cover but is no longer checked goes back to
-    // "closed" — unless something else (a different, still-open rule) had
-    // already reclaimed it in the meantime, which the dates-changed check
-    // here naturally never touches since we only ever delete dates that
-    // were THIS rule's own.
-    for (const date of editingOriginalDates.value) {
-      if (!draftDates.value.has(date)) delete next[date]
-    }
+    // 合併而非覆蓋：10/20 原本有 17:00，再新增 10/20 18:00 → 10/20 變成
+    // 17:00、18:00（使用者回報原本會因為日期重疊而無法新增）。
     for (const date of draftDates.value) {
-      if (draftTimes.value.length > 0) next[date] = [...draftTimes.value]
-      else delete next[date]
+      const merged = new Set([...(next[date] ?? []), ...draftTimes.value])
+      if (merged.size > 0) next[date] = [...merged].sort()
     }
     await persistWorkingSlots(next)
     ruleMessage.value = t('listingManage', 'slotsUpdated')
+    viewingDate.value = draftDatesArray.value.sort()[0] ?? viewingDate.value
     closeEditor()
   } catch {
     ruleMessage.value = t('listingManage', 'slotsUpdateFailed')
@@ -553,11 +518,26 @@ async function saveRule(): Promise<void> {
   }
 }
 
-async function deleteRule(rule: SlotRule): Promise<void> {
-  if (!listing.value) return
+async function removeDayTime(date: string, time: string): Promise<void> {
   const next = { ...workingSlots.value }
-  for (const date of rule.dates) delete next[date]
-  await persistWorkingSlots(next)
+  const remaining = (next[date] ?? []).filter((existing) => existing !== time)
+  if (remaining.length > 0) next[date] = remaining
+  else delete next[date]
+  try {
+    await persistWorkingSlots(next)
+  } catch {
+    ruleMessage.value = t('listingManage', 'slotsUpdateFailed')
+  }
+}
+
+async function clearDay(date: string): Promise<void> {
+  const next = { ...workingSlots.value }
+  delete next[date]
+  try {
+    await persistWorkingSlots(next)
+  } catch {
+    ruleMessage.value = t('listingManage', 'slotsUpdateFailed')
+  }
 }
 
 // The chat store already holds every conversation the current (seller) user
@@ -575,7 +555,7 @@ function inquiryOtherName(conversation: (typeof inquiries.value)[number]): strin
 }
 
 function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString('zh-TW', {
+  return new Date(timestamp).toLocaleString(localeTag(), {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -717,25 +697,46 @@ async function markAppointmentCompleted(appointment: ListingAppointment): Promis
         <h3 class="section-title">{{ t('listingManage', 'slotsTitle') }}</h3>
         <p class="hint">{{ t('listingManage', 'slotsHint') }}</p>
 
-        <div v-if="rules.length > 0" class="rule-list">
-          <div v-for="rule in rules" :key="rule.key" class="rule-card">
-            <div class="rule-times">
-              <span v-for="time in rule.times" :key="time" class="time-chip static">{{
-                time
-              }}</span>
-            </div>
-            <p class="rule-dates">{{ formatRuleDates(rule.dates) }}</p>
-            <div class="rule-actions">
-              <button type="button" class="rule-edit-btn" @click="openEditRule(rule)">
-                {{ t('listingManage', 'editRule') }}
-              </button>
-              <button type="button" class="rule-delete-btn" @click="deleteRule(rule)">
-                {{ t('listingManage', 'deleteRule') }}
-              </button>
-            </div>
-          </div>
+        <div v-if="!isEditorOpen" class="calendar-card">
+          <MonthCalendar
+            :highlighted-dates="[]"
+            :dotted-dates="highlightedDates"
+            :selected-date="viewingDate"
+            @select-date="selectViewingDate"
+          />
         </div>
-        <p v-else class="empty-hint">{{ t('listingManage', 'noSlotsYet') }}</p>
+        <template v-if="!isEditorOpen">
+          <div v-if="viewingDate" class="day-panel">
+            <p class="sub-title">
+              {{ t('listingManage', 'dayTimesTitle', { date: formatDayLabel(viewingDate) }) }}
+            </p>
+            <div v-if="viewingDateTimes.length > 0" class="time-chip-row">
+              <span v-for="time in viewingDateTimes" :key="time" class="time-chip">
+                {{ time }}
+                <button
+                  type="button"
+                  :aria-label="t('listingManage', 'removeTime')"
+                  @click="removeDayTime(viewingDate, time)"
+                >
+                  <X :size="12" />
+                </button>
+              </span>
+            </div>
+            <p v-else class="empty-hint">{{ t('listingManage', 'noTimesThisDay') }}</p>
+            <button
+              v-if="viewingDateTimes.length > 0"
+              type="button"
+              class="rule-delete-btn"
+              @click="clearDay(viewingDate)"
+            >
+              {{ t('listingManage', 'deleteDay') }}
+            </button>
+          </div>
+          <p v-else-if="highlightedDates.length > 0" class="empty-hint">
+            {{ t('listingManage', 'tapDateHint') }}
+          </p>
+          <p v-else class="empty-hint">{{ t('listingManage', 'noSlotsYet') }}</p>
+        </template>
 
         <button
           v-if="!isEditorOpen"
@@ -1244,61 +1245,26 @@ async function markAppointmentCompleted(appointment: ListingAppointment): Promis
   font-weight: 700;
 }
 
-.rule-list {
+.day-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-}
-
-.rule-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  margin-top: var(--space-sm);
   padding: var(--space-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
   min-width: 0;
 }
 
-.rule-times {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.rule-dates {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.rule-actions {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: 4px;
-}
-
-.rule-edit-btn,
 .rule-delete-btn {
-  flex: 0 0 auto;
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.rule-edit-btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-background);
-  color: var(--color-text-primary);
-}
-
-.rule-delete-btn {
-  border: 1px solid transparent;
+  align-self: flex-start;
+  padding: 6px 0;
+  border: none;
   background: none;
   color: var(--color-danger, #dc2626);
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
 .time-chip-row {

@@ -12,6 +12,9 @@ import { Compass, Hand, ListChecks, CircleCheck, Check, X } from 'lucide-vue-nex
 import { computed, ref } from 'vue'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ done: [] }>()
 
@@ -21,32 +24,16 @@ interface Slide {
   desc: string
 }
 
-const SLIDES: Slide[] = [
-  {
-    icon: Compass,
-    title: '歡迎使用驗車流程',
-    desc: '「驗車進度」會列出所有檢查分類，可依任何順序完成，中途也能隨時離開，下次會從原本的地方繼續。',
-  },
-  {
-    icon: ListChecks,
-    title: '必填項目有 ＊ 記號',
-    desc: '標示「＊」的項目為必填，其餘為選填。完成度會即時顯示在每個分類卡片與頂部進度條上。',
-  },
-  {
-    icon: Hand,
-    title: '點擊打勾，長按可選打叉',
-    desc: '在「基本12項健檢」中，點擊照片上的項目標籤會快速標示正常；長按則會彈出選單，可選擇打勾（正常）或打叉（異常）。',
-  },
-  {
-    icon: CircleCheck,
-    title: '完成所有必填後即可送出',
-    desc: '不需要照順序把每一頁填完才能翻頁——只要在送出前，所有必填項目都已完成，就能按下「完成驗證」。',
-  },
-]
+const SLIDES = computed<Slide[]>(() => [
+  { icon: Compass, title: t('tour', 's1Title'), desc: t('tour', 's1Desc') },
+  { icon: ListChecks, title: t('tour', 's2Title'), desc: t('tour', 's2Desc') },
+  { icon: Hand, title: t('tour', 's3Title'), desc: t('tour', 's3Desc') },
+  { icon: CircleCheck, title: t('tour', 's4Title'), desc: t('tour', 's4Desc') },
+])
 
 const step = ref(0)
-const isLast = computed(() => step.value === SLIDES.length - 1)
-const current = computed(() => SLIDES[step.value])
+const isLast = computed(() => step.value === SLIDES.value.length - 1)
+const current = computed(() => SLIDES.value[step.value])
 
 function next(): void {
   if (isLast.value) {
@@ -63,7 +50,7 @@ function skip(): void {
 
 <template>
   <div class="tour-overlay">
-    <button class="skip-btn" @click="skip">略過導覽</button>
+    <button class="skip-btn" @click="skip">{{ t('tour', 'skip') }}</button>
 
     <div class="tour-body">
       <div class="icon-wrap">
@@ -86,7 +73,9 @@ function skip(): void {
           :class="{ active: i === step }"
         />
       </div>
-      <PrimaryButton block @click="next">{{ isLast ? '開始使用' : '下一步' }}</PrimaryButton>
+      <PrimaryButton block @click="next">{{
+        isLast ? t('tour', 'start') : t('ui', 'next')
+      }}</PrimaryButton>
     </div>
   </div>
 </template>

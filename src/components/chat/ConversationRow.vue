@@ -25,7 +25,10 @@ const vehicleLabel = useConversationVehicleLabel(computed(() => props.conversati
 function tagLabel(): string {
   if (vehicleLabel.value) return vehicleLabel.value
   const key = TAG_LABEL_KEY[props.conversation.tag]
-  return key ? t('messagesList', key) : props.conversation.tag
+  if (key) return t('messagesList', key)
+  if (props.conversation.tag === '買家詢問') return t('convTag', 'buyerInquiry')
+  if (props.conversation.tag === '一般') return t('convTag', 'general')
+  return props.conversation.tag
 }
 
 function otherId(): string | undefined {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
@@ -69,7 +69,7 @@ const props = defineProps<{ id: string }>()
 const verificationStore = useVerificationStore()
 const vehicleStore = useVehicleStore()
 const router = useRouter()
-const { t } = useI18n()
+const { t, tItem, tItemText } = useI18n()
 
 const currentIndex = ref(0)
 // Guided UI main entry (Task B): every open of /verification/:id lands here
@@ -161,7 +161,7 @@ const needsModelGate = computed(() => {
   if (modelGateDismissed.value) return false
   if (verificationStore.flowKind !== 'buyer') return false
   const verification = verificationStore.currentVerification
-  if (!verification) return false
+  if (!verification || verification.buyerModelConfirmed) return false
   if (verification.vehicleSnapshot) return verification.vehicleSnapshot.modelId == null
   return !!vehicleStore.currentVehicle && vehicleStore.currentVehicle.modelId == null
 })
@@ -197,6 +197,11 @@ async function ensureBuyerKnownIssuesLoaded(modelIdOverride?: string | null): Pr
 async function handleConfirmModel(modelId: string | null): Promise<void> {
   const verification = verificationStore.currentVerification
   modelGateDismissed.value = true
+  if (verification) {
+    verificationService
+      .markBuyerModelConfirmed(verification.id)
+      .catch((error) => console.error('[BuyerVehicleModelGate] mark confirmed failed:', error))
+  }
   if (modelId && verification) {
     try {
       if (verification.vehicleSnapshot) {
@@ -385,8 +390,111 @@ const nextDisabled = computed(() => {
   return !!currentFlat.value && !verificationStore.isItemAdvanceReady(currentFlat.value)
 })
 const nextDisabledHint = computed(
-  () => currentFlat.value?.item.lockedHint ?? t('verificationSteps', 'nextDisabledHintFallback'),
+  () =>
+    (currentFlat.value
+      ? tItemText(currentFlat.value.item.id, 'lockedHint', currentFlat.value.item.lockedHint)
+      : undefined) ?? t('verificationSteps', 'nextDisabledHintFallback'),
 )
+
+// --- 5 分鐘作答窗口＋完成後鎖定 ------------------------------------------
+// 新的驗證檔（建立時帶 attemptStartedAt，見 verification.service.ts create）
+// 必須在 5 分鐘內同時完成「核心照片」與「冷車＋引擎檢查」，逾時就退回草稿、
+// 清空所有內容（verificationStore.expireAttempt）並重新起算。兩者都完成後，
+// 狀態維持進行中，但這兩個區塊都鎖住，不能再點開修改或重拍／重錄。
+const ATTEMPT_WINDOW_MS = 5 * 60 * 1000
+const corePhotosDone = computed(
+  () =>
+    corePhotoItemIds.value.length > 0 &&
+    corePhotoItemIds.value.every((id) => (verificationStore.evidenceByItem[id]?.length ?? 0) > 0),
+)
+const engineDone = computed(() => {
+  const progress = verificationStore.sectionProgress.find(
+    (entry) => entry.sectionId === LOCKED_ENGINE_SECTION_ID,
+  )
+  return !progress || (progress.total > 0 && progress.done >= progress.total)
+})
+const attemptSealed = computed(() => corePhotosDone.value && engineDone.value)
+
+const SEAL_LOCKED_SECTION_IDS = [APPEARANCE_SECTION_ID, LOCKED_ENGINE_SECTION_ID]
+function isSealLocked(itemId: string, sectionId: string): boolean {
+  if (!attemptSealed.value) return false
+  if (verificationStore.currentVerification?.status === 'completed') return false
+  const locked =
+    SEAL_LOCKED_SECTION_IDS.includes(sectionId) || corePhotoItemIds.value.includes(itemId)
+  if (!locked) return false
+  // An upload that failed still has to be retaken — never trap the user.
+  return !verificationStore.failedRequiredUploads.some((entry) => entry.itemId === itemId)
+}
+
+const sealLockedNotice = ref('')
+let sealNoticeTimer: ReturnType<typeof setTimeout> | null = null
+function flashSealLockedNotice(): void {
+  sealLockedNotice.value = t('verificationSteps', 'sealLocked')
+  if (sealNoticeTimer) clearTimeout(sealNoticeTimer)
+  sealNoticeTimer = setTimeout(() => (sealLockedNotice.value = ''), 2800)
+}
+
+const nowMs = ref(Date.now())
+const attemptTicker = setInterval(() => (nowMs.value = Date.now()), 1000)
+onBeforeUnmount(() => {
+  clearInterval(attemptTicker)
+  if (sealNoticeTimer) clearTimeout(sealNoticeTimer)
+})
+const attemptRemainingMs = computed<number | null>(() => {
+  const verification = verificationStore.currentVerification
+  if (!verificationStore.flowLoaded || !verification) return null
+  if (verification.attemptStartedAt == null || verification.status === 'completed') return null
+  // 買家驗證不限時（也涵蓋更新前已建立、帶有 attemptStartedAt 的買家驗證檔）。
+  if (verification.type === 'buyer') return null
+  return Math.max(0, verification.attemptStartedAt + ATTEMPT_WINDOW_MS - nowMs.value)
+})
+const showAttemptCountdown = computed(
+  () => attemptRemainingMs.value !== null && !attemptSealed.value,
+)
+const attemptCountdownTime = computed(() => {
+  const totalSeconds = Math.ceil((attemptRemainingMs.value ?? 0) / 1000)
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
+})
+const attemptCountdownLabel = computed(() =>
+  t('verificationSteps', 'attemptCountdown', { time: attemptCountdownTime.value }),
+)
+const expiringAttempt = ref(false)
+const showAttemptExpired = ref(false)
+watch(attemptRemainingMs, async (remaining) => {
+  if (remaining === null || remaining > 0 || attemptSealed.value || expiringAttempt.value) return
+  expiringAttempt.value = true
+  try {
+    await verificationStore.expireAttempt()
+    showEngineCompleteChoice.value = false
+    showBuyerDisclosure.value = false
+    currentIndex.value = 0
+    hubOpen.value = true
+    showAttemptExpired.value = true
+  } catch (error) {
+    console.error('[VerificationStepsView] expireAttempt failed:', error)
+  } finally {
+    expiringAttempt.value = false
+  }
+})
+
+// Linear Next/Prev and resume can still land inside a locked block — step
+// past it in whichever direction the user was moving.
+let navDirection: 1 | -1 = 1
+watch(currentFlat, (flat) => {
+  if (!flat || hubOpen.value || !isSealLocked(flat.item.id, flat.section.id)) return
+  const items = verificationStore.flatItems
+  let index = currentIndex.value
+  while (
+    index >= 0 &&
+    index < items.length &&
+    isSealLocked(items[index].item.id, items[index].section.id)
+  ) {
+    index += navDirection
+  }
+  if (index < 0 || index >= items.length) hubOpen.value = true
+  else currentIndex.value = index
+  flashSealLockedNotice()
+})
 
 // Deterministic exit target instead of raw browser history — history.back()
 // from inside a checklist item could land anywhere depending on how the user
@@ -502,6 +610,7 @@ function handleReview(): void {
 
 function handlePrev(): void {
   if (currentIndex.value === 0) return
+  navDirection = -1
   if (appearanceMapOpen.value) {
     // Map has no single "current item" — stepping back leaves the category
     // entirely, same as if the user had never opened the map.
@@ -563,6 +672,7 @@ function handlePrev(): void {
 
 function handleNext(): void {
   if (nextDisabled.value) return
+  navDirection = 1
   if (appearanceMapOpen.value) {
     // Skip the whole category from the hub screen — same idea as Prev above.
     const items = verificationStore.flatItems
@@ -680,10 +790,15 @@ function handleNext(): void {
   }
 }
 
-function handleJumpTo(itemId: string): void {
+function handleJumpTo(itemId: string): boolean {
   const items = verificationStore.flatItems
   const index = items.findIndex((flat) => flat.item.id === itemId)
-  if (index === -1) return
+  if (index === -1) return false
+  if (isSealLocked(itemId, items[index].section.id)) {
+    flashSealLockedNotice()
+    return false
+  }
+  navDirection = 1
 
   // Defense in depth: even if a caller (e.g. Review's "jump to missing item")
   // targets an item past an unmet lockedOrder gate WITHIN A LOCKED SECTION,
@@ -712,6 +827,7 @@ function handleJumpTo(itemId: string): void {
   // Jumping to one specific item is always a drill-in, whether it came from
   // the Capture Map or from the Hub's missing-item list.
   appearanceMapOpen.value = false
+  return true
 }
 
 function handleSelectAppearanceGroup(groupId: string): void {
@@ -729,17 +845,17 @@ function handleSelectAppearanceGroup(groupId: string): void {
 const showCategoryNav = computed(() => true)
 const answeredIds = computed(() => Object.keys(verificationStore.answers))
 
-function handleJumpToSection(sectionId: string): void {
+function handleJumpToSection(sectionId: string): boolean {
   // 其他主動揭露 (buyer flow only) — its section.items is always empty for
   // buyers (isItemVisible filters out every one of its required:false
   // items), so the normal "find first unanswered item" jump below has
   // nothing to land on; show the interstitial directly instead.
   if (sectionId === DISCLOSURE_SECTION_ID && verificationStore.flowKind === 'buyer') {
     showBuyerDisclosure.value = true
-    return
+    return true
   }
   const section = verificationStore.sections.find((candidate) => candidate.id === sectionId)
-  if (!section || section.items.length === 0) return
+  if (!section || section.items.length === 0) return false
   const firstUnanswered = section.items.find((it) => !verificationStore.answers[it.id])
   const targetId = (firstUnanswered ?? section.items[0]).id
 
@@ -754,12 +870,11 @@ function handleJumpToSection(sectionId: string): void {
   //   appearanceMapOpen.value = true
   //   return
   // }
-  handleJumpTo(targetId)
+  return handleJumpTo(targetId)
 }
 
 function handleEnterSectionFromHub(sectionId: string): void {
-  handleJumpToSection(sectionId)
-  hubOpen.value = false
+  if (handleJumpToSection(sectionId)) hubOpen.value = false
 }
 
 // Category tab clicks are a direct alternate exit from the engine section
@@ -936,7 +1051,10 @@ watch(currentFlat, (flat) => {
 })
 
 onMounted(() => {
-  verificationStore.loadFlow(props.id)
+  verificationStore.loadFlow(props.id).catch((error) => {
+    console.error('[VerificationStepsView] loadFlow failed:', error)
+    completeError.value = t('verificationSteps', 'loadFailed')
+  })
 })
 </script>
 
@@ -987,8 +1105,8 @@ onMounted(() => {
     :title="pageTitle"
     :section-title="
       isLightsGroup
-        ? `${currentFlat.section.title} · ${t('verificationSteps', 'lightsGroupSuffix')}`
-        : currentFlat.section.title
+        ? `${tItem(currentFlat.section.id, currentFlat.section.title)} · ${t('verificationSteps', 'lightsGroupSuffix')}`
+        : tItem(currentFlat.section.id, currentFlat.section.title)
     "
     :done="currentSectionProgress.done"
     :total="currentSectionProgress.total"
@@ -1083,6 +1201,34 @@ onMounted(() => {
   <p v-else class="loading-text">{{ t('verificationSteps', 'loading') }}</p>
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
+
+  <!-- Teleported so it stays visible above the full-screen camera
+       (CorePhotoCaptureFlow) and engine flows, which teleport themselves. -->
+  <Teleport to="body">
+    <div
+      v-if="showAttemptCountdown"
+      class="attempt-countdown"
+      :class="{ 'on-hub': hubOpen }"
+      role="timer"
+      :aria-label="attemptCountdownLabel"
+    >
+      <!-- Full sentence where there's room (Hub); just the clock in the
+           header row of item/camera screens so it never covers the title. -->
+      {{ hubOpen ? attemptCountdownLabel : `⏱ ${attemptCountdownTime}` }}
+    </div>
+    <div v-if="sealLockedNotice" class="seal-locked-toast" role="status">
+      {{ sealLockedNotice }}
+    </div>
+    <div v-if="showAttemptExpired" class="leave-engine-overlay attempt-expired-overlay">
+      <div class="leave-engine-card">
+        <p class="leave-engine-title">{{ t('verificationSteps', 'attemptExpiredTitle') }}</p>
+        <p class="leave-engine-sub">{{ t('verificationSteps', 'attemptExpiredBody') }}</p>
+        <PrimaryButton block @click="showAttemptExpired = false">
+          {{ t('verificationSteps', 'attemptExpiredOk') }}
+        </PrimaryButton>
+      </div>
+    </div>
+  </Teleport>
 
   <div v-if="showLeaveEngineWarning" class="leave-engine-overlay">
     <div class="leave-engine-card">
@@ -1208,6 +1354,57 @@ onMounted(() => {
   font-weight: 500;
   color: var(--color-text-secondary);
   line-height: 1.5;
+}
+
+/* Sits in the header row's empty right side (left of the review icon) so it
+   never covers the category tabs below it. */
+.attempt-countdown {
+  position: fixed;
+  top: calc(var(--safe-area-inset-top, env(safe-area-inset-top)) + 14px);
+  right: 52px;
+  z-index: 450;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* The Hub has no app header — its own big title sits where the pill would
+   go, so there it floats bottom-centre instead (free space, no footer). */
+.attempt-countdown.on-hub {
+  top: auto;
+  right: auto;
+  left: 50%;
+  bottom: calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 88px);
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  font-size: 12.5px;
+}
+
+.seal-locked-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) + 96px);
+  z-index: 450;
+  width: min(340px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.9);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.attempt-expired-overlay {
+  z-index: 460;
 }
 
 .leave-engine-actions {

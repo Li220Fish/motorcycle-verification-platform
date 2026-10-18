@@ -22,6 +22,9 @@ import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ verificationId: string; itemId: string; label: string }>()
 const emit = defineEmits<{ advance: [] }>()
@@ -156,7 +159,7 @@ async function capturePhoto(): Promise<void> {
     await verificationStore.addEvidence(evidence)
   } catch (error) {
     uploadErrorMessage.value =
-      error instanceof Error ? error.message : '上傳失敗，請重新拍攝這張照片'
+      error instanceof Error ? error.message : t('ui', 'uploadFailedRetake')
   } finally {
     uploading.value = false
   }
@@ -189,11 +192,13 @@ onBeforeUnmount(() => liveCameraService.stop())
         class="camera-feed"
       />
       <div v-else class="camera-placeholder">
-        <p v-if="phase === 'requesting'" class="placeholder-text">準備相機中...</p>
+        <p v-if="phase === 'requesting'" class="placeholder-text">
+          {{ t('ui', 'preparingCamera') }}
+        </p>
         <template v-else>
-          <p class="placeholder-text">需要相機權限才能拍攝</p>
+          <p class="placeholder-text">{{ t('ui', 'needCameraPermission') }}</p>
           <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-          <button class="retry-btn" @click="startCamera">重試</button>
+          <button class="retry-btn" @click="startCamera">{{ t('ui', 'retry') }}</button>
         </template>
       </div>
 
@@ -204,10 +209,10 @@ onBeforeUnmount(() => liveCameraService.stop())
       <div class="top-overlay">
         <div class="top-titles">
           <p class="top-title">{{ label }}</p>
-          <p v-if="uploading" class="top-subtitle">上傳中...</p>
-          <p v-else class="top-subtitle">拍攝完成後請點右上角「完成」</p>
+          <p v-if="uploading" class="top-subtitle">{{ t('ui', 'uploading') }}</p>
+          <p v-else class="top-subtitle">{{ t('multiPhoto', 'tapDone') }}</p>
         </div>
-        <button class="done-btn" @click="handleDone">完成</button>
+        <button class="done-btn" @click="handleDone">{{ t('ui', 'done') }}</button>
       </div>
 
       <p v-if="uploadErrorMessage" class="upload-error-banner">{{ uploadErrorMessage }}</p>
@@ -227,7 +232,7 @@ onBeforeUnmount(() => liveCameraService.stop())
             class="torch-btn"
             :class="{ on: torchOn }"
             :disabled="!torchSupported"
-            aria-label="開關手電筒"
+            :aria-label="t('ui', 'toggleTorch')"
             @click="toggleTorch"
           >
             <Flashlight :size="20" />
@@ -235,7 +240,7 @@ onBeforeUnmount(() => liveCameraService.stop())
           <button
             class="shutter-btn"
             :disabled="phase !== 'live' || uploading"
-            aria-label="拍照"
+            :aria-label="t('ui', 'takePhoto')"
             @click="capturePhoto"
           >
             <span class="shutter-inner" />

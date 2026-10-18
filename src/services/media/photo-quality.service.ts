@@ -10,6 +10,7 @@ import {
   QUALITY_TILE_GRID,
   WARN_MEDIAN_TILE_SHARPNESS,
 } from '@/config/photoQuality.config'
+import { lt } from '@/i18n/locale-text'
 
 export type PhotoQualityLevel = 'ok' | 'warn' | 'reject'
 
@@ -34,12 +35,19 @@ export interface PhotoQualityReport {
   metrics: PhotoQualityMetrics
 }
 
-const ISSUE_TEXT: Record<PhotoQualityIssue, string> = {
+const ISSUE_TEXT_ZH: Record<PhotoQualityIssue, string> = {
   out_of_focus: '整張照片都沒對到焦',
   low_detail: '畫面細節不足，可能失焦或晃到',
   underexposed: '光線不足，畫面偏暗',
   too_dark: '畫面大部分過暗，看不出細節',
   glare: '反光過強，部分畫面過曝',
+}
+const ISSUE_TEXT_EN: Record<PhotoQualityIssue, string> = {
+  out_of_focus: 'The photo is out of focus',
+  low_detail: 'Not enough detail — possibly out of focus or shaky',
+  underexposed: 'Not enough light — the photo is dark',
+  too_dark: 'Most of the photo is too dark to see detail',
+  glare: 'Strong glare — part of the photo is overexposed',
 }
 
 function median(values: number[]): number {
@@ -201,7 +209,9 @@ async function assess(photo: Blob): Promise<PhotoQualityReport> {
   return {
     level,
     issues,
-    message: issues.length ? issues.map((issue) => ISSUE_TEXT[issue]).join('、') : '',
+    message: issues.length
+      ? issues.map((issue) => lt(ISSUE_TEXT_ZH[issue], ISSUE_TEXT_EN[issue])).join(lt('、', '; '))
+      : '',
     metrics,
   }
 }

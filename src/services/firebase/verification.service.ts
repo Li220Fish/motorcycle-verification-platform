@@ -108,6 +108,9 @@ function toVerification(id: string, data: VerificationDoc): Verification {
     analysisStatus: data.analysisStatus,
     vehicleSnapshot: data.vehicleSnapshot,
     buyerKnownIssuesSnapshot: data.buyerKnownIssuesSnapshot,
+    attemptStartedAt: typeof data.attemptStartedAt === 'number' ? data.attemptStartedAt : undefined,
+    listingId: data.listingId,
+    buyerModelConfirmed: data.buyerModelConfirmed,
   }
 }
 
@@ -118,8 +121,22 @@ async function create(draft: VerificationDraft): Promise<string> {
     protocolVersion: PROTOCOL_VERSION,
     schemaVersion: SCHEMA_VERSION,
     createdAt: serverTimestamp(),
+    // Buyer verifications have no time limit — only seller/professional
+    // ones get the 5-minute photos+engine window.
+    ...(draft.type === 'buyer' ? {} : { attemptStartedAt: Date.now() }),
   })
   return docRef.id
+}
+
+/** 5 分鐘窗口逾時後：清空 answers/evidence（含 Storage 檔案）、退回草稿，並
+ *  以「現在」重新起算下一次的 5 分鐘。 */
+async function expireAttempt(id: string): Promise<void> {
+  const [answers, evidence] = await Promise.all([listAnswers(id), listEvidence(id)])
+  await Promise.all([
+    ...answers.map((answer) => deleteAnswer(id, answer.itemId).catch(() => {})),
+    ...evidence.map((item) => deleteEvidence(id, item.id).catch(() => {})),
+  ])
+  await updateDoc(doc(db, COLLECTION, id), { status: 'draft', attemptStartedAt: Date.now() })
 }
 
 /** One-way: a listing's publish() flips this true on every verification it
@@ -224,6 +241,11 @@ async function saveBuyerVehicleModelId(id: string, modelId: string): Promise<voi
   await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.modelId': modelId })
 }
 
+/** BuyerVehicleModelGate.vue answered — never ask again for this verification. */
+async function markBuyerModelConfirmed(id: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, id), { buyerModelConfirmed: true })
+}
+
 /** Taken once, right after BuyerYearGate.vue resolves — see
  *  Verification['buyerKnownIssuesSnapshot']'s own doc comment for why this
  *  is a snapshot rather than a live read. */
@@ -326,8 +348,10 @@ export const verificationService = {
   remove,
   complete,
   saveTransactionDecision,
+  expireAttempt,
   saveBuyerVehicleYear,
   saveBuyerVehicleModelId,
+  markBuyerModelConfirmed,
   saveBuyerKnownIssuesSnapshot,
   saveAnswer,
   listAnswers,

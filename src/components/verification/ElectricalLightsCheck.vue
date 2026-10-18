@@ -5,6 +5,9 @@ import { AlertTriangle, Check } from 'lucide-vue-next'
 import IssuePhotoCapture from './IssuePhotoCapture.vue'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationItem } from '@/data/verification'
+import { useI18n } from '@/composables/useI18n'
+
+const { t, tItem } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -41,26 +44,26 @@ function markAttention(itemId: string): void {
 <template>
   <div class="lights-check">
     <p class="lead">
-      燈具快速檢查 <span class="count">{{ doneCount }}/{{ items.length }}</span>
+      {{ t('lightsCheck', 'lead') }} <span class="count">{{ doneCount }}/{{ items.length }}</span>
     </p>
 
     <template
       v-for="(group, groupIndex) in [
-        { label: '前方', lights: frontLights },
-        { label: '後方', lights: rearLights },
-        { label: '方向燈', lights: turnLights },
+        { label: t('lightsCheck', 'front'), lights: frontLights },
+        { label: t('lightsCheck', 'rear'), lights: rearLights },
+        { label: t('lightsCheck', 'turn'), lights: turnLights },
       ]"
       :key="groupIndex"
     >
       <p class="group-label">{{ group.label }}</p>
       <div v-for="light in group.lights" :key="light.id" class="light-row">
         <div class="light-main">
-          <span class="light-title">{{ light.title }}</span>
+          <span class="light-title">{{ tItem(light.id, light.title) }}</span>
           <div class="light-actions">
             <button
               class="quick-btn ok"
               :class="{ active: resultOf(light.id) === 'normal' }"
-              aria-label="正常"
+              :aria-label="t('ui', 'pass')"
               @click="markNormal(light.id)"
             >
               <Check :size="18" />
@@ -68,7 +71,7 @@ function markAttention(itemId: string): void {
             <button
               class="quick-btn bad"
               :class="{ active: resultOf(light.id) === 'attention' }"
-              aria-label="異常"
+              :aria-label="t('ui', 'fail')"
               @click="markAttention(light.id)"
             >
               <AlertTriangle :size="18" />

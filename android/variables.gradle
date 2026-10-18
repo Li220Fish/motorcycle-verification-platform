@@ -13,4 +13,7 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // @capacitor-firebase/authentication — pulls in the native Google
+    // Sign-In SDK (Credential Manager) for LoginView's Google 登入.
+    rgcfaIncludeGoogle = true
 }

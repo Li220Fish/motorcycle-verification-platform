@@ -36,6 +36,9 @@
  */
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { liveCameraService } from '@/services/media/live-camera.service'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ captured: [file: File]; cancel: [] }>()
 
@@ -146,11 +149,13 @@ onBeforeUnmount(() => liveCameraService.stop())
     <div class="registration-capture">
       <video v-if="phase === 'live'" ref="videoEl" autoplay muted playsinline class="camera-feed" />
       <div v-else class="camera-placeholder">
-        <p v-if="phase === 'requesting'" class="placeholder-text">準備相機中...</p>
+        <p v-if="phase === 'requesting'" class="placeholder-text">
+          {{ t('ui', 'preparingCamera') }}
+        </p>
         <template v-else>
-          <p class="placeholder-text">需要相機權限才能拍攝</p>
+          <p class="placeholder-text">{{ t('ui', 'needCameraPermission') }}</p>
           <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-          <button class="retry-btn" @click="startCamera">重試</button>
+          <button class="retry-btn" @click="startCamera">{{ t('ui', 'retry') }}</button>
         </template>
       </div>
 
@@ -173,15 +178,20 @@ onBeforeUnmount(() => liveCameraService.stop())
 
       <div class="top-overlay">
         <div class="top-titles">
-          <p class="top-title">拍攝行照</p>
-          <p class="top-subtitle">請將行照放入框內，讓黃色虛線對齊「引擎號碼」欄位</p>
+          <p class="top-title">{{ t('registrationCapture', 'title') }}</p>
+          <p class="top-subtitle">{{ t('registrationCapture', 'subtitle') }}</p>
         </div>
-        <button class="cancel-btn" @click="handleCancel">取消</button>
+        <button class="cancel-btn" @click="handleCancel">{{ t('common', 'cancel') }}</button>
       </div>
 
       <div v-if="phase === 'live'" class="bottom-overlay">
         <div class="shutter-row">
-          <button class="shutter-btn" :disabled="capturing" aria-label="拍照" @click="capturePhoto">
+          <button
+            class="shutter-btn"
+            :disabled="capturing"
+            :aria-label="t('ui', 'takePhoto')"
+            @click="capturePhoto"
+          >
             <span class="shutter-inner" />
           </button>
         </div>

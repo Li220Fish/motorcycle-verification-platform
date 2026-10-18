@@ -17,8 +17,19 @@ function toAppUser(firebaseUser: FirebaseUser): User {
     createdAt: Date.parse(firebaseUser.metadata.creationTime ?? '') || Date.now(),
     updatedAt: Date.now(),
     isAnonymous: firebaseUser.isAnonymous,
+    emailVerified: firebaseUser.emailVerified,
+    providerIds: firebaseUser.providerData.map((provider) => provider.providerId),
   }
 }
+
+/** Seeded QA accounts (scripts/seed-test-users.mjs) — exempt from Email 驗證. */
+const EMAIL_VERIFICATION_EXEMPT = new Set([
+  'admin@test.com',
+  'user1@test.com',
+  'user2@test.com',
+  'user3@test.com',
+  'agent@test.com',
+])
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -39,6 +50,27 @@ export const useAuthStore = defineStore('auth', () => {
   // SharedReportView.vue's own mount check against auth.currentUser
   // directly (see src/services/firebase/firebase.ts's `auth`), not this.
   const isAuthenticated = computed(() => user.value !== null && !user.value.isAnonymous)
+
+  /** Email/password account whose address hasn't been confirmed with a code
+   *  yet (VerifyEmailView.vue). Google accounts are already verified by
+   *  Google; the seeded test accounts are exempt. */
+  const needsEmailVerification = computed(() => {
+    const current = user.value
+    if (!current || current.isAnonymous || current.emailVerified) return false
+    if (!current.providerIds.includes('password')) return false
+    return !EMAIL_VERIFICATION_EXEMPT.has(current.email.toLowerCase())
+  })
+
+  async function refreshEmailVerified(): Promise<void> {
+    const firebaseUser = await authService.reloadCurrentUser()
+    if (firebaseUser && user.value) {
+      user.value = {
+        ...user.value,
+        emailVerified: firebaseUser.emailVerified,
+        providerIds: firebaseUser.providerData.map((provider) => provider.providerId),
+      }
+    }
+  }
 
   function initialize(): void {
     if (initialized) return
@@ -109,6 +141,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function loginWithGoogle(): Promise<void> {
+    loading.value = true
+    try {
+      const firebaseUser = await authService.signInWithGoogle()
+      user.value = toAppUser(firebaseUser)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function logout(): Promise<void> {
     await authService.logout()
     user.value = null
@@ -150,10 +192,13 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     loading,
     isAuthenticated,
+    needsEmailVerification,
+    refreshEmailVerified,
     initialize,
     waitUntilReady,
     register,
     login,
+    loginWithGoogle,
     signInAnonymous,
     logout,
     updateDisplayName,

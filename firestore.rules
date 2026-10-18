@@ -159,8 +159,16 @@ service cloud.firestore {
       // "Client cannot set coldStateValid"; same reasoning for
       // analysisStatus — see AnalysisStatusEntry's own comment in
       // types/verification.ts) — never legitimate in a client create payload.
+      // Third branch: a BUYER re-verifying a seller's vehicle from a
+      // marketplace appointment never owns that vehicle — allowed only when
+      // the verification names the listing and that listing really is for
+      // this vehicle (VerificationView.vue's handleStartFromAppointment).
       allow create: if signedIn()
         && ((request.resource.data.userId == myUid() && ownsVehicle(request.resource.data.vehicleId))
+          || (request.resource.data.userId == myUid()
+            && request.resource.data.type == 'buyer'
+            && request.resource.data.get('listingId', null) is string
+            && get(/databases/$(database)/documents/marketplaceListings/$(request.resource.data.listingId)).data.vehicleId == request.resource.data.vehicleId)
           || isAdmin())
         && request.resource.data.isPublic == false
         && !('environmentContext' in request.resource.data)
@@ -310,6 +318,16 @@ service cloud.firestore {
     // invite code / engine-number snapshot directly off this collection.
     match /vehicleTransferInvites/{code} {
       allow read, write: if false;
+    }
+
+    // Buyer's own appointments across ALL listings — listing-appointment-
+    // lookup.service.ts's collectionGroup('appointments') queries
+    // (where buyerId == me). The nested per-listing rule below never applies
+    // to a collection-group query, so without this every such query was
+    // denied and the 預約看車 reminder / buyer vehicle dropdown in
+    // VerificationView.vue silently stayed empty. Read-only, own docs only.
+    match /{path=**}/appointments/{appointmentId} {
+      allow read: if signedIn() && resource.data.buyerId == myUid();
     }
 
     // --- marketplaceListings/{id} (+ appointments) ---

@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { STANDARD_INSPECTION_OPTIONS } from '@/data/verification'
 import type { ComparisonItem } from '@/services/verification/comparison.service'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{ item: ComparisonItem }>()
 
 function resultLabel(value?: string): string {
-  if (!value) return '未檢查'
+  if (!value) return t('comparisonItem', 'notChecked')
+  if (value === 'normal' || value === 'attention' || value === 'unsure') {
+    return t('resultSelector', value)
+  }
   return STANDARD_INSPECTION_OPTIONS.find((option) => option.value === value)?.label ?? value
 }
 </script>
@@ -15,16 +21,20 @@ function resultLabel(value?: string): string {
     <p class="label">{{ item.label }}</p>
     <div class="values">
       <div class="value-col">
-        <span class="value-label">Seller</span>
+        <span class="value-label">{{ t('comparisonItem', 'seller') }}</span>
         <span class="value">{{ resultLabel(item.sellerResult) }}</span>
       </div>
       <div class="value-col">
-        <span class="value-label">Buyer</span>
+        <span class="value-label">{{ t('comparisonItem', 'buyer') }}</span>
         <span class="value">{{ resultLabel(item.buyerResult) }}</span>
       </div>
       <span class="match-badge">
         {{
-          item.match === 'match' ? '✓ 一致' : item.match === 'different' ? '⚠ 不一致' : '— 尚未複驗'
+          item.match === 'match'
+            ? t('comparisonItem', 'match')
+            : item.match === 'different'
+              ? t('comparisonItem', 'different')
+              : t('comparisonItem', 'notRechecked')
         }}
       </span>
     </div>

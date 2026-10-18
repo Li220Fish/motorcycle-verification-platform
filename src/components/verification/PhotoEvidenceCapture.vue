@@ -12,6 +12,9 @@ import { imageCompressionService } from '@/services/media/image-compression.serv
 import { storageService } from '@/services/firebase/storage.service'
 import type { AiCheckKind } from '@/data/verification'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -71,7 +74,7 @@ async function handleTakePhoto(): Promise<void> {
       await handleConfirm()
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '拍照失敗'
+    errorMessage.value = error instanceof Error ? error.message : t('ui', 'captureFailed')
   }
 }
 
@@ -147,7 +150,7 @@ async function handleConfirm(): Promise<void> {
     recognitionStatus.value = 'idle'
     recognitionFindings.value = []
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '上傳失敗，請重試'
+    errorMessage.value = error instanceof Error ? error.message : t('ui', 'uploadFailedRetry')
   } finally {
     uploading.value = false
   }
@@ -161,13 +164,15 @@ async function handleConfirm(): Promise<void> {
       <template v-if="isLowLight">
         <button type="button" class="torch-hint-btn" @click="torchHintOpen = !torchHintOpen">
           <Flashlight :size="16" />
-          建議開啟補光
+          {{ t('photoEvidence', 'torchHint') }}
         </button>
         <p v-if="torchHintOpen" class="torch-hint-text">
-          這個角度光線通常較暗，拍攝前請在手機相機畫面點擊閃光燈／手電筒圖示開啟補光，再對準角度拍攝。
+          {{ t('photoEvidence', 'torchHintText') }}
         </p>
       </template>
-      <button class="capture-button" @click="handleTakePhoto">請拍攝：{{ label }}</button>
+      <button class="capture-button" @click="handleTakePhoto">
+        {{ t('photoEvidence', 'shoot', { label }) }}
+      </button>
     </template>
     <template v-else>
       <div class="preview-wrap" @click="handleMarkIssue">
@@ -178,29 +183,33 @@ async function handleConfirm(): Promise<void> {
           :style="{ left: `${issuePosition.x}%`, top: `${issuePosition.y}%` }"
         />
       </div>
-      <p v-if="allowIssueMark" class="hint">點擊照片可標記問題位置（選填）</p>
+      <p v-if="allowIssueMark" class="hint">{{ t('photoEvidence', 'markHint') }}</p>
 
       <template v-if="aiCheck && !autoConfirm">
         <button v-if="recognitionStatus === 'idle'" class="secondary ai-btn" @click="handleAnalyze">
-          影像輔助分析
+          {{ t('ui', 'imageAssist') }}
         </button>
-        <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">分析中...</p>
+        <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">
+          {{ t('ui', 'analyzing') }}
+        </p>
         <div v-else-if="recognitionStatus !== 'error'" class="findings">
           <p v-for="finding in recognitionFindings" :key="finding">• {{ finding }}</p>
-          <p class="mock-caption">此功能目前為測試模式，結果不作為正式車況判定。</p>
+          <p class="mock-caption">{{ t('ui', 'mockCaption') }}</p>
         </div>
       </template>
 
       <template v-if="autoConfirm">
-        <p v-if="uploading" class="uploading-hint">上傳中...</p>
+        <p v-if="uploading" class="uploading-hint">{{ t('ui', 'uploading') }}</p>
         <button v-else-if="errorMessage" class="primary retry-btn" @click="handleConfirm">
-          重新上傳
+          {{ t('ui', 'reupload') }}
         </button>
       </template>
       <div v-else class="preview-actions">
-        <button class="secondary" :disabled="uploading" @click="handleRetake">重新拍攝</button>
+        <button class="secondary" :disabled="uploading" @click="handleRetake">
+          {{ t('ui', 'retake') }}
+        </button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
-          {{ uploading ? '儲存中...' : '確認照片' }}
+          {{ uploading ? t('ui', 'saving') : t('photoEvidence', 'confirmPhoto') }}
         </button>
       </div>
     </template>

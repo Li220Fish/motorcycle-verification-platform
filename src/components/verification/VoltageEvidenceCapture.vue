@@ -4,6 +4,9 @@ import { computed } from 'vue'
 import { useProbeStore } from '@/stores/probe.store'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -14,7 +17,9 @@ const props = defineProps<{
 const probeStore = useProbeStore()
 const verificationStore = useVerificationStore()
 
-const isCrankingStage = computed(() => props.label.includes('啟動'))
+const isCrankingStage = computed(
+  () => props.label.includes('啟動') || /crank|start/i.test(props.label),
+)
 
 async function handleConnect(): Promise<void> {
   await probeStore.connect()
@@ -53,12 +58,14 @@ function capturedVoltage(): number | null {
 <template>
   <div class="voltage-capture">
     <div v-if="!probeStore.connected" class="connect-block">
-      <p class="hint">連接 Voltage Probe 後即可記錄 {{ label }}。</p>
-      <button class="capture-button" @click="handleConnect">連接 Probe</button>
+      <p class="hint">{{ t('voltageEvidence', 'connectHint', { label }) }}</p>
+      <button class="capture-button" @click="handleConnect">
+        {{ t('voltageEvidence', 'connect') }}
+      </button>
     </div>
     <template v-else>
       <div class="reading">
-        <span class="reading-label">目前電壓</span>
+        <span class="reading-label">{{ t('voltageEvidence', 'current') }}</span>
         <span class="reading-value">
           {{ probeStore.currentVoltage !== null ? probeStore.currentVoltage.toFixed(2) : '--' }} V
         </span>
@@ -68,10 +75,14 @@ function capturedVoltage(): number | null {
         class="capture-button secondary"
         @click="probeStore.simulateEngineStart"
       >
-        模擬啟動測試
+        {{ t('voltageEvidence', 'simulate') }}
       </button>
-      <button class="capture-button" @click="handleCapture">記錄此讀數（{{ label }}）</button>
-      <p v-if="capturedVoltage() !== null" class="captured">已記錄：{{ capturedVoltage() }} V</p>
+      <button class="capture-button" @click="handleCapture">
+        {{ t('voltageEvidence', 'capture', { label }) }}
+      </button>
+      <p v-if="capturedVoltage() !== null" class="captured">
+        {{ t('voltageEvidence', 'captured', { value: capturedVoltage() ?? '' }) }}
+      </p>
     </template>
   </div>
 </template>

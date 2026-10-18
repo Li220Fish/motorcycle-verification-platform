@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { BatteryFull } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{
   connected: boolean
@@ -11,7 +14,9 @@ defineProps<{
   <div class="status-card">
     <div class="status-left">
       <span class="dot" :class="{ connected }" />
-      <span class="status-text">{{ connected ? '已連線' : '未連線' }}</span>
+      <span class="status-text">{{
+        connected ? t('probeStatus', 'connected') : t('probeStatus', 'disconnected')
+      }}</span>
       <span v-if="connected" class="device-name">{{ deviceName }}</span>
     </div>
     <div v-if="connected" class="battery">

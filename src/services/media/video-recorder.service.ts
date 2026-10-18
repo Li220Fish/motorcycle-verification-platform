@@ -1,3 +1,4 @@
+import { lt } from '@/i18n/locale-text'
 /**
  * In-app timed video+audio capture — Step 3 (Environment Calibration) and
  * Step 39 (Cold-state 5-second contact check) both need frame-accurate,
@@ -57,7 +58,9 @@ class VideoRecorderService {
    *  cancel() (defense in depth, not a substitute for the caller doing so). */
   async start(): Promise<MediaStream> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error('此裝置或瀏覽器不支援錄影')
+      throw new Error(
+        lt('此裝置或瀏覽器不支援錄影', "This device or browser doesn't support recording"),
+      )
     }
     this.releaseStream()
 
@@ -97,7 +100,7 @@ class VideoRecorderService {
   async stop(): Promise<VideoRecordingResult> {
     const recorder = this.recorder
     const stream = this.stream
-    if (!recorder || !stream) throw new Error('尚未開始錄影')
+    if (!recorder || !stream) throw new Error(lt('尚未開始錄影', 'Recording has not started'))
 
     const durationMs = Date.now() - this.startedAt
     await new Promise<void>((resolve) => {

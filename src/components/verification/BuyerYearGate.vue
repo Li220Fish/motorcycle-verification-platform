@@ -6,6 +6,9 @@
  *  participate in section progress/required-item counting. */
 import { computed, ref } from 'vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ confirm: [number] }>()
 
@@ -17,39 +20,45 @@ const CURRENT_YEAR = new Date().getFullYear()
  *  motorcycle while still catching obvious typos (e.g. a 4-digit phone
  *  number fragment). */
 const MIN_YEAR = 1950
-const yearInput = ref('')
+// Vue's v-model on <input type="number"> hands back a number (or '' when
+// empty), never a string — calling .trim() on it threw mid-render and
+// blanked the whole screen. Normalise to a string before validating.
+const yearInput = ref<string | number>('')
+const yearText = computed(() => String(yearInput.value ?? '').trim())
 
 const yearError = computed(() => {
-  const trimmed = yearInput.value.trim()
+  const trimmed = yearText.value
   if (!trimmed) return ''
-  if (trimmed.length !== 4 || !/^\d{4}$/.test(trimmed)) return '請輸入4位數的西元年，例如 2018'
+  if (trimmed.length !== 4 || !/^\d{4}$/.test(trimmed)) return t('yearGate', 'errFormat')
   const year = Number(trimmed)
   if (year < MIN_YEAR || year > CURRENT_YEAR + 1) {
-    return `請輸入 ${MIN_YEAR}~${CURRENT_YEAR + 1} 之間的年份`
+    return t('yearGate', 'errRange', { min: MIN_YEAR, max: CURRENT_YEAR + 1 })
   }
   return ''
 })
-const canSubmit = computed(() => yearInput.value.trim().length === 4 && !yearError.value)
+const canSubmit = computed(() => yearText.value.length === 4 && !yearError.value)
 
 function submit(): void {
   if (!canSubmit.value) return
-  emit('confirm', Number(yearInput.value))
+  emit('confirm', Number(yearText.value))
 }
 </script>
 
 <template>
   <div class="year-gate">
-    <h2>這台車是幾年的車？</h2>
-    <p class="hint">賣家還沒填寫這台車的年式，請先確認一下，這會影響後續檢查項目的判斷標準。</p>
+    <h2>{{ t('yearGate', 'title') }}</h2>
+    <p class="hint">{{ t('yearGate', 'hint') }}</p>
     <input
       v-model="yearInput"
       type="number"
       inputmode="numeric"
-      :placeholder="`例如：${CURRENT_YEAR - 2}`"
+      :placeholder="t('yearGate', 'placeholder', { year: CURRENT_YEAR - 2 })"
       class="year-input"
     />
     <p v-if="yearError" class="error-text">{{ yearError }}</p>
-    <PrimaryButton block :disabled="!canSubmit" @click="submit">確認</PrimaryButton>
+    <PrimaryButton block :disabled="!canSubmit" @click="submit">{{
+      t('ui', 'confirm')
+    }}</PrimaryButton>
   </div>
 </template>
 

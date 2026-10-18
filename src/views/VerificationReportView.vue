@@ -9,6 +9,9 @@ import { useInspectionReportSections } from '@/composables/useInspectionReportSe
 import { useAuthStore } from '@/stores/auth.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
@@ -82,11 +85,11 @@ watch(
 
 <template>
   <div>
-    <AppHeader title="檢驗報告" back>
+    <AppHeader :title="t('ui', 'reportTitle')" back>
       <template v-if="isOwner" #right>
         <button
           class="icon-button"
-          aria-label="分享"
+          :aria-label="t('verificationReport', 'share')"
           @click="router.push(`/verification/${props.id}/share`)"
         >
           <Share2 :size="20" />

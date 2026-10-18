@@ -9,7 +9,8 @@ import {
   ENGINE_SESSION_ITEM_IDS,
   ENGINE_STARTUP_ITEM_IDS,
 } from '@/data/verification/engine-session'
-import { RESULT_LABEL, RESULT_TONE } from '@/data/verification/result-labels'
+import { RESULT_TONE } from '@/data/verification/result-labels'
+import { useI18n } from '@/composables/useI18n'
 import { storageService } from '@/services/firebase/storage.service'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
@@ -37,17 +38,19 @@ import type {
 export function useInspectionReportSections(verificationId: Ref<string | undefined>) {
   const verificationStore = useVerificationStore()
   const vehicleStore = useVehicleStore()
+  const { t, tItem, formatPrice, localeTag } = useI18n()
+  const resultLabel = (result: AnswerResultValue): string => t('report', result)
 
   // Capture UI = 3 Session, but Report = 6 個檢測結果 (spec §44) — the report
   // nests ENG-03..08 under their session labels instead of flattening them,
   // same underlying items, just grouped for readability.
-  const ENGINE_ITEM_GROUP_LABEL: Record<string, string> = {
-    [ENGINE_STARTUP_ITEM_IDS[0]]: '啟動檢測',
-    [ENGINE_STARTUP_ITEM_IDS[1]]: '啟動檢測',
-    [ENGINE_IDLE_ITEM_IDS[0]]: '怠速檢測',
-    [ENGINE_IDLE_ITEM_IDS[1]]: '怠速檢測',
-    [ENGINE_REV_ITEM_IDS[0]]: '油門檢測',
-    [ENGINE_REV_ITEM_IDS[1]]: '油門檢測',
+  const ENGINE_ITEM_GROUP_KEY: Record<string, 'groupStartup' | 'groupIdle' | 'groupRev'> = {
+    [ENGINE_STARTUP_ITEM_IDS[0]]: 'groupStartup',
+    [ENGINE_STARTUP_ITEM_IDS[1]]: 'groupStartup',
+    [ENGINE_IDLE_ITEM_IDS[0]]: 'groupIdle',
+    [ENGINE_IDLE_ITEM_IDS[1]]: 'groupIdle',
+    [ENGINE_REV_ITEM_IDS[0]]: 'groupRev',
+    [ENGINE_REV_ITEM_IDS[1]]: 'groupRev',
   }
 
   const RESULT_SEVERITY: Record<AnswerResultValue, number> = {
@@ -120,7 +123,7 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
   }
 
   function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString('zh-TW')
+    return new Date(timestamp).toLocaleDateString(localeTag())
   }
 
   const inspectedDate = computed(() => {
@@ -185,16 +188,16 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
     if (!range) return null
     return {
       id: 'used-price-range',
-      title: '二手價參考區間',
-      statusLabel: '參考資訊',
+      title: t('report', 'priceTitle'),
+      statusLabel: t('report', 'priceStatus'),
       statusTone: 'neutral',
       items: [
         {
           id: 'used-price-range-value',
-          title: '建議價格區間',
-          badgeLabel: `NT$ ${range.min.toLocaleString()} ~ NT$ ${range.max.toLocaleString()}`,
+          title: t('report', 'priceItem'),
+          badgeLabel: `${formatPrice(range.min)} ~ ${formatPrice(range.max)}`,
           badgeTone: 'primary',
-          note: '依車型由平台提供，僅供參考，實際成交價格仍受車況、里程、地區等因素影響。',
+          note: t('report', 'priceNote'),
           required: false,
         },
       ],
@@ -206,24 +209,24 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
       const answers = section.items
         .map((item) => effectiveItemResult(item.id))
         .filter((answer) => !!answer)
-      let statusLabel = '尚未檢查'
+      let statusLabel = t('report', 'statusNotChecked')
       let statusTone: ReportSection['statusTone'] = 'neutral'
       if (answers.length > 0) {
         if (answers.some((answer) => answer.result === 'attention')) {
-          statusLabel = '需要注意'
+          statusLabel = t('report', 'statusAttention')
           statusTone = 'warning'
         } else if (answers.some((answer) => answer.result === 'unsure')) {
-          statusLabel = '待確認'
+          statusLabel = t('report', 'statusPending')
           statusTone = 'warning'
         } else {
-          statusLabel = '良好'
+          statusLabel = t('report', 'statusGood')
           statusTone = 'success'
         }
       }
 
       return {
         id: section.id,
-        title: section.title,
+        title: tItem(section.id, section.title),
         statusLabel,
         statusTone,
         engineTypeNote: section.items.some((item) => ENGINE_SESSION_ITEM_IDS.includes(item.id))
@@ -251,8 +254,8 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
           const ocr = latestOcrResult(item.id)
           return {
             id: item.id,
-            title: item.title,
-            badgeLabel: answer ? RESULT_LABEL[answer.result] : '未檢查',
+            title: tItem(item.id, item.title),
+            badgeLabel: answer ? resultLabel(answer.result) : t('report', 'notChecked'),
             badgeTone: answer ? RESULT_TONE[answer.result] : 'neutral',
             note,
             aiNote:
@@ -261,7 +264,9 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
               undefined,
             ocrText: ocr?.text ?? undefined,
             photos,
-            groupLabel: ENGINE_ITEM_GROUP_LABEL[item.id],
+            groupLabel: ENGINE_ITEM_GROUP_KEY[item.id]
+              ? t('report', ENGINE_ITEM_GROUP_KEY[item.id])
+              : undefined,
             required: item.required,
           }
         }),
@@ -270,42 +275,52 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
     return usedPriceRangeSection.value ? [...base, usedPriceRangeSection.value] : base
   })
 
+  type MarkerLabelKey =
+    | 'mAppearance'
+    | 'mHandle'
+    | 'mHeadlight'
+    | 'mSignalF'
+    | 'mFork'
+    | 'mBrake'
+    | 'mEngine'
+    | 'mTaillight'
+    | 'mSignalR'
   interface DiagramMarkerDef {
     key: string
-    label: string
+    label: MarkerLabelKey
     anchor: [number, number]
     itemIds: string[]
   }
   const DIAGRAM_MARKER_DEFS: DiagramMarkerDef[] = [
     {
       key: 'appearance',
-      label: '外觀',
+      label: 'mAppearance',
       anchor: [46, 20],
       itemIds: ['APR-left-side', 'APR-right-side', 'APR-rear'],
     },
-    { key: 'handle', label: '把手／龍頭', anchor: [41, 33], itemIds: ['APR-triple-clamp'] },
+    { key: 'handle', label: 'mHandle', anchor: [41, 33], itemIds: ['APR-triple-clamp'] },
     {
       key: 'headlight',
-      label: '前大燈',
+      label: 'mHeadlight',
       anchor: [28, 43],
       itemIds: ['ELEC-01', 'ELEC-02', 'ELEC-03'],
     },
-    { key: 'signal_f', label: '前方向燈', anchor: [18, 46], itemIds: ['ELEC-06', 'ELEC-07'] },
+    { key: 'signal_f', label: 'mSignalF', anchor: [18, 46], itemIds: ['ELEC-06', 'ELEC-07'] },
     {
       key: 'fork',
-      label: '前避震',
+      label: 'mFork',
       anchor: [23, 63],
       itemIds: ['APR-front-suspension-left', 'APR-front-suspension-right'],
     },
     {
       key: 'brake',
-      label: '煞車系統',
+      label: 'mBrake',
       anchor: [33, 84],
       itemIds: ['APR-front-brake', 'APR-rear-brake'],
     },
     {
       key: 'engine',
-      label: '引擎',
+      label: 'mEngine',
       anchor: [49.5, 68],
       itemIds: [
         'APR-engine-bottom',
@@ -319,8 +334,8 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
         'ENG-08',
       ],
     },
-    { key: 'taillight', label: '尾燈', anchor: [75, 45], itemIds: ['ELEC-04', 'ELEC-05'] },
-    { key: 'signal_r', label: '後方向燈', anchor: [66, 60], itemIds: ['ELEC-08', 'ELEC-09'] },
+    { key: 'taillight', label: 'mTaillight', anchor: [75, 45], itemIds: ['ELEC-04', 'ELEC-05'] },
+    { key: 'signal_r', label: 'mSignalR', anchor: [66, 60], itemIds: ['ELEC-08', 'ELEC-09'] },
   ]
 
   function resolveDiagramMarker(def: DiagramMarkerDef): DiagramMarker {
@@ -330,9 +345,9 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
     if (answers.length === 0) {
       return {
         key: def.key,
-        label: def.label,
+        label: t('report', def.label),
         anchor: def.anchor,
-        badgeLabel: '未檢查',
+        badgeLabel: t('report', 'notChecked'),
         tone: 'neutral',
         itemIds: def.itemIds,
       }
@@ -344,9 +359,9 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
     )
     return {
       key: def.key,
-      label: def.label,
+      label: t('report', def.label),
       anchor: def.anchor,
-      badgeLabel: RESULT_LABEL[worst.result],
+      badgeLabel: resultLabel(worst.result),
       tone: RESULT_TONE[worst.result],
       itemIds: def.itemIds,
     }

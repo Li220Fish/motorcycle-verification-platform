@@ -29,6 +29,7 @@ import type {
   VerificationAnswer,
   VerificationEvidence,
 } from '@/types/verification-evidence'
+import { lt } from '@/i18n/locale-text'
 
 export interface SectionProgress {
   sectionId: string
@@ -89,25 +90,52 @@ export const useVerificationStore = defineStore('verification', () => {
 
   async function createVerification(draft: VerificationDraft): Promise<string> {
     const id = await verificationService.create(draft)
-    await fetchByVehicle(draft.vehicleId)
+    // A buyer can't list verifications on the seller's vehicle — the refresh
+    // is only a convenience, never a reason to fail the create.
+    await fetchByVehicle(draft.vehicleId).catch(() => {})
     return id
   }
 
   async function completeVerification(id: string): Promise<void> {
     if (flowLoaded.value && missingRequiredItems.value.length > 0) {
-      throw new Error('尚有必填項目未完成，無法結束驗證。')
+      throw new Error(
+        lt(
+          '尚有必填項目未完成，無法結束驗證。',
+          'Some required items are not done yet — cannot finish.',
+        ),
+      )
     }
     if (flowLoaded.value && pendingRequiredUploads.value.length > 0) {
-      throw new Error('正在完成最後幾筆資料上傳，請稍候再試一次。')
+      throw new Error(
+        lt(
+          '正在完成最後幾筆資料上傳，請稍候再試一次。',
+          'Still uploading the last few files — please try again shortly.',
+        ),
+      )
     }
     if (flowLoaded.value && failedRequiredUploads.value.length > 0) {
-      throw new Error('有必填照片/影音上傳失敗，請重試後再完成驗證。')
+      throw new Error(
+        lt(
+          '有必填照片/影音上傳失敗，請重試後再完成驗證。',
+          'Some required photo/media uploads failed — retry them, then finish.',
+        ),
+      )
     }
     if (flowLoaded.value && pendingRequiredAnalysis.value.length > 0) {
-      throw new Error('AI 分析正在進行中，請稍候再試一次。')
+      throw new Error(
+        lt(
+          'AI 分析正在進行中，請稍候再試一次。',
+          'AI analysis is still running — please try again shortly.',
+        ),
+      )
     }
     if (flowLoaded.value && failedRequiredAnalysis.value.length > 0) {
-      throw new Error('部分 AI 分析失敗，請重試後再完成驗證。')
+      throw new Error(
+        lt(
+          '部分 AI 分析失敗，請重試後再完成驗證。',
+          'Some AI analyses failed — retry them, then finish.',
+        ),
+      )
     }
     await verificationService.complete(id)
     if (currentVerification.value?.id === id) {
@@ -526,6 +554,37 @@ export const useVerificationStore = defineStore('verification', () => {
     }
   }
 
+  /** 5 分鐘作答窗口逾時（見 VerificationStepsView.vue 的 attempt 計時）—
+   *  Firestore 端清空＋退回草稿，本機草稿快取與記憶體狀態也一併清掉，否則
+   *  下一次 loadFlow 的「本機補推」會把剛刪掉的內容又推回去。 */
+  async function expireAttempt(): Promise<void> {
+    const verification = currentVerification.value
+    if (!verification) return
+    const verificationId = verification.id
+    for (const itemId of Object.keys(answers.value)) {
+      localDraftService.removeAnswer(verificationId, itemId)
+    }
+    for (const list of Object.values(evidenceByItem.value)) {
+      for (const evidence of list) localDraftService.removeEvidence(verificationId, evidence.id)
+    }
+    for (const evidence of localDraftService.loadEvidence(verificationId)) {
+      localDraftService.removeEvidence(verificationId, evidence.id)
+    }
+    for (const answer of localDraftService.loadAnswers(verificationId)) {
+      localDraftService.removeAnswer(verificationId, answer.itemId)
+    }
+    answers.value = {}
+    evidenceByItem.value = {}
+    await verificationService.expireAttempt(verificationId)
+    if (currentVerification.value?.id === verificationId) {
+      currentVerification.value = {
+        ...currentVerification.value,
+        status: 'draft',
+        attemptStartedAt: Date.now(),
+      }
+    }
+  }
+
   /**
    * Advances past `fromIndex`, honoring that item's `branch` rule if its
    * saved answer matches one — e.g. ELEC-10 "電系是否有改裝" answered 沒有
@@ -795,6 +854,7 @@ export const useVerificationStore = defineStore('verification', () => {
     removeEvidence,
     discardOtherEvidence,
     resetLockedEngineSection,
+    expireAttempt,
     resolveNextIndex,
     resumeIndex,
     sectionProgress,

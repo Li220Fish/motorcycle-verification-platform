@@ -7,17 +7,20 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VerificationSectionCard from '@/components/verification/VerificationSectionCard.vue'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t, tItem } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
 const verificationStore = useVerificationStore()
 const router = useRouter()
 
-const TIER_LABEL: Record<'basic' | 'detailed' | 'complete', string> = {
-  basic: '基本驗證',
-  detailed: '詳細驗證',
-  complete: '完整驗證',
-}
+const TIER_LABEL = computed<Record<'basic' | 'detailed' | 'complete', string>>(() => ({
+  basic: t('verificationResult', 'basic'),
+  detailed: t('verificationResult', 'detailed'),
+  complete: t('verificationResult', 'complete'),
+}))
 
 const attentionCount = computed(
   () =>
@@ -36,18 +39,18 @@ onMounted(() => {
 
 <template>
   <div>
-    <AppHeader title="驗證結果" back />
+    <AppHeader :title="t('verificationResult', 'title')" back />
 
     <div class="content">
       <div class="result-hero">
         <ShieldCheck :size="64" color="var(--color-success)" />
-        <p class="result-title">驗證已完成</p>
-        <p class="result-subtitle">已完整記錄車況資料與 Evidence，供買賣雙方參考</p>
+        <p class="result-title">{{ t('verificationResult', 'done') }}</p>
+        <p class="result-subtitle">{{ t('verificationResult', 'subtitle') }}</p>
       </div>
 
       <div class="score-card">
         <div class="score-header">
-          <span>驗證等級</span>
+          <span>{{ t('verificationResult', 'tier') }}</span>
           <span class="score-value">{{ TIER_LABEL[verificationStore.verificationTier] }}</span>
         </div>
 
@@ -55,35 +58,35 @@ onMounted(() => {
           <VerificationSectionCard
             v-for="section in verificationStore.sectionProgress"
             :key="section.sectionId"
-            :title="section.title"
+            :title="tItem(section.sectionId, section.title)"
             :done="section.done"
             :total="section.total"
           />
         </div>
 
         <div class="flag-row">
-          <span>需要注意</span>
+          <span>{{ t('verificationResult', 'attention') }}</span>
           <span>{{ attentionCount }}</span>
         </div>
         <div class="flag-row">
-          <span>不確定</span>
+          <span>{{ t('verificationResult', 'unsure') }}</span>
           <span>{{ unsureCount }}</span>
         </div>
 
         <p class="mock-caption">
-          「基本驗證」為必填項目全數完成；填寫部分主動揭露為「詳細驗證」，全部填寫則為「完整驗證」。此等級不代表車況評分，車況細節請見完整報告。
+          {{ t('verificationResult', 'tierCaption') }}
         </p>
       </div>
 
       <PrimaryButton block @click="router.push(`/verification/${props.id}/report`)">
-        查看完整報告
+        {{ t('ui', 'viewFullReport') }}
       </PrimaryButton>
       <PrimaryButton
         variant="secondary"
         block
         @click="router.push(`/verification/${props.id}/share`)"
       >
-        分享報告
+        {{ t('ui', 'shareReport') }}
       </PrimaryButton>
     </div>
   </div>

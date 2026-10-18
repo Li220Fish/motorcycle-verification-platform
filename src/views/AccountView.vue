@@ -12,7 +12,7 @@ import { storageService } from '@/services/firebase/storage.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
-const { t } = useI18n()
+const { t, localeTag } = useI18n()
 
 const displayName = ref(authStore.user?.displayName ?? '')
 const saving = ref(false)
@@ -80,7 +80,7 @@ const resetMessage = ref('')
 
 const joinedDate = computed(() => {
   if (!authStore.user) return '—'
-  return new Date(authStore.user.createdAt).toLocaleDateString('zh-TW', {
+  return new Date(authStore.user.createdAt).toLocaleDateString(localeTag(), {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

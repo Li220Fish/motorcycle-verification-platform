@@ -17,6 +17,12 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('@/views/VerifyEmailView.vue'),
+      meta: { hideChrome: true },
+    },
+    {
       path: '/dev-log',
       name: 'dev-log',
       component: () => import('@/views/DevLogView.vue'),
@@ -310,6 +316,17 @@ router.beforeEach(async (to) => {
   const requiresAuth = to.meta.requiresAuth !== false
   if (requiresAuth && !authStore.isAuthenticated && !to.meta.allowAnonymous) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  // Email 驗證碼 gate — an unverified email/password account can only reach
+  // the verification page until it's confirmed.
+  if (authStore.isAuthenticated && authStore.needsEmailVerification) {
+    if (to.name === 'verify-email') return true
+    if (requiresAuth || to.name === 'login') {
+      const redirect = to.name === 'login' ? undefined : to.fullPath
+      return { name: 'verify-email', query: redirect ? { redirect } : {} }
+    }
+  } else if (to.name === 'verify-email' && authStore.isAuthenticated) {
+    return { name: 'dashboard' }
   }
   if (to.name === 'login' && authStore.isAuthenticated) {
     return { name: 'dashboard' }

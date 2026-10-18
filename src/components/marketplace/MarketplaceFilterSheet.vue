@@ -24,7 +24,7 @@ const props = defineProps<{
   brandOptions: string[]
 }>()
 const emit = defineEmits<{ 'update:modelValue': [MarketplaceFilters]; close: [] }>()
-const { t } = useI18n()
+const { t, tSpec } = useI18n()
 
 const SORT_OPTIONS = computed<{ value: MarketplaceSortOption; label: string }[]>(() => [
   { value: 'price-desc', label: t('marketplace', 'sortPriceDesc') },
@@ -129,7 +129,7 @@ function handleReset(): void {
               :class="{ active: modelValue.bodyType === option }"
               @click="selectBodyType(option)"
             >
-              {{ option }}
+              {{ tSpec(option) }}
             </button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { vehicleService } from '@/services/firebase/vehicle.service'
 import { useAuthStore } from '@/stores/auth.store'
 import type { Vehicle, VehicleDraft } from '@/types/vehicle'
+import { lt } from '@/i18n/locale-text'
 
 export const useVehicleStore = defineStore('vehicle', () => {
   const vehicles = ref<Vehicle[]>([])
@@ -35,7 +36,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
 
   async function createVehicle(draft: VehicleDraft): Promise<string> {
     const authStore = useAuthStore()
-    if (!authStore.user) throw new Error('必須登入才能新增車輛')
+    if (!authStore.user)
+      throw new Error(lt('必須登入才能新增車輛', 'You must sign in to add a vehicle'))
     const id = await vehicleService.create(draft, authStore.user.id)
     await fetchVehicles()
     return id

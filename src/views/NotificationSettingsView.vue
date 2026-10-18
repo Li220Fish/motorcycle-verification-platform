@@ -70,7 +70,7 @@ async function toggle(key: keyof NotificationPrefs): Promise<void> {
     await notificationPrefsService.updatePrefs(uid, { [key]: next })
   } catch (error) {
     state[key] = previous
-    errorMessage.value = error instanceof Error ? error.message : '設定失敗，請稍後再試'
+    errorMessage.value = error instanceof Error ? error.message : t('settingsExtra', 'prefsFailed')
   } finally {
     savingKey.value = null
   }

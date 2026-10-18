@@ -51,7 +51,11 @@ async function handleLogout(): Promise<void> {
   <div>
     <AppHeader :title="t('settings', 'title')">
       <template #right>
-        <button class="icon-button" aria-label="回到主頁" @click="router.push('/dashboard')">
+        <button
+          class="icon-button"
+          :aria-label="t('settingsExtra', 'home')"
+          @click="router.push('/dashboard')"
+        >
           <Home :size="20" />
         </button>
       </template>
@@ -65,7 +69,7 @@ async function handleLogout(): Promise<void> {
           :size="52"
         />
         <div>
-          <p class="name">{{ authStore.user?.displayName || '未命名使用者' }}</p>
+          <p class="name">{{ authStore.user?.displayName || t('settingsExtra', 'unnamed') }}</p>
           <p class="email">{{ authStore.user?.email }}</p>
         </div>
       </div>

@@ -10,6 +10,9 @@ import { verificationService } from '@/services/firebase/verification.service'
 import type { ChatMessage } from '@/services/chat/chat.types'
 import type { Vehicle } from '@/types/vehicle'
 import type { Verification } from '@/types/verification'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ message: ChatMessage; mine: boolean; read: boolean }>()
 
@@ -46,7 +49,7 @@ watch(() => props.message.id, loadRichContent)
 
     <template v-else-if="message.type === 'image'">
       <div class="bubble image-bubble" :class="mine ? 'mine' : 'them'">
-        <img v-if="resolvedImageUrl" :src="resolvedImageUrl" alt="聊天圖片" />
+        <img v-if="resolvedImageUrl" :src="resolvedImageUrl" :alt="t('chatBubble', 'imageAlt')" />
       </div>
     </template>
 
@@ -59,9 +62,11 @@ watch(() => props.message.id, loadRichContent)
         <span class="rich-icon"><Bike :size="18" /></span>
         <span class="rich-body">
           <span class="rich-title">{{
-            vehicle ? `${vehicle.brand} ${vehicle.model}` : '車輛資訊'
+            vehicle ? `${vehicle.brand} ${vehicle.model}` : t('chatBubble', 'vehicleInfo')
           }}</span>
-          <span class="rich-sub">{{ vehicle?.manufactureYear ?? '' }} · 點擊查看車輛</span>
+          <span class="rich-sub"
+            >{{ vehicle?.manufactureYear ?? '' }} · {{ t('chatBubble', 'tapVehicle') }}</span
+          >
         </span>
       </button>
     </template>
@@ -74,9 +79,11 @@ watch(() => props.message.id, loadRichContent)
       >
         <span class="rich-icon"><ShieldCheck :size="18" /></span>
         <span class="rich-body">
-          <span class="rich-title">RiDE 驗證報告</span>
+          <span class="rich-title">{{ t('chatBubble', 'reportTitle') }}</span>
           <span class="rich-sub">{{
-            verification?.status === 'completed' ? '已完成 · 點擊查看' : '點擊查看報告'
+            verification?.status === 'completed'
+              ? t('chatBubble', 'reportDone')
+              : t('chatBubble', 'reportView')
           }}</span>
         </span>
       </button>
@@ -87,7 +94,8 @@ watch(() => props.message.id, loadRichContent)
     </template>
 
     <span v-if="message.type !== 'system'" class="meta">
-      {{ formatRelativeTime(message.createdAt) }}<span v-if="mine && read"> · 已讀</span>
+      {{ formatRelativeTime(message.createdAt)
+      }}<span v-if="mine && read"> · {{ t('chatBubble', 'read') }}</span>
     </span>
   </div>
 </template>

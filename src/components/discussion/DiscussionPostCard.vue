@@ -9,7 +9,7 @@ import { formatRelativeTime } from '@/utils/format-time'
 import type { DiscussionPost } from '@/services/discussion/discussion.types'
 
 const props = defineProps<{ post: DiscussionPost }>()
-const { t } = useI18n()
+const { t, tCategory } = useI18n()
 
 // Live-subscribed — authorSnapshot.photoUrl alone is frozen at post-creation
 // time and never updates again, so an author's later avatar change would
@@ -36,7 +36,7 @@ const authorPhotoUrl = useLiveAvatar(
     <div class="foot">
       <span><Heart :size="14" /> {{ post.likeCount }}</span>
       <span><MessageSquare :size="14" /> {{ post.commentCount }}</span>
-      <span class="category">{{ post.category }}</span>
+      <span class="category">{{ tCategory(post.category) }}</span>
     </div>
   </div>
 </template>

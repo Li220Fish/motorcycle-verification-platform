@@ -12,4 +12,9 @@ export interface User {
    *  InspectionReportBody.vue's `restricted` gate (photos/AI notes hidden
    *  until a REAL account, not just any Firebase Auth session). */
   isAnonymous: boolean
+  /** Firebase Auth's own flag — true for Google sign-ins, and for email/
+   *  password accounts once VerifyEmailView.vue's code was confirmed. */
+  emailVerified: boolean
+  /** Sign-in providers on the account ('password', 'google.com', …). */
+  providerIds: string[]
 }

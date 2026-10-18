@@ -9,6 +9,9 @@ import {
 } from '@/data/home/marketplace-report-mock'
 import { homeContentService } from '@/services/firebase/home-content.service'
 import type { MockMarketListing } from '@/data/home/marketplace-mock'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
@@ -36,11 +39,11 @@ const sections = computed(() => (listing.value ? buildMockReportSections(listing
 
 <template>
   <div>
-    <AppHeader title="檢驗報告" back />
-    <p v-if="loading" class="state-text">載入中...</p>
-    <p v-else-if="!listing" class="state-text">找不到這台車輛。</p>
+    <AppHeader :title="t('ui', 'reportTitle')" back />
+    <p v-if="loading" class="state-text">{{ t('ui', 'loading') }}</p>
+    <p v-else-if="!listing" class="state-text">{{ t('marketReport', 'notFound') }}</p>
     <template v-else>
-      <p class="demo-notice">DEMO 展示報告 — 內容為模擬資料，非真實驗車結果。</p>
+      <p class="demo-notice">{{ t('marketReport', 'demo') }}</p>
       <InspectionReportBody
         :vehicle-title="vehicleTitle"
         :inspected-date="inspectedDate"

@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { assertOwnsVehicle } from '../services/auth.service'
 import { notifyUser } from '../services/notification-dispatch.service'
+import { describeTransferParty } from '../services/transfer-party.service'
 
 interface RequestBody {
   vehicleId?: string
@@ -173,6 +174,21 @@ export const transferVehicleOwnership = onCall({}, async (request) => {
   const title = '車輛已轉移'
   const body = `你的「${vehicleLabel}」已經轉移給新車主。`
   await notifyUser(sellerUid, { type: 'vehicle_transferred', title, body }, { title, body })
+
+  // And the buyer (new owner) — who transferred it to them (name + masked id).
+  const fromUser = await describeTransferParty(sellerUid)
+  const receivedTitle = '你收到一台轉移的車輛'
+  const receivedBody = `${fromUser.displayName}（用戶 ID：${fromUser.maskedId}）已將「${vehicleLabel}」轉移給你。`
+  await notifyUser(
+    buyerUid,
+    {
+      type: 'vehicle_received',
+      title: receivedTitle,
+      body: receivedBody,
+      link: `/vehicles/${data.vehicleId}`,
+    },
+    { title: receivedTitle, body: receivedBody },
+  ).catch((error) => console.error('[transferVehicleOwnership] notify buyer failed:', error))
 
   return { transactionId: transactionRef.id, listingId: listingDoc?.id ?? null }
 })

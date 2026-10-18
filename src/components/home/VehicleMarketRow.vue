@@ -6,7 +6,7 @@ import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 defineProps<{ listing: MockMarketListing; isFavorite?: boolean }>()
 defineEmits<{ toggleFavorite: [] }>()
-const { t } = useI18n()
+const { t, tRegion, formatPrice } = useI18n()
 </script>
 
 <template>
@@ -41,10 +41,10 @@ const { t } = useI18n()
         <template v-if="listing.vehicleSnapshot.manufactureYear"
           >{{ t('common', 'modelYear', { year: listing.vehicleSnapshot.manufactureYear }) }} ·
         </template>
-        {{ listing.vehicleSnapshot.mileage.toLocaleString() }} km · {{ listing.region }}
+        {{ listing.vehicleSnapshot.mileage.toLocaleString() }} km · {{ tRegion(listing.region) }}
       </p>
       <div class="bottom-row">
-        <span class="price">${{ listing.priceTwd.toLocaleString() }}</span>
+        <span class="price">{{ formatPrice(listing.priceTwd) }}</span>
       </div>
     </div>
     <button

@@ -2,6 +2,9 @@
 import { ref } from 'vue'
 
 import PhotoEvidenceCapture from './PhotoEvidenceCapture.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{
   verificationId: string
@@ -14,13 +17,13 @@ const expanded = ref(false)
 <template>
   <div class="issue-capture">
     <button v-if="!expanded" class="prompt" @click="expanded = true">
-      是否新增照片？拍攝問題位置
+      {{ t('issuePhoto', 'prompt') }}
     </button>
     <PhotoEvidenceCapture
       v-else
       :verification-id="verificationId"
       :item-id="itemId"
-      label="問題位置"
+      :label="t('issuePhoto', 'label')"
       allow-issue-mark
       mark-as-issue-photo
     />

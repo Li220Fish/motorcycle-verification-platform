@@ -99,6 +99,14 @@ async function handleConfirmTransfer(): Promise<void> {
           </div>
         </div>
 
+        <div v-if="invite.fromUser" class="from-user">
+          <span class="from-user-label">{{ t('vehicleTransfer', 'fromUserLabel') }}</span>
+          <span class="from-user-name">{{ invite.fromUser.displayName }}</span>
+          <span class="from-user-id">
+            {{ t('vehicleTransfer', 'fromUserId', { id: invite.fromUser.maskedId }) }}
+          </span>
+        </div>
+
         <p class="hint">{{ t('vehicleTransfer', 'confirmHint') }}</p>
 
         <p v-if="submitError" class="error">{{ submitError }}</p>
@@ -179,6 +187,33 @@ async function handleConfirmTransfer(): Promise<void> {
   margin: 2px 0 0;
   font-size: 12.5px;
   color: var(--color-text-secondary);
+}
+
+.from-user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  font-size: 13px;
+}
+
+.from-user-label {
+  color: var(--color-text-secondary);
+}
+
+.from-user-name {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.from-user-id {
+  color: var(--color-text-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
 }
 
 .secondary {

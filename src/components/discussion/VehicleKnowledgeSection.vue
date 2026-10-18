@@ -19,9 +19,11 @@ function modelDisplayName(model: VehicleModelProfile): string {
   return [model.brand, model.series, model.trimName].filter(Boolean).join(' ')
 }
 
+// 沒有輸入搜尋字時不列出任何車款，只顯示提示文字——有搜尋才顯示結果。
+const hasQuery = computed(() => searchQuery.value.trim() !== '')
 const filteredModels = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return models.value
+  if (!query) return []
   return models.value.filter((model) => {
     const haystack = [model.brand, model.series, model.trimName, ...model.synonyms]
       .filter(Boolean)
@@ -54,6 +56,12 @@ onMounted(async () => {
       :icon="Bike"
       :title="t('vehicleKnowledge', 'emptyTitle')"
       :description="t('vehicleKnowledge', 'emptyDesc')"
+    />
+    <EmptyState
+      v-else-if="!hasQuery"
+      :icon="Search"
+      :title="t('vehicleKnowledge', 'searchPromptTitle')"
+      :description="t('vehicleKnowledge', 'searchPromptDesc')"
     />
     <EmptyState
       v-else-if="filteredModels.length === 0"

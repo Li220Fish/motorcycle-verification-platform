@@ -31,7 +31,7 @@ const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 const authStore = useAuthStore()
 const router = useRouter()
-const { t } = useI18n()
+const { t, localeTag, formatPrice } = useI18n()
 
 const uploading = ref(false)
 const uploadedUrl = ref('')
@@ -43,7 +43,7 @@ function maskLicensePlate(plate: string): string {
 }
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('zh-TW')
+  return new Date(timestamp).toLocaleDateString(localeTag())
 }
 
 const typeLabelKey: Record<string, 'typeLabelSeller' | 'typeLabelBuyer' | 'typeLabelProfessional'> =
@@ -608,7 +608,7 @@ onMounted(async () => {
                 >{{ log.mileage.toLocaleString() }} km ·
               </template>
               <template v-if="log.liters !== null">{{ log.liters }} L · </template>
-              ${{ log.costTwd.toLocaleString() }}
+              {{ formatPrice(log.costTwd) }}
             </span>
             <span v-if="log.note" class="log-note">{{ log.note }}</span>
           </div>
@@ -687,7 +687,7 @@ onMounted(async () => {
                 · {{ log.mileage.toLocaleString() }} km</template
               >
               <template v-if="log.totalCostTwd !== null">
-                · ${{ log.totalCostTwd.toLocaleString() }}</template
+                · {{ formatPrice(log.totalCostTwd) }}</template
               >
             </span>
             <span v-if="log.note" class="log-note">{{ log.note }}</span>

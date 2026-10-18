@@ -31,6 +31,9 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { useInspectionReportSections } from '@/composables/useInspectionReportSections'
 import { auth } from '@/services/firebase/firebase'
 import { useAuthStore } from '@/stores/auth.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
@@ -67,7 +70,7 @@ const vehicleTitle = computed(() => {
     const queryYear = route.query.year
     return `${queryYear ? `${queryYear} ` : ''}${queryBrand} ${queryModel}`.trim()
   }
-  return '車輛驗證報告'
+  return t('shareReport', 'seller')
 })
 
 const isRealUser = computed(() => authStore.user !== null && !authStore.user.isAnonymous)
@@ -75,13 +78,13 @@ const isRealUser = computed(() => authStore.user !== null && !authStore.user.isA
 
 <template>
   <div>
-    <AppHeader title="檢驗報告" />
+    <AppHeader :title="t('ui', 'reportTitle')" />
 
     <EmptyState
       v-if="!loading && loadError"
       :icon="ShieldCheck"
-      title="找不到這份報告"
-      description="連結可能有誤，或這份報告尚未公開分享。"
+      :title="t('sharedReport', 'notFoundTitle')"
+      :description="t('sharedReport', 'notFoundDesc')"
     />
     <template v-else>
       <InspectionReportBody
@@ -92,8 +95,10 @@ const isRealUser = computed(() => authStore.user !== null && !authStore.user.isA
         :restricted="!isRealUser"
       />
       <div v-if="!isRealUser" class="login-banner">
-        <p>登入 RiDE 帳號即可查看完整照片與 AI 判定說明</p>
-        <PrimaryButton block @click="$router.push({ name: 'login' })">登入／註冊</PrimaryButton>
+        <p>{{ t('sharedReport', 'loginPrompt') }}</p>
+        <PrimaryButton block @click="$router.push({ name: 'login' })">{{
+          t('sharedReport', 'loginButton')
+        }}</PrimaryButton>
       </div>
     </template>
   </div>

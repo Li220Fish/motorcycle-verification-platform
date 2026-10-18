@@ -13,7 +13,7 @@ import { useDiscussionStore } from '@/stores/discussion.store'
 const router = useRouter()
 const authStore = useAuthStore()
 const discussionStore = useDiscussionStore()
-const { t } = useI18n()
+const { t, tCategory } = useI18n()
 
 const category = ref(DISCUSSION_CATEGORIES[0])
 const title = ref('')
@@ -76,7 +76,7 @@ async function submit(): Promise<void> {
       <label class="field">
         <span>{{ t('discussionCompose', 'category') }}</span>
         <select v-model="category">
-          <option v-for="c in DISCUSSION_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+          <option v-for="c in DISCUSSION_CATEGORIES" :key="c" :value="c">{{ tCategory(c) }}</option>
         </select>
       </label>
 

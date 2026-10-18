@@ -5,6 +5,9 @@ import { FileText, Trash2, Video, Volume2, X, Zap } from 'lucide-vue-next'
 import { storageService } from '@/services/firebase/storage.service'
 import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -31,9 +34,9 @@ function uploadBadge(
 ): { label: string; tone: 'pending' | 'failed' } | null {
   const status = uploadQueueStore.statusFor(item.id)
   if (!status || status === 'uploaded')
-    return item.remoteUrl ? null : { label: '✓ 已拍攝', tone: 'pending' }
-  if (status === 'failed') return { label: '! 上傳失敗', tone: 'failed' }
-  return { label: '上傳中…', tone: 'pending' }
+    return item.remoteUrl ? null : { label: t('evidencePreview', 'captured'), tone: 'pending' }
+  if (status === 'failed') return { label: t('evidencePreview', 'failed'), tone: 'failed' }
+  return { label: t('evidencePreview', 'uploading'), tone: 'pending' }
 }
 
 // evidence.remoteUrl is a Storage object path for real uploads (see
@@ -127,7 +130,9 @@ function closeZoom(): void {
     </div>
 
     <div v-if="zoomedItem" class="zoom-overlay" @click="closeZoom">
-      <button class="zoom-close" aria-label="關閉" @click="closeZoom"><X :size="20" /></button>
+      <button class="zoom-close" :aria-label="t('ui', 'close')" @click="closeZoom">
+        <X :size="20" />
+      </button>
       <img
         v-if="zoomedItem.type === 'photo'"
         :src="displayUrl(zoomedItem)"

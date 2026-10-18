@@ -17,6 +17,7 @@ export type NotificationType =
   | 'discussion_like'
   | 'discussion_reply'
   | 'vehicle_transferred'
+  | 'vehicle_received'
 
 export interface NotificationInput {
   type: NotificationType

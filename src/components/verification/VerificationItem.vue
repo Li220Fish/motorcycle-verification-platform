@@ -28,7 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{ advance: [] }>()
 
 const verificationStore = useVerificationStore()
-const { t, tItem } = useI18n()
+const { t, tItem, tItemText, tItemEvidence, tItemOption } = useI18n()
 
 /** Translated display title for this item — see useI18n's tItem() doc
  *  comment: the underlying `item.title` (from src/data/verification/*.ts)
@@ -36,6 +36,28 @@ const { t, tItem } = useI18n()
  *  mode when one is registered for this item's id, falling back to the
  *  original otherwise. */
 const displayTitle = computed(() => tItem(props.item.id, props.item.title))
+const displayDescription = computed(
+  () => tItemText(props.item.id, 'description', props.item.description) ?? '',
+)
+const displayInstruction = computed(() =>
+  tItemText(props.item.id, 'instruction', props.item.instruction),
+)
+const displayHelpText = computed(() => tItemText(props.item.id, 'helpText', props.item.helpText))
+const displayOptions = computed(() =>
+  props.item.options?.map((option) => ({
+    ...option,
+    label: tItemOption(props.item.id, option.value, option.label),
+  })),
+)
+const displayDisclosureOptions = computed(() =>
+  props.item.disclosureOptions?.map((option) => ({
+    ...option,
+    label: tItemOption(props.item.id, option.value, option.label),
+  })),
+)
+function evidenceLabel(index: number, fallback: string): string {
+  return tItemEvidence(props.item.id, index, fallback) ?? fallback
+}
 
 const result = ref<AnswerResultValue | null>(null)
 const note = ref('')
@@ -117,7 +139,13 @@ function handleRemoveEvidence(evidenceId: string): void {
 // also carry a required/optional supporting photo, not just dedicated
 // photo-checklist items.
 const photoEvidenceRequirements = computed(
-  () => props.item.evidence?.filter((requirement) => requirement.kind === 'photo') ?? [],
+  () =>
+    props.item.evidence
+      ?.map((requirement, index) => ({
+        ...requirement,
+        label: evidenceLabel(index, requirement.label),
+      }))
+      .filter((requirement) => requirement.kind === 'photo') ?? [],
 )
 
 const isPurePhotoItem = computed(() => props.item.type === 'photo')
@@ -180,8 +208,8 @@ function handleUnflagIssue(): void {
     </Transition>
     <VerificationItemHeader
       :title="displayTitle"
-      :description="item.description"
-      :instruction="item.instruction"
+      :description="displayDescription"
+      :instruction="displayInstruction"
       :severity="item.severity"
     >
       <button class="help-trigger" @click="helpOpen = true">
@@ -200,7 +228,7 @@ function handleUnflagIssue(): void {
       <VideoEvidenceCapture
         :verification-id="verificationId"
         :item-id="item.id"
-        :label="item.evidence?.[0]?.label ?? displayTitle"
+        :label="item.evidence?.[0] ? evidenceLabel(0, item.evidence[0].label) : displayTitle"
       />
     </div>
     <div v-else-if="item.type === 'audio'" class="evidence-block">
@@ -255,7 +283,7 @@ function handleUnflagIssue(): void {
     </div>
     <template v-else-if="isPurePhotoItem">
       <VerificationResultSelector
-        :options="item.options"
+        :options="displayOptions"
         :model-value="result"
         @update:model-value="handleResultChange"
       />
@@ -264,14 +292,14 @@ function handleUnflagIssue(): void {
       </button>
     </template>
     <DisclosureMultiSelect
-      v-else-if="item.disclosureOptions"
-      :options="item.disclosureOptions"
+      v-else-if="displayDisclosureOptions"
+      :options="displayDisclosureOptions!"
       :model-value="selections"
       @update:model-value="handleSelectionsChange"
     />
     <VerificationResultSelector
       v-else
-      :options="item.options"
+      :options="displayOptions"
       :model-value="result"
       @update:model-value="handleResultChange"
     />
@@ -299,7 +327,7 @@ function handleUnflagIssue(): void {
     <VerificationHelpSheet
       :open="helpOpen"
       :title="displayTitle"
-      :content="item.helpText ?? `${item.description} ${item.instruction ?? ''}`.trim()"
+      :content="displayHelpText ?? `${displayDescription} ${displayInstruction ?? ''}`.trim()"
       @close="helpOpen = false"
     />
   </div>

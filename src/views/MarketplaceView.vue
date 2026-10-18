@@ -24,7 +24,7 @@ import type { MockMarketListing } from '@/data/home/marketplace-mock'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { t } = useI18n()
+const { t, tRegion } = useI18n()
 const allListings = ref<MockMarketListing[]>([])
 const searchQuery = ref('')
 const filterSheetOpen = ref(false)
@@ -97,7 +97,7 @@ const listings = computed(() => {
     if (activeTab.value === 'favorites' && !favoriteIds.value.has(listing.id)) return false
     if (keyword) {
       const haystack =
-        `${listing.vehicleSnapshot.brand} ${listing.vehicleSnapshot.model} ${listing.region} ${listing.district}`.toLowerCase()
+        `${listing.vehicleSnapshot.brand} ${listing.vehicleSnapshot.model} ${listing.region} ${listing.district} ${tRegion(listing.region)} ${tRegion(listing.district)}`.toLowerCase()
       if (!haystack.includes(keyword)) return false
     }
     const [priceMin, priceMax] = filters.value.priceRange

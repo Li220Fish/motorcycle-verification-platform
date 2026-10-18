@@ -17,10 +17,7 @@ import { Check, ChevronLeft, Flashlight, MessageSquare, X } from 'lucide-vue-nex
 
 import { useI18n } from '@/composables/useI18n'
 import { useKnownIssueReminder } from '@/composables/useKnownIssueReminder'
-import {
-  KNOWN_ISSUE_PART_LABEL,
-  knownIssuesForAprItem,
-} from '@/data/verification/known-issue-mapping'
+import { knownIssuesForAprItem } from '@/data/verification/known-issue-mapping'
 import { liveCameraService, type CameraFacing } from '@/services/media/live-camera.service'
 import VerificationHelpSheet from './VerificationHelpSheet.vue'
 import { storageService } from '@/services/firebase/storage.service'
@@ -152,7 +149,9 @@ const {
 } = useKnownIssueReminder()
 const knownIssueTitle = computed(() => {
   const part = knownIssueActiveIssues.value[0]?.part
-  return `系統偵測：${part ? KNOWN_ISSUE_PART_LABEL[part] : '通病'}`
+  return t('ui', 'knownIssueTitle', {
+    part: part ? t('knownIssuePart', part) : t('ui', 'knownIssueFallback'),
+  })
 })
 const knownIssueContent = computed(() =>
   knownIssueActiveIssues.value.map((issue) => issue.description).join('\n\n'),
@@ -414,7 +413,7 @@ async function capturePhoto(): Promise<void> {
     await uploadCapturedPhoto(blob, quality, targetItemId)
   } catch (error) {
     uploadErrorMessage.value =
-      error instanceof Error ? error.message : '上傳失敗，請重新拍攝這張照片'
+      error instanceof Error ? error.message : t('ui', 'uploadFailedRetake')
   } finally {
     uploading.value = false
   }
@@ -431,7 +430,7 @@ async function keepPendingPhoto(): Promise<void> {
     await uploadCapturedPhoto(pending.blob, pending.quality, pending.itemId)
   } catch (error) {
     uploadErrorMessage.value =
-      error instanceof Error ? error.message : '上傳失敗，請重新拍攝這張照片'
+      error instanceof Error ? error.message : t('ui', 'uploadFailedRetake')
   } finally {
     uploading.value = false
   }

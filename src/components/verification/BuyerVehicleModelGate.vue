@@ -13,6 +13,9 @@ import { computed, ref } from 'vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import VehicleModelSelect from '@/components/common/VehicleModelSelect.vue'
 import type { VehicleModelOption } from '@/services/firebase/vehicle-model.service'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ knownBrand?: string | null; knownModel?: string | null }>()
 /** null when the buyer typed a manual brand/model with no catalog match —
@@ -44,17 +47,21 @@ function submit(): void {
 
 <template>
   <div class="model-gate">
-    <h2>這台車是哪個車型？</h2>
+    <h2>{{ t('modelGate', 'title') }}</h2>
     <p class="hint">
-      請從車型資料庫選擇目前要驗的這台車，選對車型後系統會自動帶入這款車常見的通病，在檢查到對應部位時提醒你。
-      <template v-if="knownVehicleLabel">（賣家填寫的車輛：{{ knownVehicleLabel }}）</template>
+      {{ t('modelGate', 'hint') }}
+      <template v-if="knownVehicleLabel">{{
+        t('modelGate', 'sellerVehicle', { label: knownVehicleLabel })
+      }}</template>
     </p>
     <VehicleModelSelect
       v-model:brand="brand"
       v-model:model="model"
       @model-picked="handleModelPicked"
     />
-    <PrimaryButton block :disabled="!canSubmit" @click="submit">確認</PrimaryButton>
+    <PrimaryButton block :disabled="!canSubmit" @click="submit">{{
+      t('ui', 'confirm')
+    }}</PrimaryButton>
   </div>
 </template>
 

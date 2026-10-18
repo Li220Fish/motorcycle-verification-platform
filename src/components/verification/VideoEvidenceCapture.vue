@@ -6,6 +6,9 @@ import { platformService } from '@/services/platform/platform.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -41,12 +44,12 @@ async function handleStart(): Promise<void> {
   await runCountdown()
   try {
     const result = await cameraService.recordVideo()
-    if (!result.webPath) throw new Error('未取得影片')
+    if (!result.webPath) throw new Error(t('videoEvidence', 'noVideo'))
     const blob = await fetch(result.webPath).then((response) => response.blob())
     capturedBlob = blob
     previewUrl.value = URL.createObjectURL(blob)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '錄影失敗'
+    errorMessage.value = error instanceof Error ? error.message : t('videoEvidence', 'failed')
   }
 }
 
@@ -101,24 +104,24 @@ async function handleConfirm(): Promise<void> {
   <div class="video-capture">
     <template v-if="countdown !== null">
       <div class="countdown">{{ countdown }}</div>
-      <p class="hint">倒數結束後將開啟相機，請立即發動機車並怠速 20 秒</p>
+      <p class="hint">{{ t('videoEvidence', 'countdownHint') }}</p>
     </template>
     <template v-else-if="!previewUrl">
-      <p class="instructions">請將手機固定在拍攝位置，準備好後開始倒數</p>
+      <p class="instructions">{{ t('videoEvidence', 'instructions') }}</p>
       <button v-if="isNative" class="capture-button" @click="handleStart">
-        開始錄影：{{ label }}
+        {{ t('videoEvidence', 'start', { label }) }}
       </button>
       <label v-else class="capture-button file-button">
-        開始錄影：{{ label }}
+        {{ t('videoEvidence', 'start', { label }) }}
         <input type="file" accept="video/*" capture="environment" @change="handleWebFileChange" />
       </label>
     </template>
     <template v-else>
       <video :src="previewUrl" controls class="preview-video" />
       <div class="preview-actions">
-        <button class="secondary" @click="handleRetake">重新錄製</button>
+        <button class="secondary" @click="handleRetake">{{ t('ui', 'rerecord') }}</button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
-          {{ uploading ? '儲存中...' : '確認影片' }}
+          {{ uploading ? t('ui', 'saving') : t('videoEvidence', 'confirm') }}
         </button>
       </div>
     </template>

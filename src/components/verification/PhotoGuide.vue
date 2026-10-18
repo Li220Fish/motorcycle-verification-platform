@@ -4,6 +4,9 @@ import { Bike } from 'lucide-vue-next'
 
 import MotorcycleDiagram from './MotorcycleDiagram.vue'
 import { getPhotoSlotByItemId } from '@/data/verification/photo-slots'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   label: string
@@ -30,7 +33,7 @@ const highlight = computed(() => {
     <div v-else class="frame">
       <Bike :size="40" color="var(--color-text-disabled)" />
     </div>
-    <p>請讓{{ label }}完整入框</p>
+    <p>{{ t('photoGuide', 'fitInFrame', { label }) }}</p>
   </div>
 </template>
 

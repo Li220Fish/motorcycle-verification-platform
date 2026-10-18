@@ -59,7 +59,7 @@ function showChrome(): boolean {
 const pendingTransferNotice = computed(
   () =>
     [...notificationStore.notifications]
-      .filter((n) => n.type === 'vehicle_transferred' && !n.read)
+      .filter((n) => (n.type === 'vehicle_transferred' || n.type === 'vehicle_received') && !n.read)
       .sort((a, b) => a.createdAt - b.createdAt)[0],
 )
 

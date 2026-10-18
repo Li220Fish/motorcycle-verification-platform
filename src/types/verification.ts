@@ -113,6 +113,18 @@ export interface Verification {
    *  a later admin edit to the model's known-issues list doesn't retroactively
    *  change what this buyer already saw. Consumed by BuyerDisclosureCheck.vue. */
   buyerKnownIssuesSnapshot?: VehicleModelKnownIssue[]
+  /** 5 分鐘作答窗口的起點（ms）— 新的驗證檔若在這之後 5 分鐘內沒有同時完成
+   *  核心照片＋冷車引擎檢查，就退回草稿並清空所有內容（見
+   *  verification-attempt.ts）。只有建立時就帶這個欄位的新驗證檔才適用；
+   *  舊資料沒有這個欄位，不受影響。 */
+  attemptStartedAt?: number
+  /** Buyer only — the marketplace listing the appointment was for. Lets
+   *  firestore.rules allow a buyer to create a verification on a vehicle they
+   *  don't own (it must match that listing's vehicleId). */
+  listingId?: string
+  /** Buyer only — set once BuyerVehicleModelGate.vue was answered (even
+   *  with a manual, non-catalog model) so it isn't asked again on resume. */
+  buyerModelConfirmed?: boolean
 }
 
 // isPublic/protocolVersion/schemaVersion are stamped by verificationService.create()

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 /**
  * One shared schematic motorcycle side-view outline, reused by both the
  * Appearance Capture Map (all groups shown as tappable hotspots) and
@@ -28,7 +31,12 @@ defineEmits<{ select: [string] }>()
 
 <template>
   <div class="diagram">
-    <svg viewBox="0 0 300 150" class="diagram-svg" role="img" aria-label="機車部位示意圖">
+    <svg
+      viewBox="0 0 300 150"
+      class="diagram-svg"
+      role="img"
+      :aria-label="t('motorcycleDiagram', 'aria')"
+    >
       <!-- shared outline -->
       <g class="outline">
         <circle cx="55" cy="112" r="30" />

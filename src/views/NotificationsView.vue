@@ -41,6 +41,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   discussion_like: Heart,
   discussion_reply: MessageCircle,
   vehicle_transferred: ArrowRightLeft,
+  vehicle_received: ArrowRightLeft,
 }
 
 interface DisplayGroup {

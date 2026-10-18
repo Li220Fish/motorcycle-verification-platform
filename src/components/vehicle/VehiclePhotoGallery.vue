@@ -16,6 +16,9 @@ import PhotoLightbox from '@/components/common/PhotoLightbox.vue'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ vehicleId: string; photos: string[] }>()
 
@@ -65,7 +68,7 @@ async function handleNewPhotoCropConfirmed(blob: Blob): Promise<void> {
 }
 
 async function removePhoto(url: string): Promise<void> {
-  if (!window.confirm('刪除這張照片？此操作無法復原。')) return
+  if (!window.confirm(t('photoGallery', 'confirmDelete'))) return
   await vehicleStore.updateVehicle(props.vehicleId, {
     photos: props.photos.filter((photo) => photo !== url),
   })
@@ -107,14 +110,24 @@ async function handleCropConfirmed(blob: Blob): Promise<void> {
         <Bike :size="56" color="var(--color-text-disabled)" />
       </div>
       <button class="add-btn" :disabled="uploading" @click="triggerAdd">
-        <Plus :size="14" />{{ uploading ? '上傳中...' : cover ? '更換封面' : '新增照片' }}
+        <Plus :size="14" />{{
+          uploading
+            ? t('ui', 'uploading')
+            : cover
+              ? t('photoGallery', 'changeCover')
+              : t('photoGallery', 'addPhoto')
+        }}
       </button>
     </div>
 
     <div v-if="thumbnails.length > 0" class="thumb-row">
       <div v-for="photo in thumbnails" :key="photo" class="thumb">
         <img :src="photo" class="thumb-img" alt="" @click="openPhoto(photo, 1)" />
-        <button class="thumb-btn delete-btn" aria-label="刪除照片" @click="removePhoto(photo)">
+        <button
+          class="thumb-btn delete-btn"
+          :aria-label="t('ui', 'deletePhoto')"
+          @click="removePhoto(photo)"
+        >
           <Trash2 :size="11" />
         </button>
       </div>

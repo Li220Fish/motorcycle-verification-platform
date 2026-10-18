@@ -6,6 +6,9 @@
  *  "have an issue to disclose", but the other three can combine freely
  *  (a vehicle can have been both rolled over AND in a collision). */
 import type { DisclosureOption } from '@/data/verification'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   options: DisclosureOption[]
@@ -31,7 +34,7 @@ function toggle(value: string): void {
 
 <template>
   <div class="disclosure-select">
-    <p class="label">請複選</p>
+    <p class="label">{{ t('disclosureSelect', 'label') }}</p>
     <div class="options">
       <label
         v-for="option in options"

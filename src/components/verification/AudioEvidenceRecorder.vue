@@ -5,6 +5,9 @@ import { audioRecorderService } from '@/services/media/audio-recorder.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import { useUploadQueueStore } from '@/stores/upload-queue.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -24,7 +27,7 @@ async function handleStart(): Promise<void> {
     await audioRecorderService.start()
     recording.value = true
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '無法開始錄音'
+    errorMessage.value = error instanceof Error ? error.message : t('audioEvidence', 'cantStart')
   }
 }
 
@@ -35,7 +38,7 @@ async function handleStop(): Promise<void> {
     durationMs.value = result.durationMs
     previewUrl.value = URL.createObjectURL(result.blob)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '錄音失敗'
+    errorMessage.value = error instanceof Error ? error.message : t('audioEvidence', 'failed')
   } finally {
     recording.value = false
   }
@@ -77,16 +80,22 @@ async function handleConfirm(): Promise<void> {
 <template>
   <div class="audio-capture">
     <template v-if="!previewUrl">
-      <button v-if="!recording" class="capture-button" @click="handleStart">開始錄音</button>
-      <button v-else class="capture-button recording" @click="handleStop">停止錄音</button>
+      <button v-if="!recording" class="capture-button" @click="handleStart">
+        {{ t('audioEvidence', 'start') }}
+      </button>
+      <button v-else class="capture-button recording" @click="handleStop">
+        {{ t('audioEvidence', 'stop') }}
+      </button>
     </template>
     <template v-else>
       <audio :src="previewUrl" controls />
-      <p class="duration">長度：{{ (durationMs / 1000).toFixed(1) }}s</p>
+      <p class="duration">
+        {{ t('audioEvidence', 'duration', { seconds: (durationMs / 1000).toFixed(1) }) }}
+      </p>
       <div class="preview-actions">
-        <button class="secondary" @click="previewUrl = ''">重新錄製</button>
+        <button class="secondary" @click="previewUrl = ''">{{ t('ui', 'rerecord') }}</button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
-          {{ uploading ? '儲存中...' : '確認錄音' }}
+          {{ uploading ? t('ui', 'saving') : t('audioEvidence', 'confirm') }}
         </button>
       </div>
     </template>

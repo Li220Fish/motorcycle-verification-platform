@@ -38,6 +38,7 @@ function categoryForType(type: NotificationType): NotificationCategory {
     case 'booking_approved':
     case 'booking_declined':
     case 'vehicle_transferred':
+    case 'vehicle_received':
       return 'trade'
     case 'discussion_featured':
     case 'discussion_admin_post':

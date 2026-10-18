@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { useI18n } from '@/composables/useI18n'
+
 // Two overlapping native <input type="range"> elements — the standard
 // lightweight way to build a draggable dual-handle range slider without a
 // UI library dependency. Each only captures pointer events on its own thumb
@@ -16,6 +18,7 @@ const props = withDefaults(
   { step: 1000 },
 )
 const emit = defineEmits<{ 'update:modelValue': [[number, number]] }>()
+const { t, formatPrice: formatTwd } = useI18n()
 
 function handleMinInput(event: Event): void {
   const raw = Number((event.target as HTMLInputElement).value)
@@ -37,7 +40,7 @@ const fillStyle = computed(() => {
 })
 
 function formatPrice(value: number): string {
-  return value >= props.max ? `$${value.toLocaleString()}+` : `$${value.toLocaleString()}`
+  return value >= props.max ? `${formatTwd(value)}+` : formatTwd(value)
 }
 </script>
 
@@ -53,7 +56,7 @@ function formatPrice(value: number): string {
         :max="max"
         :step="step"
         :value="modelValue[0]"
-        aria-label="最低價格"
+        :aria-label="t('priceSlider', 'min')"
         @input="handleMinInput"
       />
       <input
@@ -63,7 +66,7 @@ function formatPrice(value: number): string {
         :max="max"
         :step="step"
         :value="modelValue[1]"
-        aria-label="最高價格"
+        :aria-label="t('priceSlider', 'max')"
         @input="handleMaxInput"
       />
     </div>

@@ -5,6 +5,9 @@ import { ChevronDown, Lock, X } from 'lucide-vue-next'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import VehicleDiagramOverview from '@/components/verification/VehicleDiagramOverview.vue'
 import type { DiagramMarker } from '@/components/verification/VehicleDiagramOverview.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 export interface ReportItem {
   id: string
@@ -145,7 +148,7 @@ function closeImage(): void {
   <div class="content">
     <div class="hero">
       <p class="hero-title">{{ vehicleTitle }}</p>
-      <p class="hero-date">檢驗日期：{{ inspectedDate }}</p>
+      <p class="hero-date">{{ t('report', 'inspectedOn', { date: inspectedDate }) }}</p>
     </div>
 
     <VehicleDiagramOverview :markers="diagramMarkers" @select-items="handleDiagramSelectItems" />
@@ -166,15 +169,15 @@ function closeImage(): void {
           <div v-if="expandedSectionIds.has(section.id)" class="item-list">
             <template v-if="restricted && (section.engineTypeNote || section.audioUrl)">
               <router-link to="/login" class="locked-note">
-                <Lock :size="12" />登入後查看引擎聲音判定與錄音
+                <Lock :size="12" />{{ t('report', 'loginForEngine') }}
               </router-link>
             </template>
             <template v-else>
               <p v-if="section.engineTypeNote" class="engine-type-note">
-                引擎聲型態：{{ section.engineTypeNote }}
+                {{ t('report', 'engineType', { note: section.engineTypeNote ?? '' }) }}
               </p>
               <div v-if="section.audioUrl" class="engine-audio-player">
-                <span class="engine-audio-label">引擎運轉聲音</span>
+                <span class="engine-audio-label">{{ t('report', 'engineAudio') }}</span>
                 <audio controls :src="section.audioUrl" />
               </div>
             </template>
@@ -198,29 +201,37 @@ function closeImage(): void {
                 <div class="item-text">
                   <p class="item-title">
                     {{ item.title }}
-                    <span v-if="item.required === false" class="optional-tag">使用者提供</span>
+                    <span v-if="item.required === false" class="optional-tag">{{
+                      t('report', 'userProvided')
+                    }}</span>
                   </p>
                   <p v-if="item.required === false" class="item-optional-note">
-                    此為使用者自行揭露資訊，非 AI 核心判定。
+                    {{ t('report', 'userDisclosed') }}
                   </p>
                   <template v-if="restricted && (item.ocrText || item.aiNote)">
                     <router-link to="/login" class="locked-note">
-                      <Lock :size="12" />登入後查看 AI 判定說明
+                      <Lock :size="12" />{{ t('report', 'loginForAi') }}
                     </router-link>
                   </template>
                   <template v-else>
                     <p v-if="item.ocrText" class="item-ocr-note">
-                      OCR 判讀里程：{{ item.ocrText }}
+                      {{ t('report', 'ocrMileage', { text: item.ocrText ?? '' }) }}
                     </p>
-                    <p v-if="item.aiNote" class="item-ai-note">AI 判定說明：{{ item.aiNote }}</p>
+                    <p v-if="item.aiNote" class="item-ai-note">
+                      {{ t('report', 'aiNote', { note: item.aiNote }) }}
+                    </p>
                   </template>
-                  <p v-if="item.note" class="item-note">使用者補充：{{ item.note }}</p>
+                  <p v-if="item.note" class="item-note">
+                    {{ t('report', 'userNote', { note: item.note }) }}
+                  </p>
                   <router-link
                     v-if="restricted && item.photos && item.photos.length > 0"
                     to="/login"
                     class="locked-photos"
                   >
-                    <Lock :size="14" />登入後查看詳情（{{ item.photos.length }} 張照片）
+                    <Lock :size="14" />{{
+                      t('report', 'loginForPhotos', { count: item.photos.length })
+                    }}
                   </router-link>
                   <div v-else-if="item.photos && item.photos.length > 0" class="item-photos">
                     <button
@@ -228,7 +239,7 @@ function closeImage(): void {
                       :key="index"
                       type="button"
                       class="item-photo-thumb"
-                      aria-label="查看照片"
+                      :aria-label="t('ui', 'viewPhoto')"
                       @click="openImage(photo)"
                     >
                       <img :src="photo" alt="" />
@@ -245,7 +256,7 @@ function closeImage(): void {
 
     <div v-if="activeImageUrl" class="lightbox-overlay" @click="closeImage">
       <img :src="activeImageUrl" class="lightbox-img" alt="" @click.stop />
-      <button class="lightbox-close" aria-label="關閉" @click="closeImage">
+      <button class="lightbox-close" :aria-label="t('ui', 'close')" @click="closeImage">
         <X :size="22" />
       </button>
     </div>

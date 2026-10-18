@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{
   title: string
@@ -14,8 +17,12 @@ defineProps<{
     <div class="title-row">
       <div class="title-main">
         <h2>{{ title }}</h2>
-        <StatusBadge v-if="severity === 'critical'" tone="danger">重要</StatusBadge>
-        <StatusBadge v-else-if="severity === 'important'" tone="warning">注意</StatusBadge>
+        <StatusBadge v-if="severity === 'critical'" tone="danger">{{
+          t('itemHeader', 'critical')
+        }}</StatusBadge>
+        <StatusBadge v-else-if="severity === 'important'" tone="warning">{{
+          t('itemHeader', 'important')
+        }}</StatusBadge>
       </div>
       <slot />
     </div>

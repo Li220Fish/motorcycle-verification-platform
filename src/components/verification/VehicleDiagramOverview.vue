@@ -16,6 +16,9 @@
  * used by InspectionReportBody.
  */
 import { computed, ref } from 'vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 export type DiagramTone = 'success' | 'warning' | 'neutral' | 'danger' | 'primary'
 
@@ -59,10 +62,10 @@ function colorFor(tone: DiagramTone): string {
 // Rolls the underlying per-item labels (正常/須注意/不確定/不適用/未檢查) up into
 // the same 3 buckets the legend row shows — 須注意/不確定 both read as "需留意"
 // at a glance, same for 不適用/未檢查 both reading as "尚未確認".
-const STAT_GROUPS: { key: string; label: string; tones: DiagramTone[] }[] = [
-  { key: 'good', label: '良好', tones: ['success'] },
-  { key: 'attention', label: '需留意', tones: ['warning', 'danger'] },
-  { key: 'unchecked', label: '尚未確認', tones: ['neutral', 'primary'] },
+const STAT_GROUPS: { key: 'good' | 'attention' | 'unchecked'; tones: DiagramTone[] }[] = [
+  { key: 'good', tones: ['success'] },
+  { key: 'attention', tones: ['warning', 'danger'] },
+  { key: 'unchecked', tones: ['neutral', 'primary'] },
 ]
 
 const statCounts = computed(() =>
@@ -162,7 +165,7 @@ const statCounts = computed(() =>
     <div class="diagram-stats">
       <div v-for="group in statCounts" :key="group.key" class="diagram-stat">
         <span class="diagram-stat-count">{{ group.count }}</span>
-        <span class="diagram-stat-label">{{ group.label }}</span>
+        <span class="diagram-stat-label">{{ t('diagramOverview', group.key) }}</span>
       </div>
     </div>
   </div>

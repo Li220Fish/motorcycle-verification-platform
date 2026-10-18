@@ -2,6 +2,9 @@
 import { computed } from 'vue'
 
 import type { VoltageSample } from '@/services/probe/probe.types'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -57,7 +60,9 @@ const points = computed(() => {
       />
       <polyline v-if="points" :points="points" class="voltage-line" />
     </svg>
-    <div v-if="windowSamples.length === 0" class="chart-empty">尚無電壓資料</div>
+    <div v-if="windowSamples.length === 0" class="chart-empty">
+      {{ t('probeStatus', 'noData') }}
+    </div>
   </div>
 </template>
 

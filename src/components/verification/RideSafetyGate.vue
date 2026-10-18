@@ -2,6 +2,9 @@
 import { ref } from 'vue'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineEmits<{ confirm: [] }>()
 
@@ -19,27 +22,27 @@ function allChecked(): boolean {
 
 <template>
   <div class="safety-gate">
-    <h2>安全確認</h2>
-    <p class="hint">試駕前請確認以下事項，全部勾選後才能開始。</p>
+    <h2>{{ t('rideSafety', 'title') }}</h2>
+    <p class="hint">{{ t('rideSafety', 'hint') }}</p>
     <label class="check-row">
       <input v-model="checks.consent" type="checkbox" />
-      <span>已取得車主同意</span>
+      <span>{{ t('rideSafety', 'consent') }}</span>
     </label>
     <label class="check-row">
       <input v-model="checks.helmet" type="checkbox" />
-      <span>已佩戴安全帽</span>
+      <span>{{ t('rideSafety', 'helmet') }}</span>
     </label>
     <label class="check-row">
       <input v-model="checks.route" type="checkbox" />
-      <span>路線適合</span>
+      <span>{{ t('rideSafety', 'route') }}</span>
     </label>
     <label class="check-row">
       <input v-model="checks.noDanger" type="checkbox" />
-      <span>不會進行危險測試</span>
+      <span>{{ t('rideSafety', 'noDanger') }}</span>
     </label>
-    <PrimaryButton block :disabled="!allChecked()" @click="$emit('confirm')"
-      >開始試駕</PrimaryButton
-    >
+    <PrimaryButton block :disabled="!allChecked()" @click="$emit('confirm')">{{
+      t('rideSafety', 'start')
+    }}</PrimaryButton>
   </div>
 </template>
 

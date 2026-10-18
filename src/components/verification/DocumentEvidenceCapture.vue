@@ -9,6 +9,9 @@ import { useVerificationStore } from '@/stores/verification.store'
 import { storageService } from '@/services/firebase/storage.service'
 import { imageCompressionService } from '@/services/media/image-compression.service'
 import type { VerificationEvidence } from '@/types/verification-evidence'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   verificationId: string
@@ -31,7 +34,7 @@ async function handleCapture(): Promise<void> {
     pending.value = { kind: 'photo', previewUrl: result.webPath ?? '' }
     recognitionStatus.value = 'idle'
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '拍照失敗'
+    errorMessage.value = error instanceof Error ? error.message : t('ui', 'captureFailed')
   }
 }
 
@@ -44,7 +47,7 @@ function handleFileChange(event: Event): void {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   if (file.type !== 'application/pdf') {
-    errorMessage.value = '請選擇 PDF 檔案'
+    errorMessage.value = t('documentEvidence', 'pickPdf')
     return
   }
   pending.value = { kind: 'pdf', file }
@@ -120,7 +123,7 @@ async function handleConfirm(): Promise<void> {
     await useVerificationStore().addEvidence(evidence)
     handleReset()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '上傳失敗，請重試'
+    errorMessage.value = error instanceof Error ? error.message : t('ui', 'uploadFailedRetry')
   } finally {
     uploading.value = false
   }
@@ -131,8 +134,12 @@ async function handleConfirm(): Promise<void> {
   <div class="document-capture">
     <template v-if="!pending">
       <div class="source-buttons">
-        <button class="capture-button" @click="handleCapture">拍攝文件</button>
-        <button class="capture-button secondary" @click="openFilePicker">上傳 PDF</button>
+        <button class="capture-button" @click="handleCapture">
+          {{ t('documentEvidence', 'shoot') }}
+        </button>
+        <button class="capture-button secondary" @click="openFilePicker">
+          {{ t('documentEvidence', 'uploadPdf') }}
+        </button>
       </div>
       <input
         ref="fileInput"
@@ -150,21 +157,23 @@ async function handleConfirm(): Promise<void> {
         class="capture-button secondary"
         @click="handleAnalyze"
       >
-        影像輔助分析
+        {{ t('ui', 'imageAssist') }}
       </button>
-      <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">分析中...</p>
+      <p v-else-if="recognitionStatus === 'analyzing'" class="analyzing">
+        {{ t('ui', 'analyzing') }}
+      </p>
       <div v-else-if="recognitionStatus === 'completed'" class="fields">
         <div v-for="(value, key) in recognitionFields" :key="key" class="field-row">
           <span>{{ key }}</span>
           <span>{{ value }}</span>
         </div>
-        <p class="mock-caption">此功能目前為測試模式，結果不作為正式車況判定。</p>
+        <p class="mock-caption">{{ t('ui', 'mockCaption') }}</p>
       </div>
 
       <div class="preview-actions">
-        <button class="secondary" @click="handleReset">重新選擇</button>
+        <button class="secondary" @click="handleReset">{{ t('ui', 'reselect') }}</button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
-          {{ uploading ? '儲存中...' : '確認文件' }}
+          {{ uploading ? t('ui', 'saving') : t('documentEvidence', 'confirm') }}
         </button>
       </div>
     </template>
@@ -174,9 +183,9 @@ async function handleConfirm(): Promise<void> {
         <span>{{ pending.file.name }}</span>
       </div>
       <div class="preview-actions">
-        <button class="secondary" @click="handleReset">重新選擇</button>
+        <button class="secondary" @click="handleReset">{{ t('ui', 'reselect') }}</button>
         <button class="primary" :disabled="uploading" @click="handleConfirm">
-          {{ uploading ? '儲存中...' : '確認文件' }}
+          {{ uploading ? t('ui', 'saving') : t('documentEvidence', 'confirm') }}
         </button>
       </div>
     </template>

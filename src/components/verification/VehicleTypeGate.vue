@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineEmits<{ pick: [EngineTransmissionType] }>()
 </script>
 
 <template>
   <div class="vehicle-type-gate">
-    <h2>請選擇車輛類型</h2>
+    <h2>{{ t('vehicleTypeGate', 'title') }}</h2>
     <p class="hint">
-      這台車是「速可達」還是「檔車」？這會決定鏈條／齒盤等相關項目是否需要檢查，選擇後會記錄在這台車的資料上。
+      {{ t('vehicleTypeGate', 'hint') }}
     </p>
     <div class="type-pick">
       <PrimaryButton variant="secondary" block @click="$emit('pick', 'scooter')">
-        速可達
+        {{ t('vehicleTypeGate', 'scooter') }}
       </PrimaryButton>
-      <PrimaryButton block @click="$emit('pick', 'manual')">檔車</PrimaryButton>
+      <PrimaryButton block @click="$emit('pick', 'manual')">{{
+        t('vehicleTypeGate', 'manual')
+      }}</PrimaryButton>
     </div>
   </div>
 </template>

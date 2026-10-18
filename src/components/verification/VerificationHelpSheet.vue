@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 defineProps<{
   open: boolean
   title: string
@@ -15,7 +18,7 @@ defineEmits<{ close: [] }>()
         <div class="sheet-handle" />
         <h3>{{ title }}</h3>
         <p>{{ content }}</p>
-        <button class="close-button" @click="$emit('close')">知道了</button>
+        <button class="close-button" @click="$emit('close')">{{ t('ui', 'gotIt') }}</button>
       </div>
     </div>
   </Teleport>

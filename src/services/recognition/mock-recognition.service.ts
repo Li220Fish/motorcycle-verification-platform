@@ -4,6 +4,7 @@ import type {
   RecognitionInput,
   RecognitionResult,
 } from './recognition.types'
+import { lt } from '@/i18n/locale-text'
 
 const ANALYSIS_DELAY_MS = 900
 
@@ -26,13 +27,24 @@ class MockRecognitionService implements RecognitionService {
       return {
         status: 'error',
         findings: [],
-        errorMessage: '影像分析暫時無法使用，請直接以人工判斷為主。',
+        errorMessage: lt(
+          '影像分析暫時無法使用，請直接以人工判斷為主。',
+          'Image analysis is unavailable right now — please judge manually.',
+        ),
       }
     }
     if (scenario === 'issue') {
-      return { status: 'review_required', confidence: 0.72, findings: ['可能有刮傷'] }
+      return {
+        status: 'review_required',
+        confidence: 0.72,
+        findings: [lt('可能有刮傷', 'Possible scratch')],
+      }
     }
-    return { status: 'completed', confidence: 0.91, findings: ['未發現明顯異常'] }
+    return {
+      status: 'completed',
+      confidence: 0.91,
+      findings: [lt('未發現明顯異常', 'No obvious issues found')],
+    }
   }
 
   async analyzeDamage(input: RecognitionInput): Promise<RecognitionResult> {
@@ -42,13 +54,24 @@ class MockRecognitionService implements RecognitionService {
       return {
         status: 'error',
         findings: [],
-        errorMessage: '影像分析暫時無法使用，請直接以人工判斷為主。',
+        errorMessage: lt(
+          '影像分析暫時無法使用，請直接以人工判斷為主。',
+          'Image analysis is unavailable right now — please judge manually.',
+        ),
       }
     }
     if (scenario === 'normal') {
-      return { status: 'completed', confidence: 0.88, findings: ['未發現明顯異常'] }
+      return {
+        status: 'completed',
+        confidence: 0.88,
+        findings: [lt('未發現明顯異常', 'No obvious issues found')],
+      }
     }
-    return { status: 'review_required', confidence: 0.72, findings: ['可能有刮傷'] }
+    return {
+      status: 'review_required',
+      confidence: 0.72,
+      findings: [lt('可能有刮傷', 'Possible scratch')],
+    }
   }
 
   async analyzeDocument(input: RecognitionInput): Promise<DocumentRecognitionResult> {
@@ -58,13 +81,16 @@ class MockRecognitionService implements RecognitionService {
       return {
         status: 'error',
         findings: [],
-        errorMessage: '文件辨識暫時無法使用，請手動輸入資料。',
+        errorMessage: lt(
+          '文件辨識暫時無法使用，請手動輸入資料。',
+          'Document recognition is unavailable right now — please enter the data manually.',
+        ),
       }
     }
     return {
       status: 'completed',
       confidence: 0.85,
-      findings: ['已辨識出行照欄位（測試模式）'],
+      findings: [lt('已辨識出行照欄位（測試模式）', 'Registration fields recognized (test mode)')],
       fields: {
         車牌: 'ABC-1234',
         車型: 'YAMAHA XXXXX',

@@ -46,13 +46,17 @@ async function withListingContext(
   appointmentDocs: { id: string; data: AppointmentDoc; listingId: string }[],
 ): Promise<MyAppointmentWithListing[]> {
   const uniqueListingIds = [...new Set(appointmentDocs.map((d) => d.listingId))]
+  // A buyer can only `get` a listing that's still published (firestore.rules)
+  // — one that was since sold/unpublished throws permission-denied, which
+  // used to reject this whole Promise.all and drop EVERY appointment. Treat
+  // an unreadable listing the same as a deleted one.
   const listingSnaps = await Promise.all(
-    uniqueListingIds.map((id) => getDoc(doc(db, 'marketplaceListings', id))),
+    uniqueListingIds.map((id) => getDoc(doc(db, 'marketplaceListings', id)).catch(() => null)),
   )
   const listingById = new Map(
     listingSnaps
-      .filter((snap) => snap.exists())
-      .map((snap) => [snap.id, snap.data() as ListingDocShape]),
+      .filter((snap) => snap?.exists())
+      .map((snap) => [snap!.id, snap!.data() as ListingDocShape]),
   )
 
   const result: MyAppointmentWithListing[] = []
@@ -80,6 +84,9 @@ async function withListingContext(
 async function listMyApprovedAppointmentsWithin(
   buyerId: string,
   windowMs: number,
+  /** Keep showing it this long AFTER the scheduled time too — the buyer is
+   *  usually still on-site inspecting right after the agreed time. */
+  graceAfterMs = 0,
 ): Promise<MyAppointmentWithListing[]> {
   const snapshot = await getDocs(
     query(
@@ -97,7 +104,7 @@ async function listMyApprovedAppointmentsWithin(
     }))
     .filter((entry) => {
       const scheduledAt = entry.data.scheduledAt?.toMillis?.() ?? 0
-      return scheduledAt >= now && scheduledAt <= now + windowMs
+      return scheduledAt >= now - graceAfterMs && scheduledAt <= now + windowMs
     })
   return withListingContext(docs)
 }

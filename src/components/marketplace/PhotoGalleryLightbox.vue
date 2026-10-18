@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, RotateCw, X } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 /**
  * Full-screen photo viewer for MarketplaceListingView.vue's cover + 其他照片
@@ -102,10 +105,10 @@ watch(currentIndex, () => {
 
 <template>
   <div class="overlay" tabindex="0" @keydown="onKeydown" @click.self="emit('close')">
-    <button class="close-btn" aria-label="關閉" @click="emit('close')">
+    <button class="close-btn" :aria-label="t('ui', 'close')" @click="emit('close')">
       <X :size="22" />
     </button>
-    <button class="rotate-btn" aria-label="旋轉90度" @click.stop="rotateCurrent">
+    <button class="rotate-btn" :aria-label="t('ui', 'rotate90')" @click.stop="rotateCurrent">
       <RotateCw :size="19" />
     </button>
 
@@ -113,7 +116,7 @@ watch(currentIndex, () => {
       <button
         v-if="photos.length > 1"
         class="nav-btn nav-prev"
-        aria-label="上一張"
+        :aria-label="t('ui', 'prevPhoto')"
         @click.stop="go(-1)"
       >
         <ChevronLeft :size="26" />
@@ -130,7 +133,7 @@ watch(currentIndex, () => {
       <button
         v-if="photos.length > 1"
         class="nav-btn nav-next"
-        aria-label="下一張"
+        :aria-label="t('ui', 'nextPhoto')"
         @click.stop="go(1)"
       >
         <ChevronRight :size="26" />
@@ -143,7 +146,7 @@ watch(currentIndex, () => {
         :key="index"
         class="thumb-btn"
         :class="{ selected: index === currentIndex }"
-        :aria-label="`第 ${index + 1} 張照片`"
+        :aria-label="t('ui', 'photoN', { n: index + 1 })"
         @click.stop="currentIndex = index"
       >
         <img

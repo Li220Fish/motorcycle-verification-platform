@@ -28,7 +28,7 @@ const props = defineProps<{ conversationId: string }>()
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
-const { t } = useI18n()
+const { t, localeTag } = useI18n()
 
 const sending = ref(false)
 const menuOpen = ref(false)
@@ -86,7 +86,10 @@ const conversationTagLabel = computed(() => {
   const tag = chatStore.currentConversation?.tag
   if (!tag) return ''
   const key = TAG_LABEL_KEY[tag]
-  return key ? t('messagesList', key) : tag
+  if (key) return t('messagesList', key)
+  if (tag === '買家詢問') return t('convTag', 'buyerInquiry')
+  if (tag === '一般') return t('convTag', 'general')
+  return tag
 })
 
 const otherHasRead = computed(() => {
@@ -179,7 +182,7 @@ async function handleFreeBookingSubmit(payload: { scheduledAt: number }): Promis
 }
 
 function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString('zh-TW', {
+  return new Date(timestamp).toLocaleString(localeTag(), {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',

@@ -9,6 +9,7 @@
 import { Torch } from '@capawesome/capacitor-torch'
 
 import { platformService } from '@/services/platform/platform.service'
+import { lt } from '@/i18n/locale-text'
 
 /** `torch` isn't part of the standard MediaTrackCapabilities/Constraints
  *  typings (lib.dom.d.ts) even though most Android Chrome builds support it
@@ -49,7 +50,9 @@ class LiveCameraService {
    */
   async start(facingMode: CameraFacing = 'environment'): Promise<MediaStream> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error('此裝置或瀏覽器不支援相機預覽')
+      throw new Error(
+        lt('此裝置或瀏覽器不支援相機預覽', "This device or browser doesn't support camera preview"),
+      )
     }
     this.stop()
     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -162,7 +165,7 @@ class LiveCameraService {
       }
     }
     const track = this.getVideoTrack()
-    if (!track) throw new Error('沒有可用的相機串流')
+    if (!track) throw new Error(lt('沒有可用的相機串流', 'No camera stream available'))
     const constraint: TorchConstraintSet = { torch: on }
     await track.applyConstraints({ advanced: [constraint] })
   }

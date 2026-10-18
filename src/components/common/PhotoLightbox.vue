@@ -29,6 +29,9 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { Check, Crop as CropIcon, Loader2, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 /** Either an already-uploaded photo (view-first, crop is opt-in via the
  *  "裁切" button) or a not-yet-uploaded local File (skips straight to crop —
@@ -78,7 +81,7 @@ async function rotateAndConfirm(): Promise<void> {
   } catch (error) {
     console.error('[PhotoLightbox] failed to rotate:', error)
     const detail = error instanceof Error ? error.message : String(error)
-    errorMessage.value = `無法旋轉圖片，請稍後再試。（${detail}）`
+    errorMessage.value = t('ui', 'rotateFailed', { detail })
     mode.value = 'error'
   } finally {
     rotating.value = false
@@ -193,7 +196,7 @@ async function enterCropMode(): Promise<void> {
     // reaches anyone outside a devtools console, and a live user hitting this
     // can't attach a console log to a bug report.
     const detail = error instanceof Error ? error.message : String(error)
-    errorMessage.value = `無法載入圖片進行裁切，請稍後再試。（${detail}）`
+    errorMessage.value = t('ui', 'cropLoadFailed', { detail })
     mode.value = 'error'
   }
 }
@@ -295,7 +298,7 @@ async function confirmCrop(): Promise<void> {
       <button
         v-if="mode !== 'crop' && mode !== 'loading-crop'"
         class="lightbox-close"
-        aria-label="關閉"
+        :aria-label="t('ui', 'close')"
         @click="$emit('close')"
       >
         <X :size="22" />
@@ -307,21 +310,21 @@ async function confirmCrop(): Promise<void> {
           <button class="crop-enter-btn" :disabled="rotating" @click.stop="rotateAndConfirm">
             <Loader2 v-if="rotating" :size="16" class="spin" />
             <RotateCw v-else :size="16" />
-            {{ rotating ? '旋轉中...' : '旋轉90度' }}
+            {{ rotating ? t('ui', 'rotating') : t('ui', 'rotate90') }}
           </button>
           <button class="crop-enter-btn" :disabled="rotating" @click.stop="enterCropMode">
-            <CropIcon :size="16" /> 裁切
+            <CropIcon :size="16" /> {{ t('ui', 'crop') }}
           </button>
         </div>
       </template>
 
       <p v-else-if="mode === 'loading-crop'" class="lightbox-status">
-        <Loader2 :size="20" class="spin" /> 載入圖片中...
+        <Loader2 :size="20" class="spin" /> {{ t('ui', 'loadingImage') }}
       </p>
 
       <template v-else-if="mode === 'error'">
         <p class="lightbox-status error">{{ errorMessage }}</p>
-        <button class="crop-cancel-btn" @click="mode = 'view'">返回</button>
+        <button class="crop-cancel-btn" @click="mode = 'view'">{{ t('ui', 'back') }}</button>
       </template>
 
       <template v-else>
@@ -341,7 +344,7 @@ async function confirmCrop(): Promise<void> {
             :style="previewImgStyle"
           />
         </div>
-        <p class="crop-hint">拖曳照片調整位置，用下方滑桿縮放</p>
+        <p class="crop-hint">{{ t('ui', 'cropHint') }}</p>
         <div class="zoom-row" @click.stop>
           <ZoomOut :size="16" color="#fff" />
           <input
@@ -355,11 +358,13 @@ async function confirmCrop(): Promise<void> {
           <ZoomIn :size="16" color="#fff" />
         </div>
         <div class="crop-actions">
-          <button class="crop-cancel-btn" :disabled="uploading" @click="cancelCrop">取消</button>
+          <button class="crop-cancel-btn" :disabled="uploading" @click="cancelCrop">
+            {{ t('common', 'cancel') }}
+          </button>
           <button class="crop-confirm-btn" :disabled="uploading" @click="confirmCrop">
             <Loader2 v-if="uploading" :size="16" class="spin" />
             <Check v-else :size="16" />
-            {{ uploading ? '上傳中...' : '確認裁切' }}
+            {{ uploading ? t('ui', 'uploading') : t('ui', 'confirmCrop') }}
           </button>
         </div>
       </template>

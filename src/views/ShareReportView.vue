@@ -6,17 +6,20 @@ import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
+import { useI18n } from '@/composables/useI18n'
+
+const { t, localeTag } = useI18n()
 
 const props = defineProps<{ id: string }>()
 
 const vehicleStore = useVehicleStore()
 const verificationStore = useVerificationStore()
 
-const typeLabel: Record<string, string> = {
-  seller: '車輛驗證報告',
-  buyer: '買家複驗報告',
-  professional: '專業驗證報告',
-}
+const typeLabel = computed<Record<string, string>>(() => ({
+  seller: t('shareReport', 'seller'),
+  buyer: t('shareReport', 'buyer'),
+  professional: t('shareReport', 'professional'),
+}))
 
 const copyState = ref<'idle' | 'copied'>('idle')
 
@@ -47,7 +50,7 @@ const shareLink = computed(() => {
 })
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString('zh-TW')
+  return new Date(timestamp).toLocaleDateString(localeTag())
 }
 
 async function handleCopyLink(): Promise<void> {
@@ -91,7 +94,7 @@ onMounted(() => {
 
 <template>
   <div>
-    <AppHeader title="分享驗證報告" back />
+    <AppHeader :title="t('shareReport', 'title')" back />
 
     <div class="content">
       <div class="share-card">
@@ -99,31 +102,34 @@ onMounted(() => {
           {{ vehicleStore.currentVehicle?.brand }} {{ vehicleStore.currentVehicle?.model }}
         </p>
         <p class="vehicle-meta">
-          <span v-if="vehicleStore.currentVehicle?.manufactureYear"
-            >{{ vehicleStore.currentVehicle.manufactureYear }} 年式</span
-          >
+          <span v-if="vehicleStore.currentVehicle?.manufactureYear">{{
+            t('common', 'modelYear', { year: vehicleStore.currentVehicle.manufactureYear })
+          }}</span>
           <span v-if="vehicleStore.currentVehicle?.mileage !== null">
             {{ vehicleStore.currentVehicle?.manufactureYear ? ' · ' : '' }}
             {{ vehicleStore.currentVehicle?.mileage?.toLocaleString() }} km
           </span>
         </p>
         <p class="report-type">
-          {{ typeLabel[verificationStore.currentVerification?.type ?? ''] ?? '驗證報告' }}
+          {{
+            typeLabel[verificationStore.currentVerification?.type ?? ''] ??
+            t('shareReport', 'generic')
+          }}
         </p>
         <p v-if="verificationStore.currentVerification" class="report-date">
           {{ formatDate(verificationStore.currentVerification.createdAt) }}
         </p>
 
         <div class="qr-code">
-          <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="分享連結 QR Code" />
+          <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" :alt="t('shareReport', 'qrAlt')" />
         </div>
       </div>
 
       <div class="link-row">
-        <p class="link-label">分享連結</p>
+        <p class="link-label">{{ t('shareReport', 'link') }}</p>
         <p class="link-value">{{ shareLink }}</p>
         <PrimaryButton variant="secondary" block @click="handleCopyLink">
-          {{ copyState === 'copied' ? '已複製連結' : '複製連結' }}
+          {{ copyState === 'copied' ? t('shareReport', 'copied') : t('shareReport', 'copy') }}
         </PrimaryButton>
       </div>
     </div>

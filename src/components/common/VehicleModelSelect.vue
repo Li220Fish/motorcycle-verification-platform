@@ -5,6 +5,9 @@ import {
   vehicleModelService,
   type VehicleModelOption,
 } from '@/services/firebase/vehicle-model.service'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 /**
  * 廠牌/車系/排氣量/名稱 cascading Search Select backed by the `vehicleModels`
@@ -36,6 +39,12 @@ const BUCKETS: DisplacementBucket[] = [
   { key: '550-1000', label: '549~1000', min: 550, max: 1000 },
   { key: '1000+', label: '1000以上', min: 1001, max: Infinity },
 ]
+
+function bucketLabel(bucket: DisplacementBucket): string {
+  if (bucket.key === '50-') return t('modelSelect', 'under50')
+  if (bucket.key === '1000+') return t('modelSelect', 'over1000')
+  return `${bucket.label}cc`
+}
 
 function bucketFor(cc: number | null): DisplacementBucket | null {
   if (cc == null) return null
@@ -145,52 +154,58 @@ function resetToSelect(): void {
 <template>
   <div class="vehicle-model-select">
     <label class="field">
-      <span>廠牌</span>
+      <span>{{ t('modelSelect', 'brand') }}</span>
       <select
         v-if="!manualBrand"
         :value="brand"
         required
         @change="selectBrand(($event.target as HTMLSelectElement).value)"
       >
-        <option value="" disabled>請選擇廠牌</option>
+        <option value="" disabled>{{ t('modelSelect', 'pickBrand') }}</option>
         <option v-for="item in brands" :key="item" :value="item">{{ item }}</option>
-        <option value="__manual__">找不到我的廠牌，手動輸入</option>
+        <option value="__manual__">{{ t('modelSelect', 'manualBrand') }}</option>
       </select>
-      <input v-else v-model="brand" type="text" placeholder="廠牌，例如 YAMAHA" required />
+      <input
+        v-else
+        v-model="brand"
+        type="text"
+        :placeholder="t('modelSelect', 'brandPlaceholder')"
+        required
+      />
     </label>
 
     <template v-if="!manualModel">
       <label class="field">
-        <span>車系</span>
+        <span>{{ t('modelSelect', 'series') }}</span>
         <select
           :value="series"
           required
           :disabled="!brand"
           @change="selectSeries(($event.target as HTMLSelectElement).value)"
         >
-          <option value="" disabled>請選擇車系</option>
+          <option value="" disabled>{{ t('modelSelect', 'pickSeries') }}</option>
           <option v-for="item in seriesForBrand" :key="item" :value="item">{{ item }}</option>
         </select>
       </label>
 
       <label class="field">
-        <span>排氣量</span>
+        <span>{{ t('modelSelect', 'displacement') }}</span>
         <select
           :value="bucketKey"
           required
           :disabled="!series"
           @change="selectBucket(($event.target as HTMLSelectElement).value)"
         >
-          <option value="" disabled>請選擇排氣量</option>
+          <option value="" disabled>{{ t('modelSelect', 'pickDisplacement') }}</option>
           <option v-for="bucket in bucketsForSeries" :key="bucket.key" :value="bucket.key">
-            {{ bucket.label }}
+            {{ bucketLabel(bucket) }}
           </option>
         </select>
       </label>
     </template>
 
     <label class="field">
-      <span>名稱</span>
+      <span>{{ t('modelSelect', 'name') }}</span>
       <select
         v-if="!manualModel"
         :value="model"
@@ -198,13 +213,19 @@ function resetToSelect(): void {
         :disabled="!bucketKey"
         @change="selectModel(($event.target as HTMLSelectElement).value)"
       >
-        <option value="" disabled>請選擇名稱</option>
+        <option value="" disabled>{{ t('modelSelect', 'pickName') }}</option>
         <option v-for="item in optionsForBucket" :key="item.id" :value="item.name">
           {{ item.name }}
         </option>
-        <option value="__manual__">找不到我的名稱，手動輸入</option>
+        <option value="__manual__">{{ t('modelSelect', 'manualName') }}</option>
       </select>
-      <input v-else v-model="model" type="text" placeholder="名稱，例如 勁戰六代" required />
+      <input
+        v-else
+        v-model="model"
+        type="text"
+        :placeholder="t('modelSelect', 'namePlaceholder')"
+        required
+      />
     </label>
 
     <button
@@ -213,7 +234,7 @@ function resetToSelect(): void {
       class="switch-back"
       @click="resetToSelect"
     >
-      改用選單選擇
+      {{ t('modelSelect', 'useMenu') }}
     </button>
   </div>
 </template>

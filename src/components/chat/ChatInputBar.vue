@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import { Plus, Send } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ sending: boolean }>()
 const emit = defineEmits<{ send: [string]; pickImage: [] }>()
@@ -51,21 +54,25 @@ function handleEnter(event: KeyboardEvent): void {
 
 <template>
   <div class="input-bar">
-    <button class="icon-button" aria-label="傳送照片" @click="$emit('pickImage')">
+    <button
+      class="icon-button"
+      :aria-label="t('chatInput', 'sendPhoto')"
+      @click="$emit('pickImage')"
+    >
       <Plus :size="20" />
     </button>
     <textarea
       ref="textareaRef"
       v-model="text"
       rows="1"
-      placeholder="輸入訊息..."
+      :placeholder="t('chatInput', 'placeholder')"
       enterkeyhint="send"
       @input="resize"
       @keydown.enter="handleEnter"
     />
     <button
       class="send-button"
-      aria-label="傳送"
+      :aria-label="t('chatInput', 'send')"
       :disabled="!text.trim() || sending"
       @click="submit"
     >

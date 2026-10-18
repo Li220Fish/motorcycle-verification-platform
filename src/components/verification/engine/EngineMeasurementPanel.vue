@@ -13,6 +13,9 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import EngineWaveform from './EngineWaveform.vue'
 import EngineRecordedFileCard from './EngineRecordedFileCard.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 export interface RecordedFileInfo {
   kind: 'audio' | 'imu' | 'video'
@@ -38,7 +41,7 @@ const props = withDefaults(
   {
     instructionAt: undefined,
     magnitude: null,
-    startLabel: '開始測量',
+    startLabel: undefined,
     completed: false,
     files: () => [],
   },
@@ -147,7 +150,7 @@ watch(
 <template>
   <div class="panel">
     <template v-if="completed && files.length > 0">
-      <p class="section-label">已錄製檔案</p>
+      <p class="section-label">{{ t('ui', 'recordedFiles') }}</p>
       <div class="file-list">
         <EngineRecordedFileCard
           v-for="file in files"
@@ -158,12 +161,16 @@ watch(
           :size-bytes="file.sizeBytes"
         />
       </div>
-      <button class="remeasure-btn" @click="requestRemeasure">↻ 重新測量</button>
+      <button class="remeasure-btn" @click="requestRemeasure">{{ t('ui', 'remeasure') }}</button>
     </template>
 
     <template v-else-if="phase === 'idle'">
-      <PrimaryButton block @click="requestStart">{{ startLabel }}</PrimaryButton>
-      <p class="min-hint">至少錄製 {{ minDurationSeconds }} 秒，不限最長時間</p>
+      <PrimaryButton block @click="requestStart">{{
+        startLabel ?? t('engineMeasure', 'start')
+      }}</PrimaryButton>
+      <p class="min-hint">
+        {{ t('engineMeasure', 'minHint', { seconds: minDurationSeconds }) }}
+      </p>
     </template>
 
     <template v-else-if="phase === 'countdown'">
@@ -173,9 +180,13 @@ watch(
     <template v-else-if="phase === 'recording' || phase === 'saving'">
       <div class="recording-header">
         <span class="rec-dot" />
-        <span class="rec-label">{{ phase === 'saving' ? '正在儲存…' : '正在測量中' }}</span>
+        <span class="rec-label">{{
+          phase === 'saving' ? t('ui', 'savingNow') : t('engineMeasure', 'measuring')
+        }}</span>
         <span class="rec-elapsed">{{ elapsedLabel }}</span>
-        <span class="rec-hint">（至少 {{ minDurationSeconds }} 秒）</span>
+        <span class="rec-hint">{{
+          t('engineMeasure', 'atLeast', { seconds: minDurationSeconds })
+        }}</span>
       </div>
 
       <EngineWaveform :active="phase === 'recording'" :magnitude="magnitude" />
@@ -190,10 +201,12 @@ watch(
         :disabled="!minReached || phase === 'saving'"
         @click="stopMeasuring"
       >
-        結束測量
+        {{ t('engineMeasure', 'stop') }}
       </PrimaryButton>
-      <p v-if="!minReached" class="min-hint">還需 {{ remainingToMin }} 秒才能結束</p>
-      <p v-else class="min-hint">不限最長時間，可隨時結束</p>
+      <p v-if="!minReached" class="min-hint">
+        {{ t('engineMeasure', 'remaining', { seconds: remainingToMin }) }}
+      </p>
+      <p v-else class="min-hint">{{ t('engineMeasure', 'noMax') }}</p>
     </template>
   </div>
 </template>

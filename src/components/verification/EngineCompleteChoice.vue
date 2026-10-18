@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{ completing: boolean }>()
 defineEmits<{ finish: []; continueToDisclosure: [] }>()
@@ -7,15 +10,15 @@ defineEmits<{ finish: []; continueToDisclosure: [] }>()
 
 <template>
   <div class="engine-choice">
-    <h2>核心檢查已完成</h2>
+    <h2>{{ t('engineComplete', 'title') }}</h2>
     <p class="hint">
-      核心照片、燈光電系、冷車與引擎檢查都已完成。剩下的「其他主動揭露」都是選填項目，可以直接結束驗車，也可以繼續補充。
+      {{ t('engineComplete', 'hint') }}
     </p>
     <PrimaryButton block :disabled="completing" @click="$emit('finish')">
-      {{ completing ? '處理中...' : '直接結束，完成驗證' }}
+      {{ completing ? t('engineComplete', 'processing') : t('engineComplete', 'finish') }}
     </PrimaryButton>
     <button class="secondary-btn" :disabled="completing" @click="$emit('continueToDisclosure')">
-      填寫補充項目
+      {{ t('engineComplete', 'continue') }}
     </button>
   </div>
 </template>
