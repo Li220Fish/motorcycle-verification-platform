@@ -182,7 +182,33 @@ async function handleUse(captured: CapturedShot): Promise<void> {
   const replaced = shot.repeatable ? [] : uploadedFor(shot.id).filter((c) => c.status === 'pending')
 
   const id = newCaptureId()
-  await uploadQueue.enqueue({
+  try {
+    await enqueueCapture(id, captured, shot, s)
+  } catch (e) {
+    alert(`照片儲存失敗，請重拍：${e instanceof Error ? e.message : e}`)
+    return
+  }
+  void clearSkip(shot.id)
+  for (const old of replaced) {
+    withdrawCapture(old)
+      .then(() => (captures.value = captures.value.filter((c) => c.id !== old.id)))
+      .catch(() => undefined)
+  }
+
+  if (shot.repeatable) flash('已加入，可繼續拍下一個改裝件')
+  else advanceFrom(index)
+}
+
+/** Saves the photo to the IndexedDB queue. Everything in `doc` must be plain
+ *  data — a Vue reactive proxy (e.g. `session.brakes`) can't be stored by
+ *  IndexedDB's structured clone and makes the save throw. */
+function enqueueCapture(
+  id: string,
+  captured: CapturedShot,
+  shot: TrainingShotDef,
+  s: TrainingSession,
+): Promise<void> {
+  return uploadQueue.enqueue({
     id,
     blob: captured.frame.blob,
     doc: {
@@ -191,7 +217,7 @@ async function handleUse(captured: CapturedShot): Promise<void> {
       vehicleModelId: s.vehicleModelId,
       vehicleModelLabel: s.vehicleModelLabel,
       vehicleType: s.vehicleType,
-      brakes: s.brakes,
+      brakes: { front: s.brakes.front, rear: s.brakes.rear },
       shotId: shot.id,
       partKey: shot.partKey,
       view: shot.view,
@@ -212,15 +238,6 @@ async function handleUse(captured: CapturedShot): Promise<void> {
       capturedAtMs: Date.now(),
     },
   })
-  void clearSkip(shot.id)
-  for (const old of replaced) {
-    withdrawCapture(old)
-      .then(() => (captures.value = captures.value.filter((c) => c.id !== old.id)))
-      .catch(() => undefined)
-  }
-
-  if (shot.repeatable) flash('已加入，可繼續拍下一個改裝件')
-  else advanceFrom(index)
 }
 
 const deleting = ref(false)
