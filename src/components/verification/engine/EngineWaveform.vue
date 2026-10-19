@@ -6,8 +6,9 @@
  *
  * - `magnitude` supplied (idle/rev sessions, which also capture motion):
  *   bars are driven by the REAL accelerometer-magnitude value the parent
- *   passes in each tick (see EngineInspectionFlow.vue's motion sample
- *   callback) — genuinely reactive, not decorative.
+ *   passes in (see EngineInspectionFlow.vue's motion sample callback),
+ *   sampled every 100ms and auto-scaled to its own recent peak — genuinely
+ *   reactive, not decorative.
  * - `magnitude` omitted (startup session, audio-only): there is no live
  *   audio-level source in this app (capacitor-voice-recorder only returns
  *   the finished blob, no streaming amplitude), so the bars instead run a
@@ -35,22 +36,34 @@ function pushBar(value: number): void {
 }
 
 function decorativeTick(): void {
-  // Smooth pseudo-random pulse — no single bar jumps too far from its
-  // neighbor, so it reads as "alive" rather than flickering noise.
-  const last = bars.value[bars.value.length - 1] ?? 0.3
-  const next = last + (Math.random() - 0.5) * 0.35
+  // Smooth pulse that keeps pulling back toward the middle. The previous
+  // free random walk could drift onto the 0.06 floor and sit there, which
+  // looked like a frozen first frame.
+  const last = bars.value[bars.value.length - 1] ?? 0.4
+  const next = last + (0.45 - last) * 0.35 + (Math.random() - 0.5) * 0.4
   pushBar(next)
+}
+
+/** Running peak of the real readings, decaying slowly — auto-gain, so the
+ *  tiny vibration of an idling engine (often only a few % of the old fixed
+ *  scale) still fills the bar range instead of drawing a flat line. */
+let peak = 0.02
+function realTick(value: number): void {
+  peak = Math.max(value, peak * 0.97, 0.02)
+  const level = value / peak
+  pushBar(0.15 + 0.75 * level + (Math.random() - 0.5) * 0.06)
 }
 
 function startTicking(): void {
   stopTicking()
+  peak = 0.02
+  // Fixed-rate sampling of the latest reading — the bars always advance,
+  // even when the sensor value repeats or arrives irregularly.
   tickTimer = setInterval(() => {
-    if (props.magnitude === null || props.magnitude === undefined) {
-      decorativeTick()
-    }
-    // When `magnitude` is provided, the watcher below pushes bars directly
-    // on every real sample instead of on this fixed interval.
-  }, 120)
+    const value = props.magnitude
+    if (value === null || value === undefined) decorativeTick()
+    else realTick(value)
+  }, 100)
 }
 
 function stopTicking(): void {
@@ -69,13 +82,6 @@ watch(
     }
   },
   { immediate: true },
-)
-
-watch(
-  () => props.magnitude,
-  (value) => {
-    if (props.active && value !== null && value !== undefined) pushBar(value)
-  },
 )
 
 onBeforeUnmount(stopTicking)

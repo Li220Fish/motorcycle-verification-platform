@@ -176,15 +176,35 @@ describe('buyer: cold check before hot check', () => {
     })
   })
 
-  it('no AI chat at all in 冷車 or 熱車', async () => {
+  it('「問 AI」 button is available in 冷車', async () => {
     const cold = await enter('seller-phase3-engine')
-    expect(cold.findComponent(AiChatWidget).props('hidden')).toBe(true)
+    expect(cold.findComponent(AiChatWidget).props()).toMatchObject({
+      showFab: true,
+      hidden: false,
+    })
   })
 
-  it('no AI chat in 熱車 either', async () => {
+  it('「問 AI」 button is available in 熱車', async () => {
     const hot = await enter('buyer-hot-check', { coldDone: true })
     expect(where(hot)).toBe('item(HOT-01)')
-    expect(hot.findComponent(AiChatWidget).props('hidden')).toBe(true)
+    expect(hot.findComponent(AiChatWidget).props()).toMatchObject({
+      showFab: true,
+      hidden: false,
+    })
+  })
+
+  it('…but steps aside while a recording is running', async () => {
+    const wrapper = await renderBuyer({ coldDone: true })
+    wrapper.findComponent(VerificationHub).vm.$emit('selectSection', 'seller-phase3-engine')
+    await flushPromises()
+    wrapper.findComponent(VerificationCategoryNav).vm.$emit('selectItem', 'ENG-05')
+    await flushPromises()
+    wrapper.findComponent(EngineInspectionFlow).vm.$emit('recording-active', true)
+    await flushPromises()
+    expect(wrapper.findComponent(AiChatWidget).props('hidden')).toBe(true)
+    wrapper.findComponent(EngineInspectionFlow).vm.$emit('recording-active', false)
+    await flushPromises()
+    expect(wrapper.findComponent(AiChatWidget).props('hidden')).toBe(false)
   })
 
   it('leaving the verification clears the AI conversation', async () => {

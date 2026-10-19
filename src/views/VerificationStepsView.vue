@@ -128,12 +128,17 @@ function handlePickVehicleType(type: EngineTransmissionType): void {
 // doc is never consulted; its ABSENCE means the 幫這次驗車取個名字 fallback
 // path, where the buyer owns the vehicle outright and vehicleStore
 // .currentVehicle works normally.
+/** The buyer already picked this car from an appointment (VerificationView's
+ *  dropdown / reminder row) — its brand, model and year come from the
+ *  seller's listing, so neither gate below asks again. */
+const pickedFromAppointment = computed(() => !!verificationStore.currentVerification?.listingId)
+
 const yearGateDismissed = ref(false)
 const needsYearGate = computed(() => {
   if (yearGateDismissed.value) return false
   if (verificationStore.flowKind !== 'buyer') return false
   const verification = verificationStore.currentVerification
-  if (!verification) return false
+  if (!verification || pickedFromAppointment.value) return false
   if (verification.vehicleSnapshot) return verification.vehicleSnapshot.manufactureYear == null
   return vehicleStore.currentVehicle?.manufactureYear == null
 })
@@ -151,7 +156,9 @@ const needsModelGate = computed(() => {
   if (modelGateDismissed.value) return false
   if (verificationStore.flowKind !== 'buyer') return false
   const verification = verificationStore.currentVerification
-  if (!verification || verification.buyerModelConfirmed) return false
+  if (!verification || verification.buyerModelConfirmed || pickedFromAppointment.value) {
+    return false
+  }
   if (verification.vehicleSnapshot) return verification.vehicleSnapshot.modelId == null
   return !!vehicleStore.currentVehicle && vehicleStore.currentVehicle.modelId == null
 })
@@ -171,10 +178,29 @@ async function ensureBuyerKnownIssuesLoaded(modelIdOverride?: string | null): Pr
   if (knownIssuesChecked.value) return
   knownIssuesChecked.value = true
   if (verification.buyerKnownIssuesSnapshot) return
-  const modelId =
-    modelIdOverride ?? verification.vehicleSnapshot?.modelId ?? vehicleStore.currentVehicle?.modelId
-  if (!modelId) return
+  // A snapshot means the seller's car (from a listing) — vehicleStore's
+  // currentVehicle is then NOT this car (a buyer can't read it), so never
+  // fall back to its modelId.
+  let modelId =
+    modelIdOverride ??
+    (verification.vehicleSnapshot
+      ? verification.vehicleSnapshot.modelId
+      : vehicleStore.currentVehicle?.modelId)
   try {
+    // No model gate for appointment cars any more — match the listing's
+    // brand/model text against the catalog instead (exact match only, so a
+    // miss just means no 通病 reminders, never a wrong model).
+    const snapshot = verification.vehicleSnapshot
+    if (!modelId && snapshot && pickedFromAppointment.value) {
+      const profiles = await vehicleModelService.listProfiles()
+      modelId = vehicleModelService.findModelIdByText(snapshot.brand, snapshot.model, profiles)
+      if (modelId) {
+        await verificationService
+          .saveBuyerVehicleModelId(verification.id, modelId)
+          .catch((error) => console.error('[buyer model auto-link] save failed:', error))
+      }
+    }
+    if (!modelId) return
     const profile = await vehicleModelService.getProfile(modelId)
     if (profile) {
       await verificationService.saveBuyerKnownIssuesSnapshot(verification.id, profile.knownIssues)
@@ -339,7 +365,7 @@ const isBuyerAppearanceGroup = computed(
   () => !!currentFlat.value && BUYER_APPEARANCE_ITEM_IDS.includes(currentFlat.value.item.id),
 )
 
-// 冷車＋引擎檢查 / 熱車檢查 — no AI chat at all there (button or panel).
+// 冷車＋引擎檢查 / 熱車檢查 — the 「問 AI」 button shows here too.
 const inEngineSection = computed(
   () =>
     !hubOpen.value &&
@@ -1216,12 +1242,13 @@ onMounted(() => {
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
 
-  <!-- 買家複驗專屬的 AI 詢問視窗。「問 AI」按鈕只在基本12項出現；外觀動畫檢查
-       不顯示按鈕，但拍照後的「詢問 AI」仍可打開對話；冷車／熱車完全不出現。 -->
+  <!-- 買家複驗專屬的 AI 詢問視窗。「問 AI」按鈕出現在基本12項、冷車、熱車；
+       外觀動畫檢查不顯示按鈕（拍照後的「詢問 AI」仍可打開對話）。錄音／錄影
+       進行中暫時隱藏，避免擋住畫面或誤觸。 -->
   <AiChatWidget
     v-if="verificationStore.flowKind === 'buyer' && verificationStore.flowLoaded && !showTour"
-    :hidden="inEngineSection"
-    :show-fab="!hubOpen && isBasicHealthCheckGroup"
+    :hidden="engineSessionRecording || hotEngineSessionRecording || coldTouchRecording"
+    :show-fab="!hubOpen && (isBasicHealthCheckGroup || inEngineSection)"
   />
 
   <!-- Teleported so it stays visible above the full-screen camera

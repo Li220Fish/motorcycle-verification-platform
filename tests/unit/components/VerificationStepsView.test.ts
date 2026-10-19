@@ -108,6 +108,55 @@ describe('VerificationStepsView — 5-minute attempt window', () => {
   })
 })
 
+describe('VerificationStepsView — buyer car picked from an appointment', () => {
+  it('never asks the model or year again, even when the listing has neither', async () => {
+    seed({
+      type: 'buyer',
+      listingId: 'L1',
+      vehicleSnapshot: { brand: 'YAMAHA', model: 'MT-03', manufactureYear: null, modelId: null },
+    })
+    const wrapper = await render()
+    expect(wrapper.findComponent(BuyerVehicleModelGate).exists()).toBe(false)
+    expect(wrapper.findComponent(BuyerYearGate).exists()).toBe(false)
+    expect(wrapper.findComponent(VerificationHub).exists()).toBe(true)
+  })
+
+  it('links the catalog model from the listing text and loads its known issues', async () => {
+    fs.__seed('vehicleModels/mt03', {
+      brand: 'YAMAHA',
+      series: 'MT',
+      trimName: '03',
+      knownIssues: [{ id: 'k', part: 'rear', description: '尾燈易進水' }],
+    })
+    const errSpy = vi.spyOn(console, 'error')
+    seed({
+      type: 'buyer',
+      listingId: 'L1',
+      vehicleSnapshot: { brand: 'Yamaha', model: 'MT-03', manufactureYear: 2021, modelId: null },
+    })
+    await render()
+    for (let i = 0; i < 5; i++) await flushPromises()
+    expect(errSpy).not.toHaveBeenCalled()
+    expect(fs.__get('verifications/v1')!.buyerKnownIssuesSnapshot).toEqual([
+      { id: 'k', part: 'rear', description: '尾燈易進水' },
+    ])
+    expect((fs.__get('verifications/v1')!.vehicleSnapshot as { modelId: string }).modelId).toBe(
+      'mt03',
+    )
+  })
+
+  it('no catalog match → no model linked, no gate, flow continues', async () => {
+    seed({
+      type: 'buyer',
+      listingId: 'L1',
+      vehicleSnapshot: { brand: 'Unknown', model: 'X1', manufactureYear: 2021, modelId: null },
+    })
+    const wrapper = await render()
+    expect(wrapper.findComponent(VerificationHub).exists()).toBe(true)
+    expect((fs.__get('verifications/v1')!.vehicleSnapshot as { modelId: null }).modelId).toBeNull()
+  })
+})
+
 describe('VerificationStepsView — buyer gates', () => {
   it('model gate first when the snapshot has no modelId, then the year gate, then the hub', async () => {
     seed({

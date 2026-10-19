@@ -324,4 +324,24 @@ describe('listingAppointmentLookupService', () => {
       await listingAppointmentLookupService.listMyBookableAppointments('b1'))
     expect(all[0].sellerVerificationId).toBeNull()
   })
+
+  it('bookable dropdown: past appointments are left out, each car listed once (nearest booking)', async () => {
+    seedListing('L1')
+    seedListing('L2')
+    seedListing('L3')
+    // L1: two old bookings and two upcoming ones → only the nearest upcoming
+    seedAppt('L1', 'old1', 'b1', 'approved', NOW - 30 * 24 * HOUR)
+    seedAppt('L1', 'old2', 'b1', 'pending', NOW - 3 * HOUR)
+    seedAppt('L1', 'later', 'b1', 'approved', NOW + 48 * HOUR)
+    seedAppt('L1', 'soon', 'b1', 'pending', NOW + 5 * HOUR)
+    // L2: started an hour ago — still on site, kept
+    seedAppt('L2', 'onsite', 'b1', 'approved', NOW - HOUR)
+    // L3: only past bookings → gone
+    seedAppt('L3', 'past', 'b1', 'approved', NOW - 5 * 24 * HOUR)
+    const list = await listingAppointmentLookupService.listMyBookableAppointments('b1')
+    expect(list.map((e) => [e.listingId, e.appointment.id])).toEqual([
+      ['L2', 'onsite'],
+      ['L1', 'soon'],
+    ])
+  })
 })

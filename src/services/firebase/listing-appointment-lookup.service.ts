@@ -113,8 +113,16 @@ async function listMyApprovedAppointmentsWithin(
  *  buyer has a live (not yet declined/cancelled/completed) appointment for,
  *  pending included so a buyer can start re-verifying ahead of the seller's
  *  approval (createVerificationRecord already tolerates a missing
- *  relatedVerificationId until the seller verification exists). */
-async function listMyBookableAppointments(buyerId: string): Promise<MyAppointmentWithListing[]> {
+ *  relatedVerificationId until the seller verification exists).
+ *
+ *  Past appointments are left out (only ones still ahead, or that started
+ *  less than `graceAfterMs` ago — the buyer may still be on site), and each
+ *  listing appears once, at its nearest such appointment — otherwise every
+ *  old booking of the same car piled up in the dropdown. */
+async function listMyBookableAppointments(
+  buyerId: string,
+  graceAfterMs = 2 * 60 * 60 * 1000,
+): Promise<MyAppointmentWithListing[]> {
   const snapshot = await getDocs(
     query(
       collectionGroup(db, 'appointments'),
@@ -122,11 +130,22 @@ async function listMyBookableAppointments(buyerId: string): Promise<MyAppointmen
       where('status', 'in', ['pending', 'approved']),
     ),
   )
-  const docs = snapshot.docs.map((docSnapshot) => ({
-    id: docSnapshot.id,
-    data: docSnapshot.data() as AppointmentDoc,
-    listingId: docSnapshot.ref.parent.parent!.id,
-  }))
+  const cutoff = Date.now() - graceAfterMs
+  const nearestByListing = new Map<
+    string,
+    { id: string; data: AppointmentDoc; listingId: string; at: number }
+  >()
+  for (const docSnapshot of snapshot.docs) {
+    const data = docSnapshot.data() as AppointmentDoc
+    const at = data.scheduledAt?.toMillis?.() ?? 0
+    if (at < cutoff) continue
+    const listingId = docSnapshot.ref.parent.parent!.id
+    const current = nearestByListing.get(listingId)
+    if (!current || at < current.at) {
+      nearestByListing.set(listingId, { id: docSnapshot.id, data, listingId, at })
+    }
+  }
+  const docs = [...nearestByListing.values()].sort((a, b) => a.at - b.at)
   return withListingContext(docs)
 }
 
