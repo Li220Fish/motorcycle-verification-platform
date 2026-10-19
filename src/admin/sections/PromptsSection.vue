@@ -90,14 +90,26 @@ async function handleReset(): Promise<void> {
   }
 }
 
-onMounted(async () => {
+/** The catalog comes from a callable (getAiPromptCatalog) — if it fails the
+ *  list is simply empty, so the failure needs its own visible state with a
+ *  retry, separate from the per-prompt save/reset errorMessage. */
+const loadError = ref('')
+
+async function loadCatalog(): Promise<void> {
+  loading.value = true
+  loadError.value = ''
   try {
     await reload()
-    if (prompts.value.length > 0) selectPrompt(prompts.value[0])
+    if (prompts.value.length > 0 && !selected.value) selectPrompt(prompts.value[0])
+  } catch (error) {
+    console.error('[PromptsSection] failed to load prompt catalog:', error)
+    loadError.value = error instanceof Error && error.message ? error.message : '載入失敗'
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadCatalog)
 </script>
 
 <template>
@@ -127,6 +139,13 @@ onMounted(async () => {
     <div class="admin-panel admin-udetail">
       <div class="admin-uside">
         <p v-if="loading" class="admin-page-intro" style="margin: 0">載入中...</p>
+        <div v-else-if="loadError" class="prompt-load-error">
+          <p class="admin-word" style="margin: 0">無法載入 Prompt 清單：{{ loadError }}</p>
+          <button class="admin-btn" @click="loadCatalog">重新載入</button>
+        </div>
+        <p v-else-if="prompts.length === 0" class="admin-page-intro" style="margin: 0">
+          目前沒有可編輯的 Prompt。
+        </p>
         <template v-else>
           <button
             v-for="prompt in prompts"
@@ -202,6 +221,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.prompt-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .prompt-item {
   border-radius: 8px;
   color: var(--text);
