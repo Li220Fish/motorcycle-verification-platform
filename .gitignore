@@ -53,3 +53,6 @@ capture-app/ios/RiDECapture.xcodeproj/xcuserdata/
 # Local dev scratchpad — prototyping scripts, downloaded datasets, test
 # photos. Never meant for the repo (large binary test images/model data).
 projectTest/
+
+# Unit-test coverage report (npm run test:coverage)
+coverage/
