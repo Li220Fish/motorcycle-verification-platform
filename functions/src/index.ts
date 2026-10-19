@@ -43,6 +43,8 @@ export {
 // Admin 後台「AI Prompt 設定」— lets an admin view/edit the prompt text sent
 // to Gemini without a code deploy (see services/prompt-config.service.ts).
 export { getAiPromptCatalog } from './functions/get-ai-prompt-catalog'
+// 買家複驗的 AI 詢問小視窗 — plain text/photo chat with Gemini, no prompt.
+export { askAiAssistant } from './functions/ask-ai-assistant'
 
 // In-app notification center — the first Firestore-triggered (as opposed to
 // callable) Functions in this codebase. Each writes into the relevant

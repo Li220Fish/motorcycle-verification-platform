@@ -37,9 +37,13 @@ export const ITEM_TEXTS_EN: Record<string, ItemTextEn> = {
   'seller-phase4-disclosure': {
     description: 'Supplementary info from the owner — not core AI checks; all can be skipped.',
   },
-  'buyer-ride': { description: 'Do the standard road-test procedure.' },
   'buyer-hot-check': {
-    description: 'After the ride, re-check leaks, running sound and stability — done in order.',
+    description:
+      'After the cold check, once the engine is warm, re-check leaks, running sound and stability — done in order.',
+  },
+  'buyer-appearance': {
+    description:
+      'Follow the guide animations to check drop marks and steering, then do the Basic 12-Point Check.',
   },
   'APR-left-side': {
     description:
@@ -201,7 +205,6 @@ export const ITEM_TEXTS_EN: Record<string, ItemTextEn> = {
     description: `Is the engine unusually clean, covered in sludge, or uneven? ${OWNER_NOTE}`,
     evidence: SHOOT_ISSUE,
   },
-  'RIDE-01': { description: 'Do the standard road-test procedure.' },
   'HOT-01': { description: 'Any leaks?', evidence: SHOOT_ISSUE },
   'HOT-02': { description: 'Any leaks?', evidence: SHOOT_ISSUE },
   'HOT-03': { description: 'Any leaks?', evidence: SHOOT_ISSUE },

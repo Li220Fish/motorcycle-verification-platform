@@ -4,7 +4,8 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 
 import AppearanceCaptureMap from '@/components/verification/AppearanceCaptureMap.vue'
 import BasicHealthCheck13 from '@/components/verification/BasicHealthCheck13.vue'
-import BuyerDisclosureCheck from '@/components/verification/BuyerDisclosureCheck.vue'
+import BuyerAppearanceCheck from '@/components/verification/buyer-appearance/BuyerAppearanceCheck.vue'
+import AiChatWidget from '@/components/verification/ai-chat/AiChatWidget.vue'
 import BuyerVehicleModelGate from '@/components/verification/BuyerVehicleModelGate.vue'
 import BuyerYearGate from '@/components/verification/BuyerYearGate.vue'
 import CorePhotoCaptureFlow from '@/components/verification/CorePhotoCaptureFlow.vue'
@@ -28,6 +29,7 @@ import { getAppearanceGroup } from '@/data/verification/appearance-groups'
 // only to avoid an unused-import lint error; re-add `, getAppearanceGroupId`
 // to this import when that block is restored.
 import { BASIC_HEALTH_CHECK_ITEM_IDS } from '@/data/verification/basic-health-check-items'
+import { BUYER_APPEARANCE_ITEM_IDS } from '@/data/verification/buyer-appearance-items'
 import {
   ENGINE_SESSION_ITEM_IDS,
   HOT_ENGINE_SESSION_ITEM_IDS,
@@ -43,6 +45,7 @@ import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { localDraftService } from '@/services/verification/local-draft.service'
 import { tourService } from '@/services/verification/tour.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import { useAiChatStore } from '@/stores/ai-chat.store'
 import { useVerificationStore } from '@/stores/verification.store'
 
 // Verification v2 — 車身外觀 (steps 5-24) was regrouped into PHASE 1 核心照片
@@ -51,15 +54,6 @@ import { useVerificationStore } from '@/stores/verification.store'
 // keeps the still-live "skip past this section from the category tab" jump
 // logic pointed at the right section id.
 const APPEARANCE_SECTION_ID = 'seller-phase1-core'
-// 其他主動揭露 — for a buyer flow, every one of this section's 9 items is
-// `required:false` and so gets filtered out of flatItems/sections entirely
-// by isItemVisible (verification.store.ts), which otherwise left buyers
-// with no way to ever reach this section at all (Hub tap silently no-oped,
-// linear Next skipped straight past it into 上路). BuyerDisclosureCheck.vue
-// is shown as a standalone interstitial instead — see showBuyerDisclosure
-// below — bypassing flatItems/sections for its own (dynamically-built)
-// content entirely.
-const DISCLOSURE_SECTION_ID = 'seller-phase4-disclosure'
 const ENGINE_SESSION_LAST_ITEM_ID = 'ENG-08'
 const HOT_ENGINE_SESSION_LAST_ITEM_ID = 'HOT-07'
 const LOCKED_SECTION_IDS = [LOCKED_ENGINE_SECTION_ID, LOCKED_HOT_ENGINE_SECTION_ID]
@@ -86,10 +80,6 @@ const hubOpen = ref(true)
 // there's nothing left blocking completion at this exact point — asking
 // explicitly ("直接結束" vs "填寫補充項目") beats silently continuing.
 const showEngineCompleteChoice = ref(false)
-// 買家流程的「其他主動揭露」替代畫面 (BuyerDisclosureCheck.vue) — see
-// DISCLOSURE_SECTION_ID's own comment above for why this can't just be a
-// normal flatItems stop the way every other section is.
-const showBuyerDisclosure = ref(false)
 // Chain/sprocket detection bug fix: hasExposedChainSprocket (both the
 // client's Phase 1 item-visibility check and the Trusted Backend's Core
 // Vision v2 gating — see vehicle-context.service.ts) reads Vehicle.
@@ -343,6 +333,34 @@ const isBasicHealthCheckGroup = computed(
   () => !!currentFlat.value && BASIC_HEALTH_CHECK_ITEM_IDS.includes(currentFlat.value.item.id),
 )
 
+// 買家「車輛外觀檢測」的 7 個動畫引導項目 (BUYER-APP-*) — one consolidated
+// animation + check-sheet screen, same group pattern as 基本12項 above.
+const isBuyerAppearanceGroup = computed(
+  () => !!currentFlat.value && BUYER_APPEARANCE_ITEM_IDS.includes(currentFlat.value.item.id),
+)
+
+// 冷車＋引擎檢查 / 熱車檢查 — no AI chat at all there (button or panel).
+const inEngineSection = computed(
+  () =>
+    !hubOpen.value &&
+    !!currentFlat.value &&
+    LOCKED_SECTION_IDS.includes(currentFlat.value.section.id),
+)
+// The conversation lasts for this verification screen only.
+const aiChatStore = useAiChatStore()
+onBeforeUnmount(() => aiChatStore.reset())
+
+/** Index just past the last flat item matching `ids` (or the Hub when the
+ *  group is the end of the flow) — shared "leave the whole group" exit. */
+function advancePastGroup(ids: string[]): void {
+  let last = -1
+  verificationStore.flatItems.forEach((flat, idx) => {
+    if (ids.includes(flat.item.id)) last = idx
+  })
+  if (last !== -1 && last < verificationStore.flatItems.length - 1) currentIndex.value = last + 1
+  else hubOpen.value = true
+}
+
 // ENG-03..08 (啟動馬達聲音..油門轉動運轉穩定度) render as one consolidated
 // 3-session flow (EngineInspectionFlow.vue) instead of 6 separate one-item
 // screens — see MotoVerify_Engine_Audio_IMU_UI_Agent_Implementation.md.
@@ -466,7 +484,6 @@ watch(attemptRemainingMs, async (remaining) => {
   try {
     await verificationStore.expireAttempt()
     showEngineCompleteChoice.value = false
-    showBuyerDisclosure.value = false
     currentIndex.value = 0
     hubOpen.value = true
     showAttemptExpired.value = true
@@ -656,6 +673,14 @@ function handlePrev(): void {
     currentIndex.value = Math.max(firstCoreIndex - 1, 0)
     return
   }
+  if (isBuyerAppearanceGroup.value) {
+    const firstIndex = verificationStore.flatItems.findIndex((flat) =>
+      BUYER_APPEARANCE_ITEM_IDS.includes(flat.item.id),
+    )
+    currentIndex.value = Math.max(firstIndex - 1, 0)
+    if (firstIndex <= 0) hubOpen.value = true
+    return
+  }
   if (isBasicHealthCheckGroup.value) {
     // Same idea — leave the whole tap-on-photo checklist as one unit. Not
     // reachable via the (hidden, Teleported-over) footer button in practice
@@ -705,16 +730,17 @@ function handleNext(): void {
     // can be reached. For a SELLER flow, everything from here to the end
     // (Phase 4, 其他主動揭露) is Optional — nothing left can block 完成驗證 —
     // so ask instead of silently marching into it (see
-    // showEngineCompleteChoice). A BUYER flow shows BuyerDisclosureCheck.vue
-    // as its own interstitial instead (Phase 4's actual items are hidden
-    // for buyers — see verification.store.ts's isItemVisible — this is a
-    // buyer-only reconstruction of that same section, not the same screen),
-    // then continues into 上路/熱車檢查 once the buyer taps 下一步 there.
+    // showEngineCompleteChoice). A BUYER flow has no disclosure section —
+    // it goes straight on into 熱車檢查.
     const lastEngineIndex = verificationStore.flatItems.findIndex(
       (flat) => flat.item.id === ENGINE_SESSION_LAST_ITEM_ID,
     )
-    if (verificationStore.flowKind === 'buyer') {
-      showBuyerDisclosure.value = true
+    if (
+      verificationStore.flowKind === 'buyer' &&
+      lastEngineIndex !== -1 &&
+      lastEngineIndex < verificationStore.flatItems.length - 1
+    ) {
+      currentIndex.value = lastEngineIndex + 1
     } else if (
       lastEngineIndex === -1 ||
       lastEngineIndex >= verificationStore.flatItems.length - 1
@@ -755,6 +781,11 @@ function handleNext(): void {
     }
     return
   }
+  if (isBuyerAppearanceGroup.value) {
+    // BuyerAppearanceCheck.vue emits this once all 7 items are answered.
+    advancePastGroup(BUYER_APPEARANCE_ITEM_IDS)
+    return
+  }
   if (isBasicHealthCheckGroup.value) {
     // BasicHealthCheck13.vue only ever emits this once every required item
     // is tapped (its own 完成 button, gated the same way) — jump past the
@@ -790,6 +821,8 @@ function handleNext(): void {
   }
 }
 
+const showColdFirstNotice = ref(false)
+
 function handleJumpTo(itemId: string): boolean {
   const items = verificationStore.flatItems
   const index = items.findIndex((flat) => flat.item.id === itemId)
@@ -819,10 +852,18 @@ function handleJumpTo(itemId: string): boolean {
   const firstBlockedIndex = items.findIndex(
     (flat) => flat.section.lockedOrder && !verificationStore.isItemAdvanceReady(flat),
   )
-  currentIndex.value =
+  const redirected =
     targetItem.section.lockedOrder && firstBlockedIndex !== -1 && index > firstBlockedIndex
-      ? firstBlockedIndex
-      : index
+  currentIndex.value = redirected ? firstBlockedIndex : index
+  // 想進熱車檢查卻被帶回冷車＋引擎檢查 — explain why, otherwise it looks
+  // like the tap opened the wrong section.
+  if (
+    redirected &&
+    targetItem.section.id === LOCKED_HOT_ENGINE_SECTION_ID &&
+    items[firstBlockedIndex].section.id === LOCKED_ENGINE_SECTION_ID
+  ) {
+    showColdFirstNotice.value = true
+  }
   hubOpen.value = false
   // Jumping to one specific item is always a drill-in, whether it came from
   // the Capture Map or from the Hub's missing-item list.
@@ -846,14 +887,6 @@ const showCategoryNav = computed(() => true)
 const answeredIds = computed(() => Object.keys(verificationStore.answers))
 
 function handleJumpToSection(sectionId: string): boolean {
-  // 其他主動揭露 (buyer flow only) — its section.items is always empty for
-  // buyers (isItemVisible filters out every one of its required:false
-  // items), so the normal "find first unanswered item" jump below has
-  // nothing to land on; show the interstitial directly instead.
-  if (sectionId === DISCLOSURE_SECTION_ID && verificationStore.flowKind === 'buyer') {
-    showBuyerDisclosure.value = true
-    return true
-  }
   const section = verificationStore.sections.find((candidate) => candidate.id === sectionId)
   if (!section || section.items.length === 0) return false
   const firstUnanswered = section.items.find((it) => !verificationStore.answers[it.id])
@@ -915,28 +948,6 @@ function handleEngineChoiceContinue(): void {
 
 function handleEngineChoiceFinish(): void {
   void handleComplete()
-}
-
-/** BuyerDisclosureCheck.vue's own "下一步" — continues into whatever comes
- *  right after 冷車＋引擎檢查 in the buyer flow (上路's first item), same
- *  "jump past the whole interstitial at once" shape as
- *  handleEngineChoiceContinue above. Falls back to the Hub on the (normally
- *  unreachable) edge case where ENG-08 isn't found. */
-function handleBuyerDisclosureAdvance(): void {
-  showBuyerDisclosure.value = false
-  const lastEngineIndex = verificationStore.flatItems.findIndex(
-    (flat) => flat.item.id === ENGINE_SESSION_LAST_ITEM_ID,
-  )
-  if (lastEngineIndex === -1 || lastEngineIndex >= verificationStore.flatItems.length - 1) {
-    hubOpen.value = true
-  } else {
-    currentIndex.value = lastEngineIndex + 1
-  }
-}
-
-function handleBuyerDisclosureBack(): void {
-  showBuyerDisclosure.value = false
-  hubOpen.value = true
 }
 
 async function handleComplete(): Promise<void> {
@@ -1095,11 +1106,6 @@ onMounted(() => {
     @finish="handleEngineChoiceFinish"
     @continue-to-disclosure="handleEngineChoiceContinue"
   />
-  <BuyerDisclosureCheck
-    v-else-if="showBuyerDisclosure"
-    @back="handleBuyerDisclosureBack"
-    @advance="handleBuyerDisclosureAdvance"
-  />
   <VerificationLayout
     v-else-if="currentFlat"
     :title="pageTitle"
@@ -1125,6 +1131,7 @@ onMounted(() => {
       (isColdTouchSession && coldTouchRecording) ||
       isCorePhotoGroup ||
       isBasicHealthCheckGroup ||
+      isBuyerAppearanceGroup ||
       needsRideSafetyGate ||
       needsRideTransition
     "
@@ -1179,6 +1186,13 @@ onMounted(() => {
       @advance="handleNext"
       @back="hubOpen = true"
     />
+    <BuyerAppearanceCheck
+      v-else-if="isBuyerAppearanceGroup"
+      :verification-id="id"
+      :initial-item-id="currentFlat.item.id"
+      @advance="handleNext"
+      @back="hubOpen = true"
+    />
     <BasicHealthCheck13
       v-else-if="isBasicHealthCheckGroup"
       embedded
@@ -1202,6 +1216,14 @@ onMounted(() => {
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
 
+  <!-- 買家複驗專屬的 AI 詢問視窗。「問 AI」按鈕只在基本12項出現；外觀動畫檢查
+       不顯示按鈕，但拍照後的「詢問 AI」仍可打開對話；冷車／熱車完全不出現。 -->
+  <AiChatWidget
+    v-if="verificationStore.flowKind === 'buyer' && verificationStore.flowLoaded && !showTour"
+    :hidden="inEngineSection"
+    :show-fab="!hubOpen && isBasicHealthCheckGroup"
+  />
+
   <!-- Teleported so it stays visible above the full-screen camera
        (CorePhotoCaptureFlow) and engine flows, which teleport themselves. -->
   <Teleport to="body">
@@ -1218,6 +1240,15 @@ onMounted(() => {
     </div>
     <div v-if="sealLockedNotice" class="seal-locked-toast" role="status">
       {{ sealLockedNotice }}
+    </div>
+    <div v-if="showColdFirstNotice" class="leave-engine-overlay cold-first-overlay">
+      <div class="leave-engine-card">
+        <p class="leave-engine-title">{{ t('verificationSteps', 'coldFirstTitle') }}</p>
+        <p class="leave-engine-sub">{{ t('verificationSteps', 'coldFirstBody') }}</p>
+        <PrimaryButton block @click="showColdFirstNotice = false">
+          {{ t('verificationSteps', 'coldFirstOk') }}
+        </PrimaryButton>
+      </div>
     </div>
     <div v-if="showAttemptExpired" class="leave-engine-overlay attempt-expired-overlay">
       <div class="leave-engine-card">
@@ -1404,6 +1435,11 @@ onMounted(() => {
 }
 
 .attempt-expired-overlay {
+  z-index: 460;
+}
+
+/* Same layer as the 5-minute notice — above every capture screen. */
+.cold-first-overlay {
   z-index: 460;
 }
 

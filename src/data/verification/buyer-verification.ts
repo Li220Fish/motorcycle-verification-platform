@@ -1,19 +1,19 @@
+import { buildBuyerAppearanceItems } from './buyer-appearance-items'
+import { LOCKED_ENGINE_SECTION_ID } from './engine-session'
 import { SELLER_VERIFICATION_SECTIONS } from './seller-verification'
 import type { VerificationItem, VerificationSection } from './verification.types'
 
 /**
- * Buyer Re-verification content — the frozen 53-step flow (steps 1–53).
- * Fully replaces the earlier 119-item / 14-section (B0–B13) version, which
- * covered report review, arrival comparison, price negotiation, and
- * ownership transfer — none of that carries over; the spec table this was
- * built from is technical inspection only, confirmed explicitly rather than
- * assumed to still need a home elsewhere.
+ * Buyer Re-verification — 3 sections (2026-10 redesign):
+ *   1. 車輛外觀檢測 — the 7 animated drop-mark / steering checks
+ *      (buyer-appearance-items.ts) followed by the 基本12項健檢.
+ *   2. 冷車＋引擎檢查 — identical to the seller's (same item ids, imported).
+ *   3. 熱車檢查 — leak re-check + hot audio/IMU session.
  *
- * Steps 1–45 are IDENTICAL to the Seller flow (same item IDs, same content —
- * imported, not duplicated) — a buyer re-verifying a vehicle re-runs the
- * exact same checklist the seller did. Steps 46–53 (上路 + 熱車檢查) only
- * exist here: the seller flow never rides the vehicle, so it has nothing to
- * hot-recheck afterward.
+ * Dropped for buyers: 核心照片 (seller-phase1-core), 其他主動揭露
+ * (seller-phase4-disclosure) and the 上路 (RIDE-01) step. The seller flow is
+ * unchanged. Answers already saved on older buyer drafts for those removed
+ * items simply stop being shown — nothing reads them anymore.
  */
 
 function item(
@@ -22,15 +22,11 @@ function item(
   return { type: 'check', required: true, severity: 'normal', ...partial }
 }
 
-// --- 上路 (1) ---
-const ride: VerificationItem[] = [
-  item({
-    id: 'RIDE-01',
-    title: '上路測試',
-    description: '進行既有上路流程。',
-    type: 'ride',
-  }),
-]
+function sellerSection(id: string): VerificationSection {
+  const section = SELLER_VERIFICATION_SECTIONS.find((candidate) => candidate.id === id)
+  if (!section) throw new Error(`seller section ${id} missing`)
+  return section
+}
 
 // --- 熱車檢查 (7, hot-engine re-checks, sequential — see lockedOrder) ---
 const hotCheck: VerificationItem[] = [
@@ -98,20 +94,22 @@ const hotCheck: VerificationItem[] = [
   }),
 ]
 
+export const BUYER_APPEARANCE_SECTION_ID = 'buyer-appearance'
+
 export const BUYER_VERIFICATION_SECTIONS: VerificationSection[] = [
-  ...SELLER_VERIFICATION_SECTIONS,
   {
-    id: 'buyer-ride',
-    title: '上路',
-    shortDescription: '進行既有上路測試流程。',
-    order: 4,
-    items: ride,
+    id: BUYER_APPEARANCE_SECTION_ID,
+    title: '車輛外觀檢測',
+    shortDescription: '看引導動畫逐項檢查倒地與轉向痕跡，再完成基本12項健檢。',
+    order: 0,
+    items: [...buildBuyerAppearanceItems(), ...sellerSection('seller-phase2-basic-health').items],
   },
+  { ...sellerSection(LOCKED_ENGINE_SECTION_ID), order: 1 },
   {
     id: 'buyer-hot-check',
     title: '熱車檢查',
-    shortDescription: '上路後重新確認滲漏、運轉聲與穩定度，需依序完成。',
-    order: 5,
+    shortDescription: '冷車檢查完成、引擎熱車後，重新確認滲漏、運轉聲與穩定度，需依序完成。',
+    order: 2,
     items: hotCheck,
     lockedOrder: true,
   },

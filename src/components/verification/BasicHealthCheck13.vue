@@ -15,7 +15,7 @@
  * revisiting the tab shows prior taps instead of resetting.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Camera, Check, RotateCcw, X } from 'lucide-vue-next'
+import { Camera, Check, MessageCircle, RotateCcw, X } from 'lucide-vue-next'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
@@ -37,6 +37,7 @@ import {
 } from '@/data/verification/basic-health-check-items'
 import { storageService } from '@/services/firebase/storage.service'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
+import { useAiChatStore } from '@/stores/ai-chat.store'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
@@ -299,6 +300,23 @@ const photoPopoverKey = ref<string | null>(null)
 function togglePhotoPopover(key: string): void {
   photoPopoverKey.value = photoPopoverKey.value === key ? null : key
 }
+// 買家複驗：拍好的照片可以直接帶進 AI 詢問小視窗 (ai-chat.store.ts).
+const aiChat = useAiChatStore()
+function latestPhoto(key: string): VerificationEvidence | undefined {
+  return [...evidenceFor(key)].sort((a, b) => b.createdAt - a.createdAt)[0]
+}
+function canAskAi(key: string): boolean {
+  return (
+    !props.previewMode && verificationStore.flowKind === 'buyer' && !!latestPhoto(key)?.remoteUrl
+  )
+}
+function askAiAboutPhoto(key: string): void {
+  const photo = latestPhoto(key)
+  const preview = photo ? evidenceThumbUrl(photo) : undefined
+  if (!photo?.remoteUrl || !preview) return
+  photoPopoverKey.value = null
+  aiChat.askAboutEvidencePhoto(photo.remoteUrl, preview)
+}
 function retakePhoto(key: string): void {
   photoPopoverKey.value = null
   if (!props.previewMode) issuePhotoKey.value = key
@@ -539,9 +557,19 @@ const pickerAnchor = computed<[number, number]>(() => {
                     :alt="t('basicCheck', 'viewPhoto')"
                   />
                 </div>
-                <button type="button" class="retake-btn" @click="retakePhoto(it.key)">
-                  <RotateCcw :size="14" /> {{ t('basicCheck', 'retakePhoto') }}
-                </button>
+                <div class="photo-popover-actions">
+                  <button type="button" class="retake-btn" @click="retakePhoto(it.key)">
+                    <RotateCcw :size="14" /> {{ t('basicCheck', 'retakePhoto') }}
+                  </button>
+                  <button
+                    v-if="canAskAi(it.key)"
+                    type="button"
+                    class="retake-btn ask-ai-btn"
+                    @click="askAiAboutPhoto(it.key)"
+                  >
+                    <MessageCircle :size="14" /> {{ t('aiChat', 'askAboutPhoto') }}
+                  </button>
+                </div>
               </div>
             </Transition>
             <Transition name="note-pop">
@@ -900,6 +928,20 @@ const pickerAnchor = computed<[number, number]>(() => {
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.photo-popover-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.photo-popover-actions .retake-btn {
+  flex: 1;
+}
+
+.ask-ai-btn {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .result-row.pass .result-status {

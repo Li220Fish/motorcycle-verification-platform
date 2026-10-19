@@ -5,13 +5,17 @@ import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
   GoogleAuthProvider,
+  isSignInWithEmailLink,
+  linkWithCredential,
   onAuthStateChanged,
   reauthenticateWithCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
+  sendSignInLinkToEmail,
   signInAnonymously,
   signInWithCredential,
   signInWithEmailAndPassword,
+  signInWithEmailLink,
   signInWithPopup,
   signOut,
   updateProfile,
@@ -102,12 +106,78 @@ export async function logout(): Promise<void> {
 export async function sendVerificationEmail(languageCode: string): Promise<void> {
   if (!auth.currentUser) throw new Error('Not authenticated')
   auth.languageCode = languageCode
-  // Inside the native app the WebView origin is https://localhost, which the
-  // phone's browser can't open — use the project's hosting domain there.
+  await sendEmailVerification(auth.currentUser, { url: verifyEmailContinueUrl() })
+}
+
+/** Inside the native app the WebView origin is https://localhost, which the
+ *  phone's browser can't open — use the project's hosting domain there. */
+function verifyEmailContinueUrl(): string {
   const origin = Capacitor.isNativePlatform()
     ? `https://${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}`
     : window.location.origin
-  await sendEmailVerification(auth.currentUser, { url: `${origin}/verify-email` })
+  return `${origin}/verify-email`
+}
+
+const EMAIL_LINK_STORAGE_KEY = 'motoverify:emailLinkFor'
+
+/**
+ * Google accounts arrive already `emailVerified` (Google vouches for them),
+ * so a plain verification email can't prove anything. Instead Firebase sends
+ * an Email-link (passwordless) mail to the Gmail address; opening it links
+ * that email-link credential onto the same account (completeEmailLinkVerification),
+ * which adds the 'password' provider — something only Firebase can grant, so
+ * the client can't fake having confirmed it. Requires "Email link" to be
+ * enabled under Authentication › Sign-in method › Email/Password.
+ */
+export async function sendGoogleAccountVerificationLink(languageCode: string): Promise<void> {
+  const email = auth.currentUser?.email
+  if (!auth.currentUser || !email) throw new Error('Not authenticated')
+  auth.languageCode = languageCode
+  await sendSignInLinkToEmail(auth, email, {
+    url: verifyEmailContinueUrl(),
+    handleCodeInApp: true,
+  })
+  try {
+    localStorage.setItem(EMAIL_LINK_STORAGE_KEY, email)
+  } catch {
+    // Falls back to the signed-in user's own email when completing.
+  }
+}
+
+/**
+ * Finishes the Google-account email confirmation when /verify-email is
+ * opened from the emailed link. Signed in (same browser/app) → links the
+ * credential onto the current account. Not signed in (e.g. the phone opened
+ * the link in its browser instead of the app) → signs in with the link,
+ * which lands on the same account (same email) and records the same
+ * provider; the app picks it up on its next reload. Returns false when the
+ * URL isn't an email-link at all.
+ */
+export async function completeEmailLinkVerification(href: string): Promise<boolean> {
+  if (!isSignInWithEmailLink(auth, href)) return false
+  let stored: string | null
+  try {
+    stored = localStorage.getItem(EMAIL_LINK_STORAGE_KEY)
+  } catch {
+    stored = null
+  }
+  const email = auth.currentUser?.email ?? stored
+  if (!email) throw new Error('missing-email')
+  if (auth.currentUser) {
+    try {
+      await linkWithCredential(auth.currentUser, EmailAuthProvider.credentialWithLink(email, href))
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'auth/provider-already-linked') throw error
+    }
+  } else {
+    await signInWithEmailLink(auth, email, href)
+  }
+  try {
+    localStorage.removeItem(EMAIL_LINK_STORAGE_KEY)
+  } catch {
+    // best-effort
+  }
+  return true
 }
 
 /** Re-reads the Auth user from the server — e.g. after the backend flipped

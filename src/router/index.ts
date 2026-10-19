@@ -314,6 +314,11 @@ router.beforeEach(async (to) => {
   }
 
   const requiresAuth = to.meta.requiresAuth !== false
+  // A Google account's confirmation link (email-link sign-in) may open in a
+  // browser that isn't signed in yet — VerifyEmailView.vue completes it there.
+  const isEmailLinkReturn =
+    to.name === 'verify-email' && to.query.mode === 'signIn' && !!to.query.oobCode
+  if (isEmailLinkReturn && !authStore.isAuthenticated) return true
   if (requiresAuth && !authStore.isAuthenticated && !to.meta.allowAnonymous) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
@@ -325,7 +330,7 @@ router.beforeEach(async (to) => {
       const redirect = to.name === 'login' ? undefined : to.fullPath
       return { name: 'verify-email', query: redirect ? { redirect } : {} }
     }
-  } else if (to.name === 'verify-email' && authStore.isAuthenticated) {
+  } else if (to.name === 'verify-email' && authStore.isAuthenticated && !isEmailLinkReturn) {
     return { name: 'dashboard' }
   }
   if (to.name === 'login' && authStore.isAuthenticated) {

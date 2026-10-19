@@ -51,15 +51,29 @@ export const useAuthStore = defineStore('auth', () => {
   // directly (see src/services/firebase/firebase.ts's `auth`), not this.
   const isAuthenticated = computed(() => user.value !== null && !user.value.isAnonymous)
 
-  /** Email/password account whose address hasn't been confirmed with a code
-   *  yet (VerifyEmailView.vue). Google accounts are already verified by
-   *  Google; the seeded test accounts are exempt. */
+  /** Account whose address hasn't been confirmed through our own email yet
+   *  (VerifyEmailView.vue) — checked on every navigation, not just right
+   *  after sign-up. Email/password: until Firebase's verification link is
+   *  clicked. Google: Google already marks the address verified, so it's
+   *  until the email-link credential has been linked onto the account
+   *  (adds the 'password' provider — see sendGoogleAccountVerificationLink).
+   *  The seeded test accounts are exempt. */
   const needsEmailVerification = computed(() => {
     const current = user.value
-    if (!current || current.isAnonymous || current.emailVerified) return false
-    if (!current.providerIds.includes('password')) return false
-    return !EMAIL_VERIFICATION_EXEMPT.has(current.email.toLowerCase())
+    if (!current || current.isAnonymous) return false
+    if (EMAIL_VERIFICATION_EXEMPT.has(current.email.toLowerCase())) return false
+    if (current.providerIds.includes('password')) return !current.emailVerified
+    return current.providerIds.includes('google.com')
   })
+
+  /** Google-only account — VerifyEmailView.vue sends it an email link
+   *  instead of a plain verification email. */
+  const isGoogleOnly = computed(
+    () =>
+      !!user.value &&
+      user.value.providerIds.includes('google.com') &&
+      !user.value.providerIds.includes('password'),
+  )
 
   async function refreshEmailVerified(): Promise<void> {
     const firebaseUser = await authService.reloadCurrentUser()
@@ -193,6 +207,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     isAuthenticated,
     needsEmailVerification,
+    isGoogleOnly,
     refreshEmailVerified,
     initialize,
     waitUntilReady,

@@ -5,8 +5,10 @@
  * sent by Firebase — no mail server of ours). The page re-checks the account
  * every few seconds and whenever the app comes back to the foreground, so
  * tapping the link and returning is usually enough; "我已完成驗證" re-checks
- * immediately. Google accounts and the seeded test accounts never see this
- * page (auth.store's needsEmailVerification).
+ * immediately. Google accounts get an email-link confirmation mail instead
+ * (Google already marks them verified — see sendGoogleAccountVerificationLink);
+ * opening that link lands back here and is completed on mount. The seeded
+ * test accounts never see this page (auth.store's needsEmailVerification).
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { MailCheck } from 'lucide-vue-next'
@@ -14,7 +16,11 @@ import { useRoute, useRouter } from 'vue-router'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import { useI18n } from '@/composables/useI18n'
-import { sendVerificationEmail } from '@/services/firebase/auth.service'
+import {
+  completeEmailLinkVerification,
+  sendGoogleAccountVerificationLink,
+  sendVerificationEmail,
+} from '@/services/firebase/auth.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 const authStore = useAuthStore()
@@ -50,7 +56,9 @@ async function sendEmail(): Promise<void> {
   errorMessage.value = ''
   infoMessage.value = ''
   try {
-    await sendVerificationEmail(isEnglish() ? 'en' : 'zh-TW')
+    const languageCode = isEnglish() ? 'en' : 'zh-TW'
+    if (authStore.isGoogleOnly) await sendGoogleAccountVerificationLink(languageCode)
+    else await sendVerificationEmail(languageCode)
     infoMessage.value = t('verifyEmail', 'sent', { email: authStore.user?.email ?? '' })
     startCooldown(60)
   } catch (error) {
@@ -97,8 +105,29 @@ async function handleLogout(): Promise<void> {
   router.replace({ name: 'login' })
 }
 
-onMounted(() => {
-  void sendEmail()
+/** Opened from a Google account's confirmation link → finish it here. */
+const linkDone = ref(false)
+async function completeLinkFromUrl(): Promise<boolean> {
+  if (route.query.mode !== 'signIn' || !route.query.oobCode) return false
+  checking.value = true
+  try {
+    await completeEmailLinkVerification(window.location.href)
+    await authStore.refreshEmailVerified().catch(() => {})
+    linkDone.value = true
+    // Drop the one-time code from the URL so a reload doesn't reuse it.
+    router.replace({ name: 'verify-email', query: {} })
+  } catch (error) {
+    console.error('[VerifyEmailView] email link failed:', error)
+    errorMessage.value = t('verifyEmail', 'linkFailed')
+  } finally {
+    checking.value = false
+  }
+  return true
+}
+
+onMounted(async () => {
+  const handledLink = await completeLinkFromUrl()
+  if (!handledLink) void sendEmail()
   pollTimer = setInterval(() => void checkVerified(true), 5000)
   document.addEventListener('visibilitychange', onVisible)
 })
@@ -113,7 +142,15 @@ onBeforeUnmount(() => {
   <div class="verify-wrap">
     <div class="icon-chip"><MailCheck :size="28" /></div>
     <h1>{{ t('verifyEmail', 'title') }}</h1>
-    <p class="hint">{{ t('verifyEmail', 'intro', { email: authStore.user?.email ?? '' }) }}</p>
+    <p class="hint">
+      {{
+        t('verifyEmail', authStore.isGoogleOnly ? 'googleIntro' : 'intro', {
+          email: authStore.user?.email ?? '',
+        })
+      }}
+    </p>
+
+    <p v-if="linkDone" class="info">{{ t('verifyEmail', 'linkDone') }}</p>
 
     <ol class="steps">
       <li>{{ t('verifyEmail', 'step1') }}</li>

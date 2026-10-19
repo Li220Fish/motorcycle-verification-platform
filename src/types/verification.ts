@@ -111,7 +111,7 @@ export interface Verification {
    *  (通病), taken right after vehicleSnapshot.modelId resolves so a buyer
    *  resuming an in-progress verification doesn't need to re-fetch, and so
    *  a later admin edit to the model's known-issues list doesn't retroactively
-   *  change what this buyer already saw. Consumed by BuyerDisclosureCheck.vue. */
+   *  change what this buyer already saw. Consumed by BasicHealthCheck13.vue's known-issue reminder. */
   buyerKnownIssuesSnapshot?: VehicleModelKnownIssue[]
   /** 5 分鐘作答窗口的起點（ms）— 新的驗證檔若在這之後 5 分鐘內沒有同時完成
    *  核心照片＋冷車引擎檢查，就退回草稿並清空所有內容（見

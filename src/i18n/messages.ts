@@ -235,6 +235,14 @@ const baseMessages = {
       'HOT-07': '油門轉動運轉穩定度',
       'buyer-ride': '上路',
       'buyer-hot-check': '熱車檢查',
+      'buyer-appearance': '車輛外觀檢測',
+      'BUYER-APP-steer': '龍頭轉向間隙',
+      'BUYER-APP-barend': '把手端子與拉桿',
+      'BUYER-APP-peg': '腳踏與打檔桿',
+      'BUYER-APP-fork': '避震器下座',
+      'BUYER-APP-clamp': '下三角台擋點',
+      'BUYER-APP-exhaust': '排氣管',
+      'BUYER-APP-engine': '引擎外蓋',
     },
     verificationHome: {
       startTitle: '開始驗證',
@@ -298,6 +306,10 @@ const baseMessages = {
       attemptExpiredBody:
         '未在 5 分鐘內完成拍照與引擎檢測，這份驗證已退回草稿，所有內容都已清除，請重新開始。',
       attemptExpiredOk: '我知道了',
+      coldFirstTitle: '請先完成冷車檢查',
+      coldFirstBody:
+        '熱車檢查必須在「冷車＋引擎檢查」完成後才能進行。冷車狀態只能在引擎還沒發動、還沒上路前確認，所以已為你帶到冷車檢查，完成後再進行熱車檢查。',
+      coldFirstOk: '我知道了，開始冷車檢查',
       sealLocked: '拍照與引擎檢測已完成並鎖定，無法再開啟修改或重新拍攝／錄製。',
     },
     corePhotoCapture: {
@@ -1195,6 +1207,14 @@ const baseMessages = {
       'HOT-07': 'Throttle Stability',
       'buyer-ride': 'Road Test',
       'buyer-hot-check': 'Hot Engine Check',
+      'buyer-appearance': 'Exterior Check',
+      'BUYER-APP-steer': 'Steering Lock Clearance',
+      'BUYER-APP-barend': 'Bar Ends & Levers',
+      'BUYER-APP-peg': 'Footpegs & Shifter',
+      'BUYER-APP-fork': 'Fork Lower Legs',
+      'BUYER-APP-clamp': 'Lower Triple Clamp Stops',
+      'BUYER-APP-exhaust': 'Exhaust',
+      'BUYER-APP-engine': 'Engine Covers',
     },
     verificationHome: {
       startTitle: 'Start Verification',
@@ -1262,6 +1282,10 @@ const baseMessages = {
       attemptExpiredBody:
         'Photos and the engine check were not both finished within 5 minutes, so this verification was reset to a draft and all its content was deleted. Please start again.',
       attemptExpiredOk: 'Got it',
+      coldFirstTitle: 'Do the cold-engine check first',
+      coldFirstBody:
+        'The warm-engine check can only be done after the "Cold Engine + Engine Check". The cold state can only be confirmed before the engine is started or ridden, so you have been taken to the cold-engine check — do the warm-engine check after it.',
+      coldFirstOk: 'Got it, start the cold check',
       sealLocked:
         'Photos and the engine check are complete and locked — they can no longer be opened, retaken or re-recorded.',
     },
