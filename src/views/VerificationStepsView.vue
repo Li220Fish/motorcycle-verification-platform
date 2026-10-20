@@ -33,10 +33,8 @@ import { BUYER_APPEARANCE_ITEM_IDS } from '@/data/verification/buyer-appearance-
 import {
   ENGINE_SESSION_ITEM_IDS,
   HOT_ENGINE_SESSION_ITEM_IDS,
-  inferTransmissionType,
   LOCKED_ENGINE_SECTION_ID,
   LOCKED_HOT_ENGINE_SECTION_ID,
-  transmissionLabelFor,
   type EngineTransmissionType,
 } from '@/data/verification/engine-session'
 import { SELLER_ELECTRIC_LIGHT_ITEM_IDS } from '@/data/verification/seller-verification'
@@ -96,28 +94,20 @@ const showEngineCompleteChoice = ref(false)
 // silently marked not_applicable, even for a real chain-drive bike with a
 // real photo uploaded. Asking here — before Phase 1 is ever reachable —
 // guarantees transmission is known before any evidence triggers analysis.
-const vehicleTypeConfirmed = ref(false)
+// The answer (and what's already known — transmission text, hasChain) lives
+// in verificationStore.vehicleType, which the engine screen reads too, so
+// the 檔車／速克達 question is asked at most once per verification.
 const needsVehicleTypeGate = computed(() => {
   const vehicle = vehicleStore.currentVehicle
   const verification = verificationStore.currentVerification
-  if (
-    vehicleTypeConfirmed.value ||
-    !vehicle ||
-    !verification ||
-    vehicle.id !== verification.vehicleId
-  ) {
-    return false
-  }
-  return inferTransmissionType(vehicle.transmission) === null
+  if (!vehicle || !verification || vehicle.id !== verification.vehicleId) return false
+  // A snapshot = the seller's car from a listing: never this owner-side gate.
+  if (verification.vehicleSnapshot) return false
+  return verificationStore.vehicleType === null
 })
 
 function handlePickVehicleType(type: EngineTransmissionType): void {
-  vehicleTypeConfirmed.value = true
-  const vehicleId = verificationStore.currentVerification?.vehicleId
-  if (!vehicleId) return
-  vehicleStore
-    .updateVehicle(vehicleId, { transmission: transmissionLabelFor(type) })
-    .catch((error) => console.error('[VehicleTypeGate] updateVehicle failed:', error))
+  void verificationStore.setVehicleType(type)
 }
 
 // 買家複驗專屬：年份詢問關卡 (requirement 3b) + 通病自動帶入 (3c). See

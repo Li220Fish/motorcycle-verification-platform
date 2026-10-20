@@ -7,7 +7,12 @@ import type {
   VerificationItem,
   VerificationSection,
 } from '@/data/verification'
-import { inferTransmissionType, LOCKED_ENGINE_SECTION_ID } from '@/data/verification/engine-session'
+import {
+  LOCKED_ENGINE_SECTION_ID,
+  resolveVehicleType,
+  transmissionLabelFor,
+  type EngineTransmissionType,
+} from '@/data/verification/engine-session'
 import {
   analyzeColdEngineTouchCheck,
   analyzeCoreVisionEngineBottom,
@@ -61,9 +66,47 @@ export const useVerificationStore = defineStore('verification', () => {
    * photo) — only an explicit scooter/CVT reading hides the step; unknown or
    * chain-drive both keep it visible, same "資料不足才詢問" spirit via the
    * existing 傳動 picker rather than a brand-new prompt. */
-  const hasExposedChainSprocket = computed(
-    () => inferTransmissionType(vehicleStore.currentVehicle?.transmission) !== 'scooter',
-  )
+  const hasExposedChainSprocket = computed(() => vehicleType.value !== 'scooter')
+
+  /**
+   * 檔車／速克達 for THIS verification's car, resolved once for every screen
+   * that needs it (the start-of-flow VehicleTypeGate, the engine placement
+   * diagram, the chain items above) so the user is never asked twice:
+   * - a choice already made in this session wins;
+   * - a buyer's car comes from the seller's listing (vehicleSnapshot) —
+   *   vehicleStore.currentVehicle is NOT that car for a buyer;
+   * - otherwise the owner's vehicle: transmission text, then hasChain.
+   */
+  const pickedVehicleType = ref<EngineTransmissionType | null>(null)
+  const vehicleType = computed<EngineTransmissionType | null>(() => {
+    if (pickedVehicleType.value) return pickedVehicleType.value
+    const snapshot = currentVerification.value?.vehicleSnapshot
+    if (snapshot) return resolveVehicleType({ transmission: snapshot.transmission })
+    const vehicle = vehicleStore.currentVehicle
+    if (!vehicle || vehicle.id !== currentVerification.value?.vehicleId) {
+      // Not loaded yet (or not this car) — same "unknown" the old code used.
+      return resolveVehicleType({ transmission: vehicle?.transmission })
+    }
+    return resolveVehicleType({ transmission: vehicle.transmission, hasChain: vehicle.hasChain })
+  })
+
+  /** Records the user's answer for the rest of the session and saves it where
+   *  this car's details live, so a later visit infers it too. */
+  async function setVehicleType(type: EngineTransmissionType): Promise<void> {
+    pickedVehicleType.value = type
+    const verification = currentVerification.value
+    if (!verification) return
+    const label = transmissionLabelFor(type)
+    try {
+      if (verification.vehicleSnapshot) {
+        await verificationService.saveBuyerVehicleTransmission(verification.id, label)
+      } else {
+        await vehicleStore.updateVehicle(verification.vehicleId, { transmission: label })
+      }
+    } catch (error) {
+      console.error('[verification.store] saving vehicle type failed:', error)
+    }
+  }
 
   // --- Runner state (V0.2): answers/evidence for the currently loaded flow ---
   const answers = ref<Record<string, VerificationAnswer>>({})
@@ -204,6 +247,7 @@ export const useVerificationStore = defineStore('verification', () => {
   async function loadFlow(verificationId: string): Promise<void> {
     loading.value = true
     flowLoaded.value = false
+    pickedVehicleType.value = null
     unsubscribeVerification?.()
     try {
       currentVerification.value = await verificationService.get(verificationId)
@@ -865,6 +909,8 @@ export const useVerificationStore = defineStore('verification', () => {
     pendingRequiredUploads,
     failedRequiredUploads,
     hasExposedChainSprocket,
+    vehicleType,
+    setVehicleType,
     pendingRequiredAnalysis,
     failedRequiredAnalysis,
     retryAnalysis,

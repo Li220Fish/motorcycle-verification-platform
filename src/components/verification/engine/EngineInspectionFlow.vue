@@ -40,7 +40,6 @@ import {
   analyzeEngineSensorSessionV2,
   analyzeHotEngineSensorSessionV2,
 } from '@/services/firebase/ai-analysis.service'
-import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
 import {
   ENGINE_IDLE_ITEM_IDS,
@@ -56,8 +55,6 @@ import {
   HOT_ENGINE_SESSION_ITEM_IDS,
   HOT_ENGINE_SESSION_PHASES,
   hotEngineSessionInstructionAt,
-  inferTransmissionType,
-  transmissionLabelFor,
 } from '@/data/verification/engine-session'
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
 import type { VerificationEvidence } from '@/types/verification-evidence'
@@ -129,7 +126,6 @@ const IMU_ITEM_IDS = computed(() =>
 )
 
 const verificationStore = useVerificationStore()
-const vehicleStore = useVehicleStore()
 
 type Phase =
   | 'placement'
@@ -167,17 +163,11 @@ function setRecordingActive(active: boolean): void {
 }
 
 // --- Vehicle type (needed for the placement diagram before recording) ----
-const vehicleType = ref<EngineTransmissionType | null>(
-  inferTransmissionType(vehicleStore.currentVehicle?.transmission),
-)
+// Shared with the start-of-flow VehicleTypeGate and the buyer's listing data
+// (verificationStore.vehicleType) — only asked here when nothing knows it yet.
+const vehicleType = computed<EngineTransmissionType | null>(() => verificationStore.vehicleType)
 function pickVehicleType(type: EngineTransmissionType): void {
-  vehicleType.value = type
-  const vehicleId = verificationStore.currentVerification?.vehicleId
-  if (vehicleId) {
-    vehicleStore
-      .updateVehicle(vehicleId, { transmission: transmissionLabelFor(type) })
-      .catch(() => {})
-  }
+  void verificationStore.setVehicleType(type)
 }
 
 const motionSupported = ref(motionCaptureService.isSupported())

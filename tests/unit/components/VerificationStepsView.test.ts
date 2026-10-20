@@ -13,9 +13,11 @@ vi.mock('capacitor-voice-recorder', () => ({ VoiceRecorder: {} }))
 import AiChatWidget from '@/components/verification/ai-chat/AiChatWidget.vue'
 import BuyerVehicleModelGate from '@/components/verification/BuyerVehicleModelGate.vue'
 import BuyerYearGate from '@/components/verification/BuyerYearGate.vue'
+import VehicleTypeGate from '@/components/verification/VehicleTypeGate.vue'
 import VerificationHub from '@/components/verification/VerificationHub.vue'
 import { tourService } from '@/services/verification/tour.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
+import { useVerificationStore } from '@/stores/verification.store'
 import VerificationStepsView from '@/views/VerificationStepsView.vue'
 import * as fs from '../fakes/firestore'
 
@@ -212,6 +214,30 @@ describe('VerificationStepsView — buyer gates', () => {
     expect(wrapper.findComponent(BuyerVehicleModelGate).exists()).toBe(false)
     expect(wrapper.findComponent(BuyerYearGate).exists()).toBe(false)
     expect(wrapper.findComponent(VerificationHub).exists()).toBe(true)
+  })
+
+  it('seller whose car type is already known (chain info) is not asked 檔車／速可達', async () => {
+    seed({ type: 'seller', attemptStartedAt: NOW })
+    useVehicleStore().currentVehicle = {
+      id: 'veh1',
+      transmission: '6速', // catalog text alone doesn't say
+      hasChain: true,
+    } as never
+    const wrapper = await render()
+    expect(wrapper.findComponent(VehicleTypeGate).exists()).toBe(false)
+    expect(wrapper.findComponent(VerificationHub).exists()).toBe(true)
+  })
+
+  it('seller with an unknown car type is asked once at the start', async () => {
+    seed({ type: 'seller', attemptStartedAt: NOW })
+    useVehicleStore().currentVehicle = { id: 'veh1', transmission: null, hasChain: null } as never
+    const wrapper = await render()
+    const gate = wrapper.findComponent(VehicleTypeGate)
+    expect(gate.exists()).toBe(true)
+    gate.vm.$emit('pick', 'manual')
+    await flushPromises()
+    expect(useVerificationStore().vehicleType).toBe('manual')
+    expect(wrapper.findComponent(VehicleTypeGate).exists()).toBe(false)
   })
 
   it('sellers get no AI chat button (buyer-only)', async () => {

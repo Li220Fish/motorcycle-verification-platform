@@ -33,6 +33,21 @@ export function inferTransmissionType(
   return null
 }
 
+/** Transmission text first; when that doesn't say (e.g. a catalog value like
+ *  「6速」), fall back to whether the bike has an exposed chain — a chain
+ *  bike is a 檔車 (manual), a chainless one a 速克達 (scooter). null only
+ *  when neither is known, which is the one case the user still gets asked. */
+export function resolveVehicleType(info: {
+  transmission?: string | null
+  hasChain?: boolean | null
+}): EngineTransmissionType | null {
+  const fromText = inferTransmissionType(info.transmission)
+  if (fromText) return fromText
+  if (info.hasChain === true) return 'manual'
+  if (info.hasChain === false) return 'scooter'
+  return null
+}
+
 /** Written back to Vehicle.transmission when the user picks a type manually
  *  (spec §34: "此選擇應回存合適的 Vehicle / Verification context，而不是只
  *  存在 local UI state") — reuses the existing free-text field rather than

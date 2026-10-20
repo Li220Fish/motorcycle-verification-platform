@@ -241,6 +241,12 @@ async function saveBuyerVehicleModelId(id: string, modelId: string): Promise<voi
   await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.modelId': modelId })
 }
 
+/** Buyer's answer to 檔車／速克達 — kept on the verification's own snapshot
+ *  (the buyer can't write the seller's vehicles/{id}). */
+async function saveBuyerVehicleTransmission(id: string, transmission: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, id), { 'vehicleSnapshot.transmission': transmission })
+}
+
 /** BuyerVehicleModelGate.vue answered — never ask again for this verification. */
 async function markBuyerModelConfirmed(id: string): Promise<void> {
   await updateDoc(doc(db, COLLECTION, id), { buyerModelConfirmed: true })
@@ -351,6 +357,7 @@ export const verificationService = {
   expireAttempt,
   saveBuyerVehicleYear,
   saveBuyerVehicleModelId,
+  saveBuyerVehicleTransmission,
   markBuyerModelConfirmed,
   saveBuyerKnownIssuesSnapshot,
   saveAnswer,
