@@ -1,217 +1,231 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Bluetooth, ChevronLeft, HelpCircle } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Bluetooth, ChevronLeft, HelpCircle, RotateCcw, Unplug } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
-import ProbeStatusCard from '@/components/probe/ProbeStatusCard.vue'
-import VoltageChart from '@/components/probe/VoltageChart.vue'
-import VoltageMetric from '@/components/probe/VoltageMetric.vue'
+import ProbeStageCard from '@/components/probe/ProbeStageCard.vue'
 import { useI18n } from '@/composables/useI18n'
-import { useBluetoothStore } from '@/stores/bluetooth.store'
+import { PROBE_STAGES, type ProbeStage } from '@/services/probe/probe-protocol'
+import { ProbeError } from '@/services/probe/probe.service'
 import { useProbeStore } from '@/stores/probe.store'
 
 const probeStore = useProbeStore()
-const bluetoothStore = useBluetoothStore()
-const { t } = useI18n()
+const router = useRouter()
+const { t, formatDate } = useI18n()
 
-const connecting = ref(false)
-const errorMessage = ref('')
 const showHelp = ref(false)
-const showDevices = ref(false)
+const showLog = ref(false)
+const stageError = ref('')
 
-const isMockMode = () => probeStore.mode === 'mock'
+const isMock = computed(() => probeStore.mode === 'mock')
+const canUseBle = computed(() => isMock.value || probeStore.bleSupported)
+const modeLabel = computed(() =>
+  isMock.value ? t('probe', 'mockMode') : t('probe', 'realBleMode'),
+)
 
 function toggleMode(): void {
-  probeStore.setMode(isMockMode() ? 'ble' : 'mock')
+  probeStore.setMode(isMock.value ? 'ble' : 'mock')
 }
 
-async function handleSearch(): Promise<void> {
-  errorMessage.value = ''
-  connecting.value = true
+function goBack(): void {
+  if (window.history.length > 1) router.back()
+  else router.push('/settings')
+}
+
+const ERROR_KEYS = {
+  PROBE_DISCONNECTED: 'errDisconnected',
+  PROBE_BUSY: 'errBusy',
+  PROBE_INVALID: 'errInvalid',
+  PROBE_TIMEOUT: 'errTimeout',
+  PROBE_RESET: 'errReset',
+} as const
+
+async function runStage(stage: ProbeStage): Promise<void> {
+  stageError.value = ''
   try {
-    await probeStore.connect()
-    await probeStore.start()
+    await probeStore.runStage(stage)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : t('probe', 'searchFailed')
-  } finally {
-    connecting.value = false
+    stageError.value =
+      error instanceof ProbeError ? t('probe', ERROR_KEYS[error.code]) : String(error)
   }
 }
 
-async function handleStopMonitoring(): Promise<void> {
-  await probeStore.stop()
-  await probeStore.disconnect()
+function progressText(stage: ProbeStage): string {
+  if (probeStore.runningStage !== stage) return ''
+  return probeStore.progress?.message ?? ''
 }
 
-async function toggleScan(): Promise<void> {
-  if (bluetoothStore.scanning) {
-    await bluetoothStore.stopScan()
-  } else {
-    await bluetoothStore.startScan()
-  }
-}
+// Live clip/voltage readout while connected (STATUS every 2s, skipped
+// automatically while a stage is running).
+let stopStatus: (() => void) | null = null
+watch(
+  () => probeStore.connected,
+  (connected) => {
+    stopStatus?.()
+    stopStatus = connected ? probeStore.watchStatus(2000) : null
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => stopStatus?.())
 
-onMounted(() => {
-  bluetoothStore.checkEnabled()
-  bluetoothStore.refreshBondedDevices()
-})
+function formatTime(at: number): string {
+  return formatDate(at, true).split(' ').pop() ?? ''
+}
 </script>
 
 <template>
   <div class="probe-page">
-    <template v-if="!probeStore.connected">
-      <header class="probe-header">
-        <span class="spacer" />
-        <h1>{{ t('probe', 'connectTitle') }}</h1>
-        <button class="icon-button" aria-label="Help" @click="showHelp = !showHelp">
-          <HelpCircle :size="20" />
-        </button>
-      </header>
+    <header class="probe-header">
+      <button class="icon-button" :aria-label="t('ui', 'back')" @click="goBack">
+        <ChevronLeft :size="22" />
+      </button>
+      <h1>
+        {{ probeStore.connected ? t('probe', 'connectedTitle') : t('probe', 'connectTitle') }}
+      </h1>
+      <button class="icon-button" aria-label="Help" @click="showHelp = !showHelp">
+        <HelpCircle :size="20" />
+      </button>
+    </header>
 
-      <div class="connect-content">
-        <p v-if="showHelp" class="help-tip">{{ t('probe', 'helpTip') }}</p>
-        <div class="device-illustration">
-          <Bluetooth :size="40" color="var(--color-probe-voltage)" />
-        </div>
-        <p class="device-name">{{ t('probe', 'deviceName') }}</p>
-        <p class="device-subtitle">{{ t('probe', 'deviceSubtitle') }}</p>
+    <p v-if="showHelp" class="help-tip">{{ t('probe', 'helpTip') }}</p>
 
-        <p class="connection-state">{{ t('probe', 'notConnected') }}</p>
-
-        <PrimaryButton block :disabled="connecting" @click="handleSearch">
-          {{ connecting ? t('probe', 'searching') : t('probe', 'searchDevice') }}
-        </PrimaryButton>
-
-        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-
-        <button class="mode-toggle" @click="toggleMode">
-          <span>{{ isMockMode() ? t('probe', 'mockMode') : t('probe', 'realBleMode') }}</span>
-          <span class="mode-switch" :class="{ on: isMockMode() }" />
-        </button>
-
-        <div class="instructions">
-          <h2>{{ t('probe', 'instructions') }}</h2>
-          <ol>
-            <li>{{ t('probe', 'step1') }}</li>
-            <li>{{ t('probe', 'step2') }}</li>
-            <li>{{ t('probe', 'step3') }}</li>
-            <li>{{ t('probe', 'step4') }}</li>
-          </ol>
-        </div>
+    <!-- Not connected -->
+    <div v-if="!probeStore.connected" class="connect-content">
+      <div class="device-illustration">
+        <Bluetooth :size="40" color="var(--color-probe-voltage)" />
       </div>
-    </template>
+      <p class="device-name">{{ t('probe', 'deviceName') }}</p>
+      <p class="device-subtitle">{{ t('probe', 'deviceSubtitle') }}</p>
+      <p class="connection-state">{{ t('probe', 'notConnected') }}</p>
 
-    <template v-else>
-      <header class="probe-header">
-        <button class="icon-button" aria-label="Back" @click="handleStopMonitoring">
-          <ChevronLeft :size="22" />
-        </button>
-        <h1>{{ t('probe', 'monitoringTitle') }}</h1>
-        <span class="spacer" />
-      </header>
+      <p v-if="!canUseBle" class="error">{{ t('probe', 'bleUnsupported') }}</p>
+      <PrimaryButton
+        block
+        :disabled="probeStore.connecting || !canUseBle"
+        data-testid="probe-connect"
+        @click="probeStore.connect()"
+      >
+        {{ probeStore.connecting ? t('probe', 'connecting') : t('probe', 'searchDevice') }}
+      </PrimaryButton>
+      <p v-if="probeStore.errorMessage" class="error">{{ probeStore.errorMessage }}</p>
 
-      <div class="monitor-content">
-        <ProbeStatusCard :connected="true" device-name="MotoProbe-3846" />
-
-        <div class="voltage-hero">
-          <p class="voltage-label">{{ t('probe', 'currentVoltage') }}</p>
-          <p class="voltage-value">
-            {{ probeStore.currentVoltage !== null ? probeStore.currentVoltage.toFixed(2) : '--' }}
-            <span class="voltage-unit">V</span>
-          </p>
-        </div>
-
-        <VoltageChart :samples="probeStore.samples" />
-
-        <div class="metric-row">
-          <VoltageMetric
-            :label="t('probe', 'minVoltage')"
-            :value="`${probeStore.analysis.minVoltage} V`"
-          />
-          <VoltageMetric
-            :label="t('probe', 'maxVoltage')"
-            :value="`${probeStore.analysis.maxVoltage} V`"
-          />
-          <VoltageMetric
-            :label="t('probe', 'avgVoltage')"
-            :value="`${probeStore.analysis.averageVoltage} V`"
-          />
-        </div>
-
-        <PrimaryButton variant="danger" block @click="handleStopMonitoring">
-          {{ t('probe', 'stopMonitoring') }}
-        </PrimaryButton>
-        <PrimaryButton
-          v-if="isMockMode()"
-          variant="secondary"
-          block
-          @click="probeStore.simulateEngineStart"
-        >
-          {{ t('probe', 'simulateEngineStart') }}
-        </PrimaryButton>
-      </div>
-    </template>
-
-    <div class="devices-section">
-      <button class="devices-toggle" @click="showDevices = !showDevices">
-        {{ showDevices ? t('probe', 'hideDeviceList') : t('probe', 'showDeviceList') }}
+      <button class="mode-toggle" :disabled="probeStore.connecting" @click="toggleMode">
+        <span>{{ t('probe', 'modeLabel') }}：{{ modeLabel }}</span>
+        <span class="mode-switch" :class="{ on: isMock }" />
       </button>
 
-      <div v-if="showDevices" class="devices-panel">
-        <p class="devices-hint">{{ t('probe', 'devicesHint') }}</p>
-        <p class="devices-status">
-          {{
-            t('probe', 'bluetoothStatus', {
-              status: bluetoothStore.enabled
-                ? t('probe', 'enabled')
-                : t('probe', 'unknownOrDisabled'),
-            })
-          }}
-        </p>
+      <div class="instructions">
+        <h2>{{ t('probe', 'instructions') }}</h2>
+        <ol>
+          <li>{{ t('probe', 'step1') }}</li>
+          <li>{{ t('probe', 'step2') }}</li>
+          <li>{{ t('probe', 'step3') }}</li>
+          <li>{{ t('probe', 'step4') }}</li>
+        </ol>
+      </div>
+    </div>
 
-        <div class="devices-controls">
-          <button class="ghost-button" @click="toggleScan">
-            {{ bluetoothStore.scanning ? t('probe', 'stopScan') : t('probe', 'startScan') }}
-          </button>
-          <button class="ghost-button" @click="bluetoothStore.refreshBondedDevices">
-            {{ t('probe', 'refreshBonded') }}
-          </button>
+    <!-- Connected -->
+    <div v-else class="monitor-content">
+      <div class="status-card">
+        <span class="dot" />
+        <div class="status-text">
+          <p class="status-name">{{ probeStore.deviceName }}</p>
+          <p class="status-sub">{{ modeLabel }}</p>
         </div>
+        <div v-if="probeStore.statusReport" class="live" data-testid="probe-live">
+          <p class="live-value">
+            {{
+              probeStore.statusReport.liveVoltage !== null
+                ? `${probeStore.statusReport.liveVoltage.toFixed(2)} V`
+                : '—'
+            }}
+          </p>
+          <p class="live-label">{{ t('probe', 'liveVoltage') }}</p>
+        </div>
+        <button
+          class="ghost-button"
+          data-testid="probe-disconnect"
+          @click="probeStore.disconnect()"
+        >
+          <Unplug :size="15" />{{ t('probe', 'disconnect') }}
+        </button>
+      </div>
 
-        <p v-if="bluetoothStore.errorMessage" class="error">{{ bluetoothStore.errorMessage }}</p>
+      <p
+        v-if="probeStore.statusReport"
+        class="clips"
+        :class="{ off: !probeStore.statusReport.clipsOnBattery }"
+        data-testid="probe-clips"
+      >
+        {{
+          probeStore.statusReport.clipsOnBattery ? t('probe', 'clipsOn') : t('probe', 'clipsOff')
+        }}
+      </p>
 
-        <h3>{{ t('probe', 'nearbyDevices') }}</h3>
-        <ul class="device-list">
-          <li v-for="result in bluetoothStore.scannedDevices" :key="result.device.deviceId">
-            <span>{{ result.localName || result.device.name || result.device.deviceId }}</span>
-            <span class="device-meta">rssi: {{ result.rssi ?? 'n/a' }}</span>
-            <button
-              v-if="!bluetoothStore.connectedDeviceIds.includes(result.device.deviceId)"
-              class="ghost-button small"
-              @click="bluetoothStore.connectTo(result.device.deviceId)"
+      <div class="section-head">
+        <h2>{{ t('probe', 'stagesTitle') }}</h2>
+        <p>{{ t('probe', 'stagesHint') }}</p>
+      </div>
+
+      <ProbeStageCard
+        v-for="stage in PROBE_STAGES"
+        :key="stage"
+        :stage="stage"
+        :reading="probeStore.results[stage] ?? null"
+        :running="probeStore.runningStage === stage"
+        :progress="progressText(stage)"
+        variant="dark"
+        show-description
+      >
+        <button
+          class="run-button"
+          :disabled="probeStore.runningStage !== null"
+          :data-testid="`probe-run-${stage}`"
+          @click="runStage(stage)"
+        >
+          {{ t('probe', 'run') }}
+        </button>
+      </ProbeStageCard>
+
+      <PrimaryButton
+        v-if="isMock && probeStore.runningStage === 'CRANK'"
+        variant="secondary"
+        block
+        @click="probeStore.simulateCrank()"
+      >
+        {{ t('probe', 'simulateCrank') }}
+      </PrimaryButton>
+
+      <p v-if="stageError" class="error">{{ stageError }}</p>
+
+      <div class="action-row">
+        <button class="ghost-button" @click="probeStore.reset()">
+          <RotateCcw :size="15" />{{ t('probe', 'resetDevice') }}
+        </button>
+        <button class="ghost-button" @click="probeStore.clearResults()">
+          {{ t('probe', 'clearResults') }}
+        </button>
+      </div>
+
+      <div class="log-section">
+        <button class="devices-toggle" @click="showLog = !showLog">
+          {{ t('probe', 'logTitle') }}（{{ probeStore.log.length }}）
+        </button>
+        <ol v-if="showLog" class="log-list">
+          <li v-if="probeStore.log.length === 0" class="log-empty">{{ t('probe', 'logEmpty') }}</li>
+          <li
+            v-for="(entry, index) in [...probeStore.log].reverse()"
+            :key="index"
+            :class="entry.direction"
+          >
+            <span class="log-meta"
+              >{{ entry.direction === 'tx' ? '→' : '←' }} {{ formatTime(entry.at) }}</span
             >
-              {{ t('probe', 'connect') }}
-            </button>
-            <button
-              v-else
-              class="ghost-button small"
-              @click="bluetoothStore.disconnectFrom(result.device.deviceId)"
-            >
-              {{ t('probe', 'disconnect') }}
-            </button>
+            <code>{{ entry.text }}</code>
           </li>
-          <li v-if="bluetoothStore.scannedDevices.length === 0">
-            {{ t('probe', 'noDevicesFound') }}
-          </li>
-        </ul>
-
-        <h3>{{ t('probe', 'bondedDevices') }}</h3>
-        <ul class="device-list">
-          <li v-for="device in bluetoothStore.bondedDevices" :key="device.deviceId">
-            {{ device.name || device.deviceId }}
-          </li>
-          <li v-if="bluetoothStore.bondedDevices.length === 0">{{ t('probe', 'noBondedData') }}</li>
-        </ul>
+        </ol>
       </div>
     </div>
   </div>
@@ -232,15 +246,12 @@ onMounted(() => {
   height: var(--header-height);
   padding: 0 var(--space-md);
   padding-top: var(--safe-area-inset-top, env(safe-area-inset-top));
+  box-sizing: content-box;
 }
 
 .probe-header h1 {
   font-size: 17px;
   font-weight: 700;
-}
-
-.spacer {
-  width: 36px;
 }
 
 .icon-button {
@@ -255,22 +266,21 @@ onMounted(() => {
   border-radius: var(--radius-sm);
 }
 
+.help-tip {
+  margin: 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .connect-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: var(--space-xl) var(--space-md);
   gap: var(--space-sm);
-}
-
-.help-tip {
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-md);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: var(--space-sm);
 }
 
 .device-illustration {
@@ -289,21 +299,20 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.device-subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: var(--space-lg);
-}
-
+.device-subtitle,
 .connection-state {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.connection-state {
   margin-bottom: var(--space-md);
 }
 
 .error {
   color: #ff8a80;
   font-size: 13px;
+  text-align: center;
 }
 
 .mode-toggle {
@@ -370,40 +379,135 @@ onMounted(() => {
   padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--space-sm);
 }
 
-.voltage-hero {
-  text-align: center;
-  padding: var(--space-lg) 0;
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
 }
 
-.voltage-label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: var(--space-xs);
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-probe-voltage);
+  box-shadow: 0 0 0 4px rgba(53, 208, 111, 0.2);
+  flex-shrink: 0;
 }
 
-.voltage-value {
-  font-size: 48px;
+.status-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-name {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-sub {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.live {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.live-value {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-probe-voltage);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-label {
+  margin: 0;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.clips {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  background: rgba(53, 208, 111, 0.12);
   color: var(--color-probe-voltage);
 }
 
-.voltage-unit {
-  font-size: 20px;
-  font-weight: 600;
+.clips.off {
+  background: rgba(255, 138, 128, 0.12);
+  color: #ff8a80;
 }
 
-.metric-row {
+.section-head {
+  margin-top: var(--space-sm);
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.section-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.run-button {
+  flex-shrink: 0;
+  min-width: 56px;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-probe-voltage);
+  color: #06331a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.run-button:disabled {
+  opacity: 0.4;
+}
+
+.action-row {
   display: flex;
-  padding: var(--space-md) 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: var(--space-sm);
+  flex-wrap: wrap;
 }
 
-.devices-section {
-  padding: var(--space-md);
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.log-section {
+  margin-top: var(--space-md);
 }
 
 .devices-toggle {
@@ -417,63 +521,44 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.devices-panel {
-  margin-top: var(--space-md);
+.log-list {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-.devices-hint,
-.devices-status {
-  font-size: 12px;
+.log-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-list li.tx {
+  background: rgba(53, 208, 111, 0.1);
+}
+
+.log-meta {
+  font-size: 10.5px;
   color: rgba(255, 255, 255, 0.5);
 }
 
-.devices-controls {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+.log-list code {
+  font-size: 11px;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.ghost-button {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #fff;
-  font-size: 13px;
-}
-
-.ghost-button.small {
-  padding: 4px 10px;
+.log-empty {
   font-size: 12px;
-}
-
-.devices-panel h3 {
-  font-size: 13px;
-  font-weight: 700;
-  margin-top: var(--space-sm);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.device-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.device-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 13px;
-}
-
-.device-meta {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
 }
 </style>

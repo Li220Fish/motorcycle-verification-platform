@@ -12,6 +12,13 @@ import {
 import { RESULT_TONE } from '@/data/verification/result-labels'
 import { useI18n } from '@/composables/useI18n'
 import { storageService } from '@/services/firebase/storage.service'
+import {
+  PROBE_EVIDENCE_ITEM_ID,
+  readProbeEvidence,
+  type ProbeEvidenceMetadata,
+  type ProbeSessionKind,
+} from '@/services/probe/probe-evidence'
+import { PROBE_STAGES } from '@/services/probe/probe-protocol'
 import { vehicleModelService } from '@/services/firebase/vehicle-model.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useVerificationStore } from '@/stores/verification.store'
@@ -399,5 +406,27 @@ export function useInspectionReportSections(verificationId: Ref<string | undefin
     { immediate: true },
   )
 
-  return { sections, diagramMarkers, inspectedDate, loading, loadError }
+  // Probe readings (only present when this inspection opted into the probe)
+  // — latest per session+stage, cold stages first, then 熱車, then a manual
+  // PREP-04 reading. Kept outside `sections`: the probe is optional extra
+  // data, so it never feeds a section's status badge or the score.
+  const probeReadings = computed<ProbeEvidenceMetadata[]>(() => {
+    const evidence = [
+      ...(verificationStore.evidenceByItem[PROBE_EVIDENCE_ITEM_ID] ?? []),
+      ...(verificationStore.evidenceByItem['PREP-04'] ?? []),
+    ].sort((a, b) => a.createdAt - b.createdAt)
+    const latest = new Map<string, ProbeEvidenceMetadata>()
+    for (const item of evidence) {
+      const reading = readProbeEvidence(item)
+      if (reading) latest.set(`${reading.session}:${reading.stage}`, reading)
+    }
+    const sessionOrder: ProbeSessionKind[] = ['cold', 'hot', 'manual']
+    return [...latest.values()].sort(
+      (a, b) =>
+        sessionOrder.indexOf(a.session) - sessionOrder.indexOf(b.session) ||
+        PROBE_STAGES.indexOf(a.stage) - PROBE_STAGES.indexOf(b.stage),
+    )
+  })
+
+  return { sections, diagramMarkers, inspectedDate, loading, loadError, probeReadings }
 }

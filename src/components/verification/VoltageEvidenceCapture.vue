@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
+import ProbeStageCard from '@/components/probe/ProbeStageCard.vue'
+import { useI18n } from '@/composables/useI18n'
+import { buildProbeEvidence, readProbeEvidence } from '@/services/probe/probe-evidence'
+import type { ProbeReading } from '@/services/probe/probe-protocol'
 import { useProbeStore } from '@/stores/probe.store'
 import { useVerificationStore } from '@/stores/verification.store'
-import type { VerificationEvidence } from '@/types/verification-evidence'
-import { useI18n } from '@/composables/useI18n'
 
 const { t } = useI18n()
 
@@ -16,42 +18,39 @@ const props = defineProps<{
 
 const probeStore = useProbeStore()
 const verificationStore = useVerificationStore()
+const measuring = ref(false)
+const failed = ref(false)
 
-const isCrankingStage = computed(
-  () => props.label.includes('啟動') || /crank|start/i.test(props.label),
-)
-
-async function handleConnect(): Promise<void> {
-  await probeStore.connect()
-  await probeStore.start()
-}
+/** Latest OCV reading saved under this item (PREP-04 連接專用工具). */
+const latestReading = computed<ProbeReading | null>(() => {
+  const list = verificationStore.evidenceByItem[props.itemId] ?? []
+  for (let i = list.length - 1; i >= 0; i--) {
+    const reading = readProbeEvidence(list[i])
+    if (reading) return reading
+  }
+  return null
+})
 
 async function handleCapture(): Promise<void> {
-  if (probeStore.currentVoltage === null) return
-  const evidence: VerificationEvidence = {
-    id: crypto.randomUUID(),
-    verificationId: props.verificationId,
-    itemId: props.itemId,
-    type: 'voltage',
-    createdAt: Date.now(),
-    captureSource: 'probe',
-    captureTimestamp: Date.now(),
-    metadata: {
-      label: props.label,
-      voltage: probeStore.currentVoltage,
-      mode: probeStore.mode,
-      sampleCount: probeStore.sampleCount,
-    },
+  measuring.value = true
+  failed.value = false
+  try {
+    const result = await probeStore.runStage('OCV')
+    await verificationStore.addEvidence(
+      buildProbeEvidence({
+        verificationId: props.verificationId,
+        result,
+        session: 'manual',
+        deviceName: probeStore.deviceName,
+        probeMode: probeStore.mode,
+        itemId: props.itemId,
+      }),
+    )
+  } catch {
+    failed.value = true
+  } finally {
+    measuring.value = false
   }
-  await verificationStore.addEvidence(evidence)
-}
-
-function capturedVoltage(): number | null {
-  const list = verificationStore.evidenceByItem[props.itemId] ?? []
-  const latest = list[list.length - 1]
-  return latest && typeof latest.metadata?.voltage === 'number'
-    ? (latest.metadata.voltage as number)
-    : null
 }
 </script>
 
@@ -59,30 +58,23 @@ function capturedVoltage(): number | null {
   <div class="voltage-capture">
     <div v-if="!probeStore.connected" class="connect-block">
       <p class="hint">{{ t('voltageEvidence', 'connectHint', { label }) }}</p>
-      <button class="capture-button" @click="handleConnect">
-        {{ t('voltageEvidence', 'connect') }}
+      <button
+        class="capture-button"
+        :disabled="probeStore.connecting"
+        @click="probeStore.connect()"
+      >
+        {{ probeStore.connecting ? t('probe', 'connecting') : t('voltageEvidence', 'connect') }}
       </button>
+      <p v-if="probeStore.errorMessage" class="error">{{ probeStore.errorMessage }}</p>
     </div>
     <template v-else>
-      <div class="reading">
-        <span class="reading-label">{{ t('voltageEvidence', 'current') }}</span>
-        <span class="reading-value">
-          {{ probeStore.currentVoltage !== null ? probeStore.currentVoltage.toFixed(2) : '--' }} V
-        </span>
-      </div>
-      <button
-        v-if="isCrankingStage && probeStore.mode === 'mock'"
-        class="capture-button secondary"
-        @click="probeStore.simulateEngineStart"
-      >
-        {{ t('voltageEvidence', 'simulate') }}
+      <ProbeStageCard stage="OCV" :reading="latestReading" :running="measuring" />
+      <button class="capture-button" :disabled="measuring" @click="handleCapture">
+        {{
+          measuring ? t('voltageEvidence', 'measuring') : t('voltageEvidence', 'capture', { label })
+        }}
       </button>
-      <button class="capture-button" @click="handleCapture">
-        {{ t('voltageEvidence', 'capture', { label }) }}
-      </button>
-      <p v-if="capturedVoltage() !== null" class="captured">
-        {{ t('voltageEvidence', 'captured', { value: capturedVoltage() ?? '' }) }}
-      </p>
+      <p v-if="failed" class="error">{{ t('voltageEvidence', 'failed') }}</p>
     </template>
   </div>
 </template>
@@ -94,49 +86,34 @@ function capturedVoltage(): number | null {
   gap: var(--space-sm);
 }
 
-.hint {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.reading {
+.connect-block {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: var(--space-md);
-  background: var(--color-background);
-  border-radius: var(--radius-md);
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 
-.reading-label {
+.hint {
+  margin: 0;
   font-size: 13px;
   color: var(--color-text-secondary);
-}
-
-.reading-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--color-probe-voltage);
 }
 
 .capture-button {
   height: 46px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-primary);
-  background: #e8f1fd;
+  background: var(--color-primary-bg, #e8f1fd);
   color: var(--color-primary);
   font-weight: 600;
 }
 
-.capture-button.secondary {
-  border-color: var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+.capture-button:disabled {
+  opacity: 0.6;
 }
 
-.captured {
-  font-size: 13px;
-  color: var(--color-success);
-  font-weight: 600;
+.error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-danger);
 }
 </style>

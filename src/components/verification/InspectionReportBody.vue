@@ -3,6 +3,8 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { ChevronDown, Lock, X } from 'lucide-vue-next'
 
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import ProbeStageCard from '@/components/probe/ProbeStageCard.vue'
+import type { ProbeEvidenceMetadata } from '@/services/probe/probe-evidence'
 import VehicleDiagramOverview from '@/components/verification/VehicleDiagramOverview.vue'
 import type { DiagramMarker } from '@/components/verification/VehicleDiagramOverview.vue'
 import { useI18n } from '@/composables/useI18n'
@@ -79,9 +81,17 @@ const props = withDefaults(
      *  VerificationReportView.vue (owner or any real signed-in account
      *  always sees full detail, unchanged from before this prop existed). */
     restricted?: boolean
+    /** MotoBattery_Probe readings, when this inspection used the probe. */
+    probeReadings?: ProbeEvidenceMetadata[]
   }>(),
-  { diagramMarkers: () => [], restricted: false },
+  { diagramMarkers: () => [], restricted: false, probeReadings: () => [] },
 )
+
+const PROBE_SESSION_TAG = {
+  cold: 'sessionCold',
+  hot: 'sessionHot',
+  manual: 'sessionManual',
+} as const
 
 // Presentational only — the real report (per-verification data) and the
 // Marketplace mock report (per-listing fabricated data) both feed this the
@@ -254,6 +264,18 @@ function closeImage(): void {
       </div>
     </div>
 
+    <section v-if="probeReadings.length > 0" class="probe-report">
+      <h3>{{ t('probeFlow', 'reportTitle') }}</h3>
+      <p class="probe-report-hint">{{ t('probeFlow', 'reportHint') }}</p>
+      <ProbeStageCard
+        v-for="reading in probeReadings"
+        :key="`${reading.session}:${reading.stage}`"
+        :stage="reading.stage"
+        :reading="reading"
+        :tag="t('probeFlow', PROBE_SESSION_TAG[reading.session])"
+      />
+    </section>
+
     <div v-if="activeImageUrl" class="lightbox-overlay" @click="closeImage">
       <img :src="activeImageUrl" class="lightbox-img" alt="" @click.stop />
       <button class="lightbox-close" :aria-label="t('ui', 'close')" @click="closeImage">
@@ -264,6 +286,28 @@ function closeImage(): void {
 </template>
 
 <style scoped>
+.probe-report {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.probe-report h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.probe-report-hint {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 .content {
   padding: var(--space-md);
   display: flex;

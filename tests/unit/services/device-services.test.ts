@@ -20,6 +20,11 @@ const hw = vi.hoisted(() => ({
     getConnectedDevices: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
+    requestDevice: vi.fn(),
+    startNotifications: vi.fn(),
+    stopNotifications: vi.fn(),
+    write: vi.fn(),
+    setDisplayStrings: vi.fn(),
   },
 }))
 
@@ -33,7 +38,10 @@ vi.mock('@capacitor/core', () => ({
 vi.mock('capacitor-voice-recorder', () => ({ VoiceRecorder: hw.voice }))
 vi.mock('@capacitor/camera', () => ({ Camera: hw.camera }))
 vi.mock('@capawesome/capacitor-torch', () => ({ Torch: hw.torch }))
-vi.mock('@capacitor-community/bluetooth-le', () => ({ BleClient: hw.ble }))
+vi.mock('@capacitor-community/bluetooth-le', () => ({
+  BleClient: hw.ble,
+  textToDataView: (text: string) => new DataView(new TextEncoder().encode(text).buffer),
+}))
 
 import { MAX_LONG_EDGE } from '@/config/imageUpload.config'
 import { audioRecorderService } from '@/services/media/audio-recorder.service'
@@ -45,7 +53,13 @@ import {
   motionCaptureService,
 } from '@/services/motion/motion-capture.service'
 import { devlogService } from '@/services/firebase/devlog.service'
-import { useBluetoothStore } from '@/stores/bluetooth.store'
+import { BleProbeTransport } from '@/services/probe/ble-probe.service'
+import {
+  PROBE_DEVICE_NAME_PREFIX,
+  PROBE_RX_CHARACTERISTIC_UUID,
+  PROBE_SERVICE_UUID,
+  PROBE_TX_CHARACTERISTIC_UUID,
+} from '@/services/probe/probe-protocol'
 import * as fs from '../fakes/firestore'
 
 function fakeTrack(
@@ -275,51 +289,103 @@ describe('motion capture', () => {
   })
 })
 
-describe('bluetooth store', () => {
-  it('initializes once, de-duplicates scan results, tracks connections', async () => {
-    hw.ble.isEnabled.mockResolvedValue(true)
-    hw.ble.requestLEScan.mockImplementation(async (_opts: unknown, cb: (r: unknown) => void) => {
-      cb({ device: { deviceId: 'a' } })
-      cb({ device: { deviceId: 'a' } })
-      cb({ device: { deviceId: 'b' } })
+describe('BLE probe transport', () => {
+  const encode = (text: string) => new DataView(new TextEncoder().encode(text).buffer)
+
+  function setup() {
+    let notify: (value: DataView) => void = () => {}
+    let dropped: () => void = () => {}
+    for (const fn of [hw.ble.initialize, hw.ble.disconnect, hw.ble.stopNotifications, hw.ble.write])
+      fn.mockResolvedValue(undefined)
+    hw.ble.requestDevice.mockResolvedValue({ deviceId: 'AA:BB', name: 'MotoBattery_Probe' })
+    hw.ble.connect.mockImplementation(async (_id: string, cb: () => void) => {
+      dropped = cb
     })
-    let onDisconnect: () => void = () => {}
-    hw.ble.connect.mockImplementation(async (_id: string, cb: () => void) => (onDisconnect = cb))
-    hw.ble.getBondedDevices.mockResolvedValue([{ deviceId: 'x' }])
-    const store = useBluetoothStore()
-    await store.checkEnabled()
-    await store.startScan()
-    await store.stopScan()
-    await store.refreshBondedDevices()
-    await store.connectTo('a')
-    expect(store.enabled).toBe(true)
-    expect(store.scannedDevices.map((d) => d.device.deviceId)).toEqual(['a', 'b'])
-    expect(store.scanning).toBe(false)
-    expect(store.bondedDevices).toEqual([{ deviceId: 'x' }])
-    expect(store.connectedDeviceIds).toEqual(['a'])
-    expect(hw.ble.initialize).toHaveBeenCalledTimes(1)
-    onDisconnect()
-    expect(store.connectedDeviceIds).toEqual([])
-    await store.connectTo('b')
-    await store.disconnectFrom('b')
-    expect(store.connectedDeviceIds).toEqual([])
+    hw.ble.startNotifications.mockImplementation(
+      async (_d: string, _s: string, _c: string, cb: (v: DataView) => void) => {
+        notify = cb
+      },
+    )
+    return {
+      notify: (text: string) => notify(encode(text)),
+      notifyBytes: (bytes: Uint8Array) =>
+        notify(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)),
+      drop: () => dropped(),
+    }
+  }
+
+  it('is supported natively, and on web only with Web Bluetooth', () => {
+    hw.native.value = true
+    expect(BleProbeTransport.isSupported()).toBe(true)
+    hw.native.value = false
+    expect(BleProbeTransport.isSupported()).toBe('bluetooth' in navigator)
   })
 
-  it('errors land in errorMessage', async () => {
-    const store = useBluetoothStore()
-    hw.ble.isEnabled.mockRejectedValue(new Error('no adapter'))
-    await store.checkEnabled()
-    expect(store.errorMessage).toBe('no adapter')
-    hw.ble.requestLEScan.mockRejectedValue(new Error('scan denied'))
-    await store.startScan()
-    expect(store.errorMessage).toBe('scan denied')
-    expect(store.scanning).toBe(false)
-    hw.ble.connect.mockRejectedValue('weird')
-    await store.connectTo('z')
-    expect(store.errorMessage).toBe('Connect failed')
-    hw.ble.getBondedDevices.mockRejectedValue(new Error('android only'))
-    await store.refreshBondedDevices()
-    expect(store.errorMessage).toBe('android only')
+  it('picks only MotoBattery_Probe*, subscribes to TX, writes commands to RX', async () => {
+    hw.native.value = true
+    const link = setup()
+    const transport = new BleProbeTransport()
+    const texts: string[] = []
+    transport.onText((text) => texts.push(text))
+    const connection = await transport.connect()
+    expect(connection).toEqual({ deviceId: 'AA:BB', name: 'MotoBattery_Probe' })
+    expect(hw.ble.requestDevice).toHaveBeenCalledWith({
+      namePrefix: PROBE_DEVICE_NAME_PREFIX,
+      optionalServices: [PROBE_SERVICE_UUID],
+    })
+    expect(hw.ble.setDisplayStrings).toHaveBeenCalledTimes(1)
+    expect(hw.ble.startNotifications.mock.calls[0].slice(0, 3)).toEqual([
+      'AA:BB',
+      PROBE_SERVICE_UUID,
+      PROBE_TX_CHARACTERISTIC_UUID,
+    ])
+    link.notify('{"stage":"OCV","status":"OK"}')
+    expect(texts).toEqual(['{"stage":"OCV","status":"OK"}'])
+    // Chinese text decodes as UTF-8 — even when one character is split
+    // across two notifications.
+    const bytes = new TextEncoder().encode('{"judgment":"探針未夾緊"}')
+    texts.length = 0
+    link.notifyBytes(bytes.slice(0, 15))
+    link.notifyBytes(bytes.slice(15))
+    expect(texts.join('')).toBe('{"judgment":"探針未夾緊"}')
+
+    await transport.write('CRANK')
+    const [deviceId, service, characteristic, value] = hw.ble.write.mock.calls[0]
+    expect([deviceId, service, characteristic]).toEqual([
+      'AA:BB',
+      PROBE_SERVICE_UUID,
+      PROBE_RX_CHARACTERISTIC_UUID,
+    ])
+    expect(new TextDecoder().decode((value as DataView).buffer)).toBe('CRANK')
+
+    await transport.disconnect()
+    expect(hw.ble.stopNotifications).toHaveBeenCalled()
+    expect(hw.ble.disconnect).toHaveBeenCalledWith('AA:BB')
+    await expect(transport.write('OCV')).rejects.toThrow('PROBE_DISCONNECTED')
+  })
+
+  it('reports an unexpected link loss, and cleans up if notifications fail', async () => {
+    hw.native.value = true
+    const link = setup()
+    const transport = new BleProbeTransport()
+    const lost = vi.fn()
+    transport.onDisconnected(lost)
+    await transport.connect()
+    link.drop()
+    expect(lost).toHaveBeenCalledTimes(1)
+    await expect(transport.write('OCV')).rejects.toThrow('PROBE_DISCONNECTED')
+
+    hw.ble.startNotifications.mockRejectedValue(new Error('gatt 133'))
+    await expect(transport.connect()).rejects.toThrow('gatt 133')
+    expect(hw.ble.disconnect).toHaveBeenCalledWith('AA:BB')
+  })
+
+  it('refuses on a browser without Web Bluetooth', async () => {
+    hw.native.value = false
+    const original = Object.getOwnPropertyDescriptor(navigator, 'bluetooth')
+    if ('bluetooth' in navigator) delete (navigator as unknown as Record<string, unknown>).bluetooth
+    await expect(new BleProbeTransport().connect()).rejects.toThrow('不支援藍牙')
+    if (original) Object.defineProperty(navigator, 'bluetooth', original)
   })
 })
 

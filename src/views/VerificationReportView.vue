@@ -34,7 +34,8 @@ const isOwner = computed(
 )
 
 const verificationIdRef = computed(() => props.id)
-const { sections, diagramMarkers, inspectedDate } = useInspectionReportSections(verificationIdRef)
+const { sections, diagramMarkers, inspectedDate, probeReadings } =
+  useInspectionReportSections(verificationIdRef)
 
 /**
  * A stranger viewing a public verification's report (from a Marketplace
@@ -101,6 +102,7 @@ watch(
       :inspected-date="inspectedDate"
       :sections="sections"
       :diagram-markers="diagramMarkers"
+      :probe-readings="probeReadings"
     />
   </div>
 </template>

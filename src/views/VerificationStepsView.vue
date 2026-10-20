@@ -14,6 +14,7 @@ import EngineCompleteChoice from '@/components/verification/EngineCompleteChoice
 import EngineInspectionFlow from '@/components/verification/engine/EngineInspectionFlow.vue'
 import ColdTouchCapture from '@/components/verification/environment/ColdTouchCapture.vue'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import ProbeUsePrompt from '@/components/probe/ProbeUsePrompt.vue'
 import RideSafetyGate from '@/components/verification/RideSafetyGate.vue'
 import RideTransition from '@/components/verification/RideTransition.vue'
 import VehicleTypeGate from '@/components/verification/VehicleTypeGate.vue'
@@ -44,6 +45,7 @@ import { localDraftService } from '@/services/verification/local-draft.service'
 import { tourService } from '@/services/verification/tour.service'
 import { useVehicleStore } from '@/stores/vehicle.store'
 import { useAiChatStore } from '@/stores/ai-chat.store'
+import { useProbeStore } from '@/stores/probe.store'
 import { useVerificationStore } from '@/stores/verification.store'
 
 // Verification v2 — 車身外觀 (steps 5-24) was regrouped into PHASE 1 核心照片
@@ -996,6 +998,27 @@ const initialLastItemId = localDraftService.loadLastPosition(props.id)
 const isFreshVerification = ref<boolean | null>(null)
 const tourSeen = ref(tourService.hasSeenTour())
 const showTour = computed(() => !tourSeen.value && isFreshVerification.value === true)
+
+// 「要使用 Probe 嗎？」— asked once per verification (seller or buyer), only
+// while a probe is actually connected, and only after the tour/gates so it
+// never stacks on another full-screen step. Yes → EngineInspectionFlow adds
+// the probe stages to the cold (and buyer 熱車) sessions; No → unchanged.
+const probeStore = useProbeStore()
+const showProbePrompt = computed(
+  () =>
+    probeStore.connected &&
+    verificationStore.flowLoaded &&
+    verificationStore.currentVerification?.id === props.id &&
+    verificationStore.currentVerification.status !== 'completed' &&
+    !showTour.value &&
+    !needsVehicleTypeGate.value &&
+    !needsModelGate.value &&
+    !needsYearGate.value &&
+    !engineSessionRecording.value &&
+    !hotEngineSessionRecording.value &&
+    !coldTouchRecording.value &&
+    probeStore.choiceFor(props.id) === null,
+)
 function dismissTour(): void {
   tourService.markTourSeen()
   tourSeen.value = true
@@ -1231,6 +1254,12 @@ onMounted(() => {
   <p v-else class="loading-text">{{ t('verificationSteps', 'loading') }}</p>
 
   <p v-if="completeError" class="error-text">{{ completeError }}</p>
+
+  <ProbeUsePrompt
+    v-if="showProbePrompt"
+    :device-name="probeStore.deviceName ?? 'MotoBattery_Probe'"
+    @choose="probeStore.setChoice(id, $event)"
+  />
 
   <!-- 買家複驗專屬的 AI 詢問視窗。「問 AI」按鈕出現在基本12項、冷車、熱車；
        外觀動畫檢查不顯示按鈕（拍照後的「詢問 AI」仍可打開對話）。錄音／錄影

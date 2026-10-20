@@ -320,12 +320,11 @@ const zh = {
     recorded: '已記錄：平均震動 {avg}，波動 {std}',
   },
   voltageEvidence: {
-    connectHint: '連接 Voltage Probe 後即可記錄 {label}。',
+    connectHint: '連接 MotoBattery_Probe 後即可記錄 {label}（量測電瓶靜態電壓）。',
     connect: '連接 Probe',
-    current: '目前電壓',
-    simulate: '模擬啟動測試',
-    capture: '記錄此讀數（{label}）',
-    captured: '已記錄：{value} V',
+    capture: '量測並記錄（{label}）',
+    measuring: '量測中…',
+    failed: '量測失敗，請確認 Probe 夾子已夾緊後再試一次。',
   },
   photoGallery: {
     confirmDelete: '刪除這張照片？此操作無法復原。',
@@ -497,11 +496,6 @@ const zh = {
   },
   recentActivity: {
     empty: '目前沒有最近活動。',
-  },
-  probeStatus: {
-    connected: '已連線',
-    disconnected: '未連線',
-    noData: '尚無電壓資料',
   },
   settingsExtra: {
     home: '回到主頁',
@@ -898,12 +892,11 @@ const en: Shape<typeof zh> = {
     recorded: 'Recorded: average vibration {avg}, variation {std}',
   },
   voltageEvidence: {
-    connectHint: 'Connect the Voltage Probe to record {label}.',
+    connectHint: 'Connect MotoBattery_Probe to record {label} (battery resting voltage).',
     connect: 'Connect Probe',
-    current: 'Current voltage',
-    simulate: 'Simulate Cranking Test',
-    capture: 'Record this reading ({label})',
-    captured: 'Recorded: {value} V',
+    capture: 'Measure & record ({label})',
+    measuring: 'Measuring…',
+    failed: 'Measurement failed. Make sure the Probe clips are secure and try again.',
   },
   photoGallery: {
     confirmDelete: "Delete this photo? This can't be undone.",
@@ -1079,11 +1072,6 @@ const en: Shape<typeof zh> = {
   recentActivity: {
     empty: 'No recent activity.',
   },
-  probeStatus: {
-    connected: 'Connected',
-    disconnected: 'Not connected',
-    noData: 'No voltage data yet',
-  },
   settingsExtra: {
     home: 'Back to home',
     unnamed: 'Unnamed user',
@@ -1151,7 +1139,8 @@ const en: Shape<typeof zh> = {
     retakePhoto: 'Retake photo',
     photoSaved: 'Photo taken',
     photoTitle: 'Photograph what you see',
-    photoHint: 'Take a photo of the issue or the unclear spot — you can ask the AI about it afterwards.',
+    photoHint:
+      'Take a photo of the issue or the unclear spot — you can ask the AI about it afterwards.',
     close: 'Close',
     next: 'Done, next item',
     finish: 'Finish the animated checks',

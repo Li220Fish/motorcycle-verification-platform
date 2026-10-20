@@ -22,9 +22,10 @@
  * it lands — ONE Gemini audio call for all 4 audio items (spec §28), IMU
  * classification stays fully deterministic (spec §31-§33).
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Activity } from 'lucide-vue-next'
 import PrimaryButton from '@/components/common/PrimaryButton.vue'
+import ProbeStageCard from '@/components/probe/ProbeStageCard.vue'
 import EngineWaveform from './EngineWaveform.vue'
 import EngineRecordedFileCard from './EngineRecordedFileCard.vue'
 import type { RecordedFileInfo } from './EngineMeasurementPanel.vue'
@@ -59,6 +60,9 @@ import {
 import type { EngineTransmissionType } from '@/data/verification/engine-session'
 import type { VerificationEvidence } from '@/types/verification-evidence'
 import { useI18n } from '@/composables/useI18n'
+import { useProbeEngineSession } from '@/composables/useProbeEngineSession'
+import type { ProbeStage } from '@/services/probe/probe-protocol'
+import { useProbeStore } from '@/stores/probe.store'
 
 const { t } = useI18n()
 
@@ -126,10 +130,30 @@ const IMU_ITEM_IDS = computed(() =>
 )
 
 const verificationStore = useVerificationStore()
+const probeStore = useProbeStore()
+const probeSession = useProbeEngineSession(
+  () => props.verificationId,
+  () => props.mode,
+)
+
+function probeProgressText(stage: ProbeStage): string {
+  if (probeSession.runningStage.value !== stage) return ''
+  const status = probeStore.progress?.status
+  if (status === 'WAITING_TRIGGER') return t('probeFlow', 'waitingCrank')
+  if (status === 'STABILIZING') return t('probeFlow', 'stabilizing')
+  return ''
+}
+
+const probeShownStages = computed<ProbeStage[]>(() =>
+  probeSession.attempted.value.length > 0
+    ? probeSession.attempted.value
+    : probeSession.recordingStages.value,
+)
 
 type Phase =
   | 'placement'
   | 'placement-precheck'
+  | 'probe-precheck'
   | 'ready'
   | 'permission-denied'
   | 'recording'
@@ -141,6 +165,16 @@ function allDone(): boolean {
 }
 
 const phase = ref<Phase>(allDone() ? 'completed' : 'placement')
+
+// Clip check on the ready screen: one STATUS when it opens (and when the
+// probe (re)connects) so a probe whose clips aren't on the battery is flagged
+// before the user starts the one-shot cold session.
+watch(
+  () => [phase.value, probeSession.active.value] as const,
+  ([current, active]) => {
+    if (current === 'ready' && active) void probeStore.refreshStatus()
+  },
+)
 const showCancelConfirm = ref(false)
 const isActivelyRecording = ref(false)
 const elapsedMs = ref(0)
@@ -293,6 +327,7 @@ function updateLiveMagnitude(sample: MotionSample): void {
 }
 
 async function abortAsFailed(): Promise<void> {
+  probeSession.cancel()
   clearTimer()
   setRecordingActive(false)
   liveMagnitude.value = null
@@ -355,6 +390,13 @@ async function handleRequestStart(): Promise<void> {
     return
   }
 
+  // Probe (opted in + connected): OCV + IR need the engine still off, so
+  // they run here, before the recording — ~1s, the firmware's own timing.
+  if (probeSession.active.value && probeSession.preStartStages.value.length > 0) {
+    phase.value = 'probe-precheck'
+  }
+  await probeSession.runPreStart()
+
   motionSamples = []
   try {
     await audioRecorderService.start()
@@ -377,6 +419,9 @@ async function handleRequestStart(): Promise<void> {
   recordingStartedAt = Date.now()
   elapsedMs.value = 0
   phase.value = 'recording'
+  // CRANK's 10s trigger window opens at the same t=0 as audio/IMU, so the
+  // start the rider performs now is captured by all three at once.
+  probeSession.startWithRecording()
   timer = setInterval(() => {
     elapsedMs.value = Date.now() - recordingStartedAt
     if (elapsedMs.value >= sessionDurationMs.value) {
@@ -395,6 +440,7 @@ function dismissCancelConfirm(): void {
 }
 async function confirmCancel(): Promise<void> {
   showCancelConfirm.value = false
+  probeSession.cancel()
   clearTimer()
   setRecordingActive(false)
   liveMagnitude.value = null
@@ -424,6 +470,7 @@ function formatElapsed(): string {
 
 onMounted(() => document.addEventListener('visibilitychange', handleVisibilityChange))
 onBeforeUnmount(() => {
+  if (isActivelyRecording.value) probeSession.cancel()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   clearTimer()
   motionCaptureService.stop()
@@ -464,6 +511,20 @@ onBeforeUnmount(() => {
       </ul>
     </template>
 
+    <!-- Probe pre-start stages (engine off): OCV + IR, ~1s -->
+    <template v-else-if="phase === 'probe-precheck'">
+      <div class="panel-card">
+        <p class="probe-strip-title">{{ t('probeFlow', 'preRun') }}</p>
+        <ProbeStageCard
+          v-for="stage in probeSession.preStartStages.value"
+          :key="stage"
+          :stage="stage"
+          :reading="probeSession.readings.value[stage] ?? null"
+          :running="probeSession.runningStage.value === stage"
+        />
+      </div>
+    </template>
+
     <!-- Ready / Recording / Completed: single 23.0s session -->
     <template v-else-if="phase === 'ready' || phase === 'recording' || phase === 'completed'">
       <div class="top-card">
@@ -493,6 +554,35 @@ onBeforeUnmount(() => {
 
       <div class="panel-card">
         <template v-if="phase === 'ready'">
+          <div v-if="probeSession.needsReconnect.value" class="probe-notice">
+            <p>{{ t('probeFlow', 'notConnected') }}</p>
+            <PrimaryButton
+              variant="secondary"
+              block
+              :disabled="probeStore.connecting"
+              @click="probeStore.connect()"
+            >
+              {{ probeStore.connecting ? t('probe', 'connecting') : t('probeFlow', 'reconnect') }}
+            </PrimaryButton>
+          </div>
+          <p
+            v-if="probeSession.active.value && probeStore.statusReport?.clipsOnBattery === false"
+            class="probe-notice"
+          >
+            {{ t('probeFlow', 'clipsOffWarning') }}
+          </p>
+          <div v-else-if="probeSession.active.value" class="probe-notice active">
+            <p class="probe-strip-title">
+              {{ t('probeFlow', 'strip') }} · {{ probeStore.deviceName }}
+            </p>
+            <p>
+              {{
+                [...probeSession.preStartStages.value, ...probeSession.recordingStages.value]
+                  .map((stage) => t('probe', `stage${stage}`))
+                  .join('、')
+              }}
+            </p>
+          </div>
           <PrimaryButton block @click="handleRequestStart">{{ startButtonLabel }}</PrimaryButton>
         </template>
 
@@ -504,6 +594,20 @@ onBeforeUnmount(() => {
           </div>
           <EngineWaveform :active="true" :magnitude="liveMagnitude" />
           <p class="live-instruction">{{ instructionAt(elapsedMs / 1000) }}</p>
+          <div
+            v-if="probeSession.attempted.value.length > 0 || probeSession.active.value"
+            class="probe-strip"
+          >
+            <p class="probe-strip-title">{{ t('probeFlow', 'strip') }}</p>
+            <ProbeStageCard
+              v-for="stage in probeSession.recordingStages.value"
+              :key="stage"
+              :stage="stage"
+              :reading="probeSession.readings.value[stage] ?? null"
+              :running="probeSession.runningStage.value === stage"
+              :progress="probeProgressText(stage)"
+            />
+          </div>
           <button class="cancel-btn" @click="requestCancel">{{ t('common', 'cancel') }}</button>
         </template>
 
@@ -517,6 +621,17 @@ onBeforeUnmount(() => {
               :filename="file.filename"
               :duration-seconds="file.durationSeconds"
               :size-bytes="file.sizeBytes"
+            />
+          </div>
+          <div v-if="probeSession.attempted.value.length > 0" class="probe-strip">
+            <p class="probe-strip-title">{{ t('probeFlow', 'done') }}</p>
+            <ProbeStageCard
+              v-for="stage in probeShownStages"
+              :key="stage"
+              :stage="stage"
+              :reading="probeSession.readings.value[stage] ?? null"
+              :running="probeSession.runningStage.value === stage"
+              :progress="probeProgressText(stage)"
             />
           </div>
           <PrimaryButton block @click="emit('advance')">{{ finishButtonLabel }}</PrimaryButton>
@@ -557,6 +672,39 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.probe-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+}
+
+.probe-notice.active {
+  background: var(--color-primary-bg);
+  gap: 2px;
+}
+
+.probe-notice p {
+  margin: 0;
+}
+
+.probe-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.probe-strip-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
 .engine-flow {
   display: flex;
   flex-direction: column;

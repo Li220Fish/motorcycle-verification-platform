@@ -52,7 +52,7 @@ authStore.initialize()
 if (!auth.currentUser) void authStore.signInAnonymous()
 
 const verificationIdRef = computed(() => props.id)
-const { sections, diagramMarkers, inspectedDate, loading, loadError } =
+const { sections, diagramMarkers, inspectedDate, loading, loadError, probeReadings } =
   useInspectionReportSections(verificationIdRef)
 
 // No vehicles/{id} access exists for a stranger (that doc has no isPublic
@@ -93,6 +93,7 @@ const isRealUser = computed(() => authStore.user !== null && !authStore.user.isA
         :sections="sections"
         :diagram-markers="diagramMarkers"
         :restricted="!isRealUser"
+        :probe-readings="probeReadings"
       />
       <div v-if="!isRealUser" class="login-banner">
         <p>{{ t('sharedReport', 'loginPrompt') }}</p>

@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { analyzeVoltage } from '@/services/analysis/voltage-analysis.service'
 import { photoQualityService } from '@/services/media/photo-quality.service'
 import { effectiveRoll, startTilt, stopTilt, tilt } from '@/services/media/device-tilt.service'
 import { platformService } from '@/services/platform/platform.service'
-import { BleProbeService } from '@/services/probe/ble-probe.service'
-import { MockProbeService } from '@/services/probe/mock-probe.service'
-import { probeService } from '@/services/probe/probe.service'
 import { futureAiRecognitionService } from '@/services/recognition/future-ai-recognition.service'
 import { mockRecognitionService } from '@/services/recognition/mock-recognition.service'
 import { vehicleSearchService } from '@/services/search/vehicle-search.service'
@@ -14,7 +10,6 @@ import { comparisonService } from '@/services/verification/comparison.service'
 import { computeVerificationScore, scorableAnswers } from '@/services/verification/scoring.service'
 import { tourService } from '@/services/verification/tour.service'
 import { getFlatItems } from '@/data/verification'
-import { useProbeStore } from '@/stores/probe.store'
 import { useLocaleStore } from '@/stores/locale.store'
 import type { AnswerResultValue, VerificationAnswer } from '@/types/verification-evidence'
 import * as fs from '../fakes/firestore'
@@ -129,90 +124,6 @@ describe('vehicleSearchService (demo)', () => {
     const assertion = expect(err).rejects.toThrow('搜尋服務暫時無法使用')
     await vi.advanceTimersByTimeAsync(600)
     await assertion
-  })
-})
-
-describe('analyzeVoltage', () => {
-  it('min/max/avg rounded to 2dp; empty → zeros', () => {
-    expect(analyzeVoltage([])).toEqual({
-      minVoltage: 0,
-      maxVoltage: 0,
-      averageVoltage: 0,
-      sampleCount: 0,
-    })
-    expect(
-      analyzeVoltage([12.6, 10.123, 14].map((voltage, i) => ({ timestamp: i, voltage }))),
-    ).toEqual({
-      minVoltage: 10.12,
-      maxVoltage: 14,
-      averageVoltage: 12.24,
-      sampleCount: 3,
-    })
-  })
-})
-
-describe('probes', () => {
-  it('mock probe: connect → samples at rest → crank dip → running charge', async () => {
-    vi.useFakeTimers()
-    const probe = new MockProbeService()
-    const samples: number[] = []
-    probe.onVoltage((s) => samples.push(s.voltage))
-    await probe.startMeasurement() // not connected → ignored
-    const connecting = probe.connect()
-    await vi.advanceTimersByTimeAsync(300)
-    await connecting
-    expect(probe.isConnected()).toBe(true)
-    await probe.startMeasurement()
-    await vi.advanceTimersByTimeAsync(500)
-    expect(samples.length).toBe(5)
-    expect(samples.every((v) => v >= 12.55 && v <= 12.65)).toBe(true)
-    probe.simulateEngineStart()
-    samples.length = 0
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(samples.every((v) => v >= 9.75 && v <= 10.45)).toBe(true)
-    await vi.advanceTimersByTimeAsync(1000)
-    samples.length = 0
-    await vi.advanceTimersByTimeAsync(300)
-    expect(samples.every((v) => v >= 13.8 && v <= 14.1)).toBe(true)
-    await probe.disconnect()
-    expect(probe.isConnected()).toBe(false)
-    samples.length = 0
-    await vi.advanceTimersByTimeAsync(500)
-    expect(samples).toEqual([])
-  })
-
-  it('BLE probe is a placeholder that refuses to connect', async () => {
-    expect(BleProbeService.isSupported()).toBe(false)
-    const ble = new BleProbeService()
-    await expect(ble.connect()).rejects.toThrow('not supported')
-    await expect(ble.startMeasurement()).rejects.toThrow('not implemented')
-    await ble.disconnect()
-    expect(ble.isConnected()).toBe(false)
-  })
-
-  it('probe facade + store: mock by default, collects samples and analysis', async () => {
-    vi.useFakeTimers()
-    expect(probeService.getMode()).toBe('mock')
-    const store = useProbeStore()
-    const c = store.connect()
-    await vi.advanceTimersByTimeAsync(300)
-    await c
-    expect(store.connected).toBe(true)
-    await store.start()
-    await vi.advanceTimersByTimeAsync(2500)
-    expect(store.sampleCount).toBe(25)
-    expect(store.recentSamples).toHaveLength(20)
-    expect(store.currentVoltage).not.toBeNull()
-    expect(store.analysis.sampleCount).toBe(25)
-    store.simulateEngineStart()
-    await store.stop()
-    expect(store.measuring).toBe(false)
-    await store.disconnect()
-    expect(store.connected).toBe(false)
-    store.setMode('ble')
-    expect(probeService.getMode()).toBe('ble')
-    probeService.simulateEngineStart() // no-op on BLE
-    probeService.setMode('mock')
   })
 })
 
