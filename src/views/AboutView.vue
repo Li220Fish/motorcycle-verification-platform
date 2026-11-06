@@ -9,7 +9,7 @@ import { useI18n } from '@/composables/useI18n'
 const { t } = useI18n()
 
 const APP_VERSION = '1.0.0-beta'
-const SUPPORT_EMAIL = 'support@ride78.app'
+const SUPPORT_EMAIL = 'li220fish@neutrackco.uk'
 
 type AboutKey = 'terms' | 'privacy' | 'faq' | 'contact'
 const rowKeys: AboutKey[] = ['terms', 'privacy', 'faq', 'contact']
