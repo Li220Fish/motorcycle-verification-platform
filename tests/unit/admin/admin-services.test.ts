@@ -4,7 +4,7 @@ const authMock = vi.hoisted(() => ({ signInWithEmailAndPassword: vi.fn() }))
 vi.mock('firebase/auth', () => authMock)
 
 import * as admin from '@/admin/services/admin-data.service'
-import { ADMIN_UID, adminLogin, isAdminSession } from '@/admin/services/admin-auth.service'
+import { ADMIN_UIDS, adminLogin, isAdminSession } from '@/admin/services/admin-auth.service'
 import { PROMPT_ITEM_MAP } from '@/admin/services/prompt-item-map'
 import * as training from '@/admin/services/training-dataset.service'
 import { getFlatItems } from '@/data/verification'
@@ -45,7 +45,10 @@ describe('admin auth', () => {
     expect(isAdminSession()).toBe(false)
     mutableAuth.currentUser = { uid: 'someone' }
     expect(isAdminSession()).toBe(false)
-    mutableAuth.currentUser = { uid: ADMIN_UID }
+    mutableAuth.currentUser = { uid: ADMIN_UIDS[0] }
+    expect(isAdminSession()).toBe(true)
+    // production (ride78) admin@test.com
+    mutableAuth.currentUser = { uid: 'yByQ86E0oCeIJYGv2fmTRIvOhCI3' }
     expect(isAdminSession()).toBe(true)
   })
 })
@@ -276,7 +279,7 @@ describe('admin-data: moderation & content', () => {
       conversationsUpdated: 1,
     }))
     expect((await admin.listAiPrompts())[0].key).toBe('k')
-    mutableAuth.currentUser = { uid: ADMIN_UID, email: 'admin@test.com' }
+    mutableAuth.currentUser = { uid: ADMIN_UIDS[0], email: 'admin@test.com' }
     await admin.setAiPromptOverride('k', 'new text')
     expect(fs.__get('aiPrompts/k')).toEqual({
       text: 'new text',

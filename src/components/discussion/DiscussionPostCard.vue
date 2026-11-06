@@ -2,7 +2,7 @@
 import { Heart, MessageSquare } from 'lucide-vue-next'
 
 import Avatar from '@/components/common/Avatar.vue'
-import { ADMIN_UID } from '@/admin/services/admin-auth.service'
+import { isAdminUid } from '@/admin/services/admin-auth.service'
 import { useI18n } from '@/composables/useI18n'
 import { useLiveAvatar } from '@/composables/useLiveAvatar'
 import { formatRelativeTime } from '@/utils/format-time'
@@ -25,7 +25,7 @@ const authorPhotoUrl = useLiveAvatar(
     <div class="top">
       <Avatar :name="post.authorSnapshot.displayName" :photo-url="authorPhotoUrl" :size="26" />
       <span class="author">{{ post.authorSnapshot.displayName }}</span>
-      <span v-if="post.authorId === ADMIN_UID" class="official-tag">{{
+      <span v-if="isAdminUid(post.authorId)" class="official-tag">{{
         t('discussion', 'officialTag')
       }}</span>
       <span class="time">· {{ formatRelativeTime(post.createdAt) }}</span>

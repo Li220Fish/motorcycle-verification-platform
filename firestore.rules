@@ -62,7 +62,9 @@ service cloud.firestore {
     // docs/test-accounts.md. (Superseded 2026-09-04: previously
     // admin@motoverify.internal via the now-deleted scripts/seed-admin-user.mjs.)
     function isAdmin() {
-      return signedIn() && myUid() == 'CMWrmo2pHsRiBu5kMj1CDJ23xd72';
+      // admin@test.com in staging, then in production (ride78) — a uid only
+      // exists in its own project, so listing both grants nothing extra.
+      return signedIn() && myUid() in ['CMWrmo2pHsRiBu5kMj1CDJ23xd72', 'yByQ86E0oCeIJYGv2fmTRIvOhCI3'];
     }
 
     function ownsVehicle(vehicleId) {

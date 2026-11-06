@@ -23,9 +23,18 @@ const ADMIN_PASSWORD = 'test1234'
  *  admin-authored content by authorId — e.g. discussion.store.ts's "官方"
  *  badge and the discussion_admin_post notification trigger's client-side
  *  counterpart. Same uid firestore.rules' isAdmin() and functions/src/
- *  services/auth.service.ts's isAdminUid() hardcode — keep all three in
- *  lockstep by hand. */
-export const ADMIN_UID = 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+ *  services/auth.service.ts's isAdminUid() hardcode — keep all of them in
+ *  lockstep by hand. One admin@test.com per Firebase project: staging
+ *  (motorcycle-verification) and production (ride78). A uid only exists in
+ *  its own project, so listing both never grants anything cross-project. */
+export const ADMIN_UIDS: readonly string[] = [
+  'CMWrmo2pHsRiBu5kMj1CDJ23xd72', // staging
+  'yByQ86E0oCeIJYGv2fmTRIvOhCI3', // production (ride78)
+]
+
+export function isAdminUid(uid: string | null | undefined): boolean {
+  return !!uid && ADMIN_UIDS.includes(uid)
+}
 
 export async function adminLogin(username: string, password: string): Promise<void> {
   if (username !== 'test' || password !== 'test') {
@@ -35,5 +44,5 @@ export async function adminLogin(username: string, password: string): Promise<vo
 }
 
 export function isAdminSession(): boolean {
-  return auth.currentUser?.uid === ADMIN_UID
+  return isAdminUid(auth.currentUser?.uid)
 }

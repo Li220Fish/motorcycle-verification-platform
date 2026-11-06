@@ -5,8 +5,10 @@ import { VerificationDoc } from './types'
 /** Mirrors firestore.rules' isAdmin() — same hardcoded uid, same reasoning
  *  (see the comment on that function): an allowlist collection writable by
  *  any client would be a real privilege-escalation hole, so this only ever
- *  changes via a source deploy, on both sides, kept in lockstep. */
-const ADMIN_UID = 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+ *  changes via a source deploy, on both sides, kept in lockstep. One
+ *  admin@test.com per project — staging and production (ride78); a uid only
+ *  exists in its own project, so listing both grants nothing cross-project. */
+const ADMIN_UIDS: readonly string[] = ['CMWrmo2pHsRiBu5kMj1CDJ23xd72', 'yByQ86E0oCeIJYGv2fmTRIvOhCI3']
 
 /**
  * Every analyze/retry Function calls this first. Mirrors firestore.rules'
@@ -42,7 +44,7 @@ export async function assertCanAnalyze(
     ? (vehicleSnap.data()?.currentOwnerId as string | undefined)
     : undefined
 
-  const authorized = data.userId === callerUid || ownerId === callerUid || callerUid === ADMIN_UID
+  const authorized = data.userId === callerUid || ownerId === callerUid || isAdminUid(callerUid)
   if (!authorized) {
     throw new HttpsError('permission-denied', 'Not authorized for this verification.')
   }
@@ -51,7 +53,7 @@ export async function assertCanAnalyze(
 }
 
 export function isAdminUid(uid: string | undefined): boolean {
-  return uid === ADMIN_UID
+  return !!uid && ADMIN_UIDS.includes(uid)
 }
 
 /** Vehicle-level equivalent of assertCanAnalyze, for Functions that act on a
@@ -71,7 +73,7 @@ export async function assertOwnsVehicle(
     throw new HttpsError('not-found', 'Vehicle not found.')
   }
   const data = snap.data() as { currentOwnerId: string; registrationDocumentUrl?: string | null }
-  const authorized = data.currentOwnerId === callerUid || callerUid === ADMIN_UID
+  const authorized = data.currentOwnerId === callerUid || isAdminUid(callerUid)
   if (!authorized) {
     throw new HttpsError('permission-denied', 'Not authorized for this vehicle.')
   }

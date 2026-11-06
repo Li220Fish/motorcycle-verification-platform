@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
 
 export const ADMIN_UID = 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+/** admin@test.com in production (ride78). */
+export const PROD_ADMIN_UID = 'yByQ86E0oCeIJYGv2fmTRIvOhCI3'
 
 export async function createEnv(): Promise<RulesTestEnvironment> {
   return initializeTestEnvironment({

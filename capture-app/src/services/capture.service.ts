@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore'
 import { deleteObject, ref, uploadBytesResumable } from 'firebase/storage'
 
-import { ADMIN_UID } from '@/admin/services/admin-auth.service'
+import { isAdminUid } from '@/admin/services/admin-auth.service'
 import { db, storage } from '@/services/firebase/firebase'
 import {
   defaultBrakeSetup,
@@ -33,7 +33,7 @@ function toMillis(value: unknown): number {
 }
 
 export async function isDataCollector(uid: string): Promise<boolean> {
-  if (uid === ADMIN_UID) return true
+  if (isAdminUid(uid)) return true
   const snap = await getDoc(doc(db, TRAINING_COLLECTIONS.collectors, uid))
   return snap.exists()
 }

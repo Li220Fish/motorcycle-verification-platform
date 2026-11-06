@@ -5,7 +5,7 @@ import {
 } from '@firebase/rules-unit-testing'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
-import { ADMIN_UID, createEnv } from './helpers'
+import { ADMIN_UID, createEnv, PROD_ADMIN_UID } from './helpers'
 
 let env: RulesTestEnvironment
 const bytes = new Uint8Array([1, 2, 3])
@@ -50,6 +50,7 @@ describe('storage rules', () => {
   it('vehicle model photos: admin only', async () => {
     await assertFails(put(as('u1'), 'vehicleModels/m1/cover.jpg'))
     await assertSucceeds(put(as(ADMIN_UID), 'vehicleModels/m1/cover.jpg'))
+    await assertSucceeds(put(as(PROD_ADMIN_UID), 'vehicleModels/m1/cover.jpg'))
   })
 
   it('training uploads: own folder, images only, under 20MB', async () => {

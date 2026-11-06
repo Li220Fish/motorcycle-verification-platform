@@ -25,7 +25,9 @@ service firebase.storage {
     // firestore.get() cross-service reads flagged as unreliable elsewhere in
     // this file, this needs no cross-service call at all.
     function isAdmin() {
-      return request.auth != null && request.auth.uid == 'CMWrmo2pHsRiBu5kMj1CDJ23xd72'
+      // staging admin, production (ride78) admin — see firestore.rules.
+      return request.auth != null
+        && request.auth.uid in ['CMWrmo2pHsRiBu5kMj1CDJ23xd72', 'yByQ86E0oCeIJYGv2fmTRIvOhCI3']
     }
 
 

@@ -5,7 +5,7 @@ import {
 } from '@firebase/rules-unit-testing'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
-import { ADMIN_UID, createEnv, seed } from './helpers'
+import { ADMIN_UID, createEnv, PROD_ADMIN_UID, seed } from './helpers'
 
 let env: RulesTestEnvironment
 
@@ -29,6 +29,7 @@ describe('vehicles', () => {
   it('owner/admin read; others denied', async () => {
     await assertSucceeds(as('seller').doc('vehicles/v1').get())
     await assertSucceeds(admin().doc('vehicles/v1').get())
+    await assertSucceeds(as(PROD_ADMIN_UID).doc('vehicles/v1').get())
     await assertFails(as('buyer').doc('vehicles/v1').get())
     await assertFails(anon().doc('vehicles/v1').get())
   })

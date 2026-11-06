@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 
 import AppHeader from '@/components/common/AppHeader.vue'
 import Avatar from '@/components/common/Avatar.vue'
-import { ADMIN_UID, isAdminSession } from '@/admin/services/admin-auth.service'
+import { isAdminSession, isAdminUid } from '@/admin/services/admin-auth.service'
 import AuthorFollowButton from '@/components/discussion/AuthorFollowButton.vue'
 import CommentInput from '@/components/discussion/CommentInput.vue'
 import CommentItem from '@/components/discussion/CommentItem.vue'
@@ -62,7 +62,7 @@ function cancelReply(): void {
 const isAuthor = computed(
   () => !!authStore.user && discussionStore.currentPost?.authorId === authStore.user.id,
 )
-const isAdminPost = computed(() => discussionStore.currentPost?.authorId === ADMIN_UID)
+const isAdminPost = computed(() => isAdminUid(discussionStore.currentPost?.authorId))
 const canManageFeatured = computed(() => isAdminSession())
 
 async function toggleFeatured(): Promise<void> {

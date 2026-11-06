@@ -37,7 +37,7 @@ vi.mock('@/services/firebase/user-profile.service', () => ({
 }))
 
 import router from '@/router'
-import { ADMIN_UID } from '@/admin/services/admin-auth.service'
+import { ADMIN_UIDS } from '@/admin/services/admin-auth.service'
 import { auth } from '@/services/firebase/firebase'
 
 function fbUser(overrides: Record<string, unknown> = {}) {
@@ -138,7 +138,7 @@ describe('router guard', () => {
 
   it('/admin requires the admin uid; /admin/login bounces an admin to the dashboard', async () => {
     expect((await go('/admin/users')).name).toBe('admin-login')
-    ;(auth as { currentUser: unknown }).currentUser = { uid: ADMIN_UID }
+    ;(auth as { currentUser: unknown }).currentUser = { uid: ADMIN_UIDS[0] }
     expect((await go('/admin/users')).name).toBe('admin-dashboard')
     expect((await go('/admin/login')).name).toBe('admin-dashboard')
     ;(auth as { currentUser: unknown }).currentUser = { uid: 'not-admin' }
