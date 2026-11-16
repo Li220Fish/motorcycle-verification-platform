@@ -1,0 +1,36 @@
+{
+  "name": "tofu-run",
+  "private": true,
+  "version": "0.1.0",
+  "description": "送豆腐 — 騎乘平穩度遊戲（RiDE 技術延伸的獨立小程式）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode staging",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vite build --mode staging",
+    "test": "vitest run",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat :app:assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor-community/keep-awake": "^8.0.1",
+    "@capacitor-community/text-to-speech": "^8.0.2",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/preferences": "^8.0.1",
+    "capacitor-voice-recorder": "^7.0.6",
+    "firebase": "^12.18.0",
+    "vue": "^3.5.41"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.1",
+    "happy-dom": "^21.0.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.11"
+  }
+}

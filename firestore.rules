@@ -800,6 +800,78 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && resource.data.collectorUid == myUid());
     }
 
+    // ===================================================================
+    // Mini-apps (mini-apps/README.md) — separate products sharing this test
+    // project. Nothing in the RiDE app reads or writes these collections.
+    // ===================================================================
+
+    // --- 送豆腐 (mini-apps/tofu-run) — anonymous player accounts; every doc
+    // carries its owner's uid and only that player (or admin) sees it.
+    match /tofuProfiles/{uid} {
+      allow read: if signedIn() && (myUid() == uid || isAdmin());
+      allow create, update: if signedIn() && myUid() == uid && request.resource.data.uid == uid;
+      allow delete: if isAdmin();
+    }
+
+    match /tofuCalibrations/{calibrationId} {
+      allow read: if signedIn() && (resource.data.uid == myUid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.uid == myUid();
+      allow update, delete: if isAdmin();
+    }
+
+    match /tofuRuns/{runId} {
+      allow read: if signedIn() && (resource.data.uid == myUid() || isAdmin());
+      allow create: if signedIn() && request.resource.data.uid == myUid();
+      allow update, delete: if isAdmin();
+    }
+
+    // --- 引擎檢測 LINE Bot (mini-apps/engine-line) — LINE users never touch
+    // Firestore directly (their data arrives through the engineline Cloud
+    // Functions, Admin SDK). Only staff (客服／研究成員) read it through the
+    // console, and may only change triage fields.
+    function isEngineLineStaff() {
+      return signedIn()
+        && (isAdmin() || exists(/databases/$(database)/documents/engineLineStaff/$(myUid())));
+    }
+
+    match /engineLineStaff/{uid} {
+      allow read: if signedIn() && (myUid() == uid || isEngineLineStaff());
+      allow write: if isAdmin();
+    }
+
+    match /engineLineUsers/{lineUserId} {
+      allow read: if isEngineLineStaff();
+      allow write: if false;
+    }
+
+    match /engineLineTickets/{ticketId} {
+      allow read: if isEngineLineStaff();
+      allow update: if isEngineLineStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'assigneeUid', 'assigneeName', 'labels', 'unreadForStaff', 'staffNote', 'updatedAt']);
+      allow create, delete: if false;
+
+      // Staff replies are written here and delivered to LINE by the
+      // engineline function onStaffMessageCreated.
+      match /messages/{messageId} {
+        allow read: if isEngineLineStaff();
+        allow create: if isEngineLineStaff()
+          && request.resource.data.from == 'staff'
+          && request.resource.data.staffUid == myUid()
+          && request.resource.data.type == 'text'
+          && request.resource.data.delivery == 'pending';
+        allow update, delete: if false;
+      }
+    }
+
+    match /engineLineChecks/{checkId} {
+      allow read: if isEngineLineStaff();
+      allow update: if isEngineLineStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['researchLabels', 'staffNote', 'reviewedBy', 'reviewedAt']);
+      allow create, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -65,3 +65,17 @@ describe('storage rules', () => {
     await assertFails(put(as('u1'), 'random/a.jpg'))
   })
 })
+
+describe('mini-apps storage', () => {
+  it('tofu-run: players read/write only their own folder', async () => {
+    await assertSucceeds(put(as('p1'), 'tofu/p1/calibrations/c1/imu.json', 'application/json'))
+    await assertFails(put(as('p2'), 'tofu/p1/calibrations/c1/x.json', 'application/json'))
+    await assertFails(as('p2').ref('tofu/p1/calibrations/c1/imu.json').getMetadata())
+    await assertSucceeds(as(ADMIN_UID).ref('tofu/p1/calibrations/c1/imu.json').getMetadata())
+  })
+
+  it('engine-line: functions-only writes, admin reads', async () => {
+    await assertFails(put(as('u1'), 'engineLine/checks/k1/engine.webm', 'audio/webm'))
+    await assertFails(put(as(ADMIN_UID), 'engineLine/checks/k1/engine.webm', 'audio/webm'))
+  })
+})

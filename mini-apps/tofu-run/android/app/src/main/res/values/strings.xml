@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">送豆腐</string>
+    <string name="title_activity_main">送豆腐</string>
+    <string name="package_name">com.ride78.tofurun</string>
+    <string name="custom_url_scheme">com.ride78.tofurun</string>
+</resources>

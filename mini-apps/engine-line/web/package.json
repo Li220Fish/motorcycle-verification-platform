@@ -1,0 +1,26 @@
+{
+  "name": "engine-line-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "引擎檢測 LINE Bot — LIFF check page + staff console",
+  "scripts": {
+    "dev": "vite --mode staging",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vite build --mode staging",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@line/liff": "^2.27.2",
+    "firebase": "^12.18.0",
+    "vue": "^3.5.41"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "happy-dom": "^21.0.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.11"
+  }
+}

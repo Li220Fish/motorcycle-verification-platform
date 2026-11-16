@@ -105,6 +105,22 @@ service firebase.storage {
     // Dev-only smoke-test scratch space (src/components/media/*.vue's "Media
     // Capture Test" harness, gated by import.meta.env.DEV in the app itself
     // — never reachable from a production build). Not production-sensitive.
+    // --- Mini-apps (mini-apps/README.md) ---
+    // 送豆腐: each player's calibration recordings, owner only.
+    match /tofu/{uid}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 20 * 1024 * 1024;
+    }
+
+    // 引擎檢測 LINE Bot: written only by the engineline functions (Admin
+    // SDK); staff listen to recordings from the console.
+    match /engineLine/{allPaths=**} {
+      allow read: if request.auth != null && (isAdmin()
+        || firestore.exists(/databases/(default)/documents/engineLineStaff/$(request.auth.uid)));
+      allow write: if false;
+    }
+
     match /dev-test/{allPaths=**} {
       allow read, write: if request.auth != null;
     }

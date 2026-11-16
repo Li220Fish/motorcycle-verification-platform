@@ -456,3 +456,60 @@ describe('backend-only & admin-only collections', () => {
     await assertFails(as('u1').doc('somethingNew/x').set({ a: 1 }))
   })
 })
+
+describe('mini-apps: 送豆腐 (tofu-run)', () => {
+  it('players own their profile, calibrations and runs', async () => {
+    await assertSucceeds(as('p1').doc('tofuProfiles/p1').set({ uid: 'p1', runs: 1 }))
+    await assertFails(as('p1').doc('tofuProfiles/p2').set({ uid: 'p2' }))
+    await assertSucceeds(as('p1').doc('tofuCalibrations/c1').set({ uid: 'p1' }))
+    await assertFails(as('p1').doc('tofuCalibrations/c2').set({ uid: 'p2' }))
+    await assertSucceeds(as('p1').doc('tofuRuns/r1').set({ uid: 'p1', integrity: 90 }))
+    await assertFails(as('p1').doc('tofuRuns/r1').update({ integrity: 100 }))
+    await assertFails(as('p2').doc('tofuRuns/r1').get())
+    await assertSucceeds(admin().doc('tofuRuns/r1').get())
+    await assertFails(anon().doc('tofuRuns/r2').set({ uid: 'p1' }))
+  })
+})
+
+describe('mini-apps: 引擎檢測 LINE Bot (engine-line)', () => {
+  beforeEach(() =>
+    seed(env, {
+      'engineLineStaff/s1': { name: 'Staff' },
+      'engineLineTickets/t1': { lineUserId: 'U1', status: 'open', labels: [], lastMessagePreview: 'hi' },
+      'engineLineChecks/k1': { lineUserId: 'U1', researchLabels: [], result: { overall: 'normal' } },
+      'engineLineUsers/U1': { displayName: 'A' },
+    }),
+  )
+
+  it('only staff/admin read; LINE data is never client-writable', async () => {
+    await assertSucceeds(as('s1').doc('engineLineTickets/t1').get())
+    await assertSucceeds(admin().doc('engineLineUsers/U1').get())
+    await assertFails(as('u1').doc('engineLineTickets/t1').get())
+    await assertFails(as('u1').doc('engineLineChecks/k1').get())
+    await assertFails(as('s1').doc('engineLineUsers/U1').set({ displayName: 'B' }))
+    await assertFails(as('s1').doc('engineLineTickets/t2').set({ lineUserId: 'U1' }))
+  })
+
+  it('staff change triage fields only', async () => {
+    await assertSucceeds(as('s1').doc('engineLineTickets/t1').update({ status: 'in_progress', labels: ['異音'] }))
+    await assertFails(as('s1').doc('engineLineTickets/t1').update({ lineUserId: 'U2' }))
+    await assertSucceeds(as('s1').doc('engineLineChecks/k1').update({ researchLabels: ['正常'], staffNote: 'ok' }))
+    await assertFails(as('s1').doc('engineLineChecks/k1').update({ result: { overall: 'attention' } }))
+  })
+
+  it('staff replies must be pending text messages signed as themselves', async () => {
+    const reply = { from: 'staff', type: 'text', text: 'hi', staffUid: 's1', delivery: 'pending' }
+    await assertSucceeds(as('s1').collection('engineLineTickets/t1/messages').add(reply))
+    await assertFails(as('s1').collection('engineLineTickets/t1/messages').add({ ...reply, staffUid: 'other' }))
+    await assertFails(as('s1').collection('engineLineTickets/t1/messages').add({ ...reply, delivery: 'sent' }))
+    await assertFails(as('s1').collection('engineLineTickets/t1/messages').add({ ...reply, from: 'user' }))
+    await assertFails(as('u1').collection('engineLineTickets/t1/messages').add({ ...reply, staffUid: 'u1' }))
+  })
+
+  it('only admin manages the staff list', async () => {
+    await assertSucceeds(admin().doc('engineLineStaff/s2').set({ name: 'New' }))
+    await assertFails(as('s1').doc('engineLineStaff/s3').set({ name: 'Self-promoted' }))
+    await assertFails(as('u1').doc('engineLineStaff/u1').set({ name: 'Me' }))
+    await assertSucceeds(as('u1').doc('engineLineStaff/u1').get())
+  })
+})
