@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
+import TofuBlock from './components/TofuBlock.vue'
 import CalibrateScreen from './screens/CalibrateScreen.vue'
 import HistoryScreen from './screens/HistoryScreen.vue'
 import HomeScreen from './screens/HomeScreen.vue'
@@ -46,7 +47,10 @@ function handleFinished(run: RunRecord): void {
 </script>
 
 <template>
-  <div v-if="screen === 'loading'" class="screen"><p class="muted">載入中…</p></div>
+  <div v-if="screen === 'loading'" class="screen splash">
+    <TofuBlock :size="140" />
+    <p class="muted">豆腐準備中…</p>
+  </div>
   <SafetyScreen v-else-if="screen === 'safety'" @accept="handleSafetyAccepted" />
   <HomeScreen
     v-else-if="screen === 'home'"
@@ -81,3 +85,7 @@ function handleFinished(run: RunRecord): void {
   />
   <HistoryScreen v-else-if="screen === 'history'" :uid="uid" @back="screen = 'home'" />
 </template>
+
+<style scoped>
+.splash { align-items: center; justify-content: center; }
+</style>

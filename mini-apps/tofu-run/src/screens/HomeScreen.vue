@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import DeliveryScene from '@tofu/components/DeliveryScene.vue'
 import type { LocalCalibration } from '@tofu/services/data'
 
 const props = defineProps<{ calibration: LocalCalibration | null; error: string }>()
@@ -13,8 +14,11 @@ const calibratedOn = computed(() =>
 
 <template>
   <div class="screen">
-    <h1>送豆腐</h1>
-    <p class="muted">平穩騎完一趟，把豆腐完整送到。</p>
+    <DeliveryScene class="hero" />
+    <div class="title">
+      <h1>送豆腐</h1>
+      <p class="muted">平穩騎完一趟，把豆腐完整送到。</p>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="card">
@@ -42,3 +46,11 @@ const calibratedOn = computed(() =>
     <button class="btn ghost" @click="$emit('history')">送貨紀錄</button>
   </div>
 </template>
+
+<style scoped>
+.hero { margin: 0 -4px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); animation: rise 0.6s ease-out both; }
+.title { text-align: center; animation: rise 0.6s ease-out 0.1s both; }
+.title h1 { font-size: 34px; letter-spacing: 0.12em; }
+.card { animation: rise 0.6s ease-out 0.2s both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+</style>

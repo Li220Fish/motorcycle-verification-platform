@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import TofuBlock from '@tofu/components/TofuBlock.vue'
+
 defineEmits<{ accept: [] }>()
 const agreed = ref(false)
 </script>
 
 <template>
   <div class="screen">
-    <h1>送豆腐 🚚🧈</h1>
+    <TofuBlock class="mascot" :size="150" />
+    <h1 class="center">送豆腐</h1>
     <p class="muted">把手機當成一盒豆腐固定在車上，騎得越平穩，豆腐越完整。</p>
     <div class="card">
       <h2>安全守則</h2>
@@ -28,6 +31,8 @@ const agreed = ref(false)
 </template>
 
 <style scoped>
+.mascot { margin: 8px auto 0; }
+.center { text-align: center; letter-spacing: 0.12em; }
 .rules { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
 .agree { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .agree input { width: 22px; height: 22px; accent-color: var(--accent); }

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import GradeStamp from '@tofu/components/GradeStamp.vue'
 import RouteSketch from '@tofu/components/RouteSketch.vue'
+import TofuBlock from '@tofu/components/TofuBlock.vue'
 import { MIN_DELIVERY_METERS } from '@tofu/core/tofu-engine'
 import { saveRun, type RunRecord } from '@tofu/services/data'
 
@@ -32,11 +34,12 @@ onMounted(async () => {
 
 <template>
   <div class="screen">
-    <h1>{{ verdict }}</h1>
-    <div class="grade-card card">
-      <p class="grade">{{ run.grade ?? '—' }}</p>
-      <p class="muted">豆腐完整度 {{ Math.round(run.integrity) }}%</p>
+    <h1 class="verdict">{{ verdict }}</h1>
+    <div class="podium">
+      <TofuBlock :integrity="run.integrity" :size="130" />
+      <GradeStamp :grade="run.grade" />
     </div>
+    <p class="muted center">豆腐完整度 {{ Math.round(run.integrity) }}%</p>
     <div class="card">
       <div class="stat"><span>距離</span><b>{{ (run.distanceMeters / 1000).toFixed(2) }} km</b></div>
       <div class="stat"><span>時間</span><b>{{ Math.floor(run.durationSeconds / 60) }} 分 {{ run.durationSeconds % 60 }} 秒</b></div>
@@ -59,6 +62,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.grade-card { align-items: center; }
-.grade { font-size: 88px; font-weight: 900; line-height: 1; color: var(--accent); }
+.verdict { text-align: center; animation: rise 0.5s ease-out both; }
+.podium { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.center { text-align: center; }
+.card { animation: rise 0.5s ease-out 0.6s both; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 </style>

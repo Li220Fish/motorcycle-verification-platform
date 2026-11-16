@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import TofuBlock from '@tofu/components/TofuBlock.vue'
+import type { TofuMotion } from '@tofu/components/tofu-motion'
 import { TripRecorder } from '@tofu/core/geo'
 import { gradeFor, TofuEngine, VOICE_LINES, type TofuEvent } from '@tofu/core/tofu-engine'
 import type { LocalCalibration, RunRecord } from '@tofu/services/data'
@@ -20,6 +22,8 @@ const distance = ref(0)
 const elapsed = ref(0)
 const gpsLost = ref(false)
 const holdProgress = ref(0)
+const motion = ref<TofuMotion | null>(null)
+const flash = ref(0)
 const startedAt = Date.now()
 
 let clock: ReturnType<typeof setInterval> | null = null
@@ -32,7 +36,11 @@ const tone = computed(() =>
 
 function handleEvents(produced: TofuEvent[]): void {
   for (const event of produced) {
-    if (event.type === 'sway' || event.type === 'bump') events.push(event)
+    if (event.type === 'sway' || event.type === 'bump') {
+      events.push(event)
+      motion.value = { kind: event.type, n: (motion.value?.n ?? 0) + 1 }
+      flash.value += 1
+    }
     if (event.type === 'bump') beep(320, 140)
     if (event.type === 'warning') void say(VOICE_LINES[`warn${event.integrity}`] ?? '')
     if (event.type === 'broken') void say(VOICE_LINES.broken)
@@ -121,8 +129,11 @@ function formatTime(seconds: number): string {
 
 <template>
   <div class="ride" :class="tone">
-    <p class="label">豆腐完整度</p>
+    <div :key="flash" class="flash" :class="{ on: flash > 0 }" />
+    <TofuBlock class="tofu" :integrity="integrity" :motion="motion" size="min(64vw, 280px)" />
     <p class="integrity">{{ Math.round(integrity) }}<span>%</span></p>
+    <p class="label">豆腐完整度</p>
+    <div class="meter"><div class="meter-fill" :style="{ width: `${Math.max(0, integrity)}%` }" /></div>
     <p class="meta">{{ (distance / 1000).toFixed(2) }} km ・ {{ formatTime(elapsed) }}</p>
     <p v-if="gpsLost" class="meta warn">GPS 訊號弱</p>
     <p class="hint">騎乘中請勿操作手機・停好車後長按下方按鈕</p>
@@ -151,9 +162,18 @@ function formatTime(seconds: number): string {
   background: #000;
   text-align: center;
 }
-.label { color: var(--muted); font-size: 18px; }
-.integrity { font-size: 120px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
-.integrity span { font-size: 40px; }
+.ride { position: relative; overflow: hidden; }
+.tofu { margin-top: auto; }
+.label { color: var(--muted); font-size: 16px; }
+.integrity { font-size: 72px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.integrity span { font-size: 28px; }
+.meter { width: min(80vw, 320px); height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.meter-fill { height: 100%; border-radius: 999px; background: var(--good); transition: width 0.4s, background 0.4s; }
+.warn .meter-fill { background: var(--warn); }
+.bad .meter-fill, .broken .meter-fill { background: var(--bad); }
+.flash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 40%, rgba(255, 93, 93, 0.35), transparent 70%); opacity: 0; }
+.flash.on { animation: flash 0.5s ease-out; }
+@keyframes flash { from { opacity: 1; } to { opacity: 0; } }
 .good .integrity { color: var(--good); }
 .warn .integrity { color: var(--warn); }
 .bad .integrity, .broken .integrity { color: var(--bad); }

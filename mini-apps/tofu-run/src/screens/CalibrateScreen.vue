@@ -9,6 +9,8 @@ import {
   type Baseline,
 } from '@tofu/core/calibration'
 import type { ImuSample } from '@tofu/core/imu'
+import EngineGauge from '@tofu/components/EngineGauge.vue'
+import TofuBlock from '@tofu/components/TofuBlock.vue'
 import { measureAudioLevels, saveCalibration, type LocalCalibration, type VehicleType } from '@tofu/services/data'
 import { startMotion, stopMotion } from '@tofu/services/motion'
 import { recorder } from '@tofu/services/recorder'
@@ -184,17 +186,19 @@ onBeforeUnmount(() => {
     </template>
 
     <div v-else-if="step === 'countdown'" class="big-center">
-      <p class="big">{{ countdown }}</p>
+      <p :key="countdown" class="big pop">{{ countdown }}</p>
       <p class="muted">放開手機…</p>
     </div>
 
     <div v-else-if="step === 'recording'" class="big-center">
       <p class="rec">● 錄製中 {{ Math.floor(elapsedMs / 1000) }} / 18 秒</p>
+      <EngineGauge :phase="elapsedMs >= 9000 ? 'rev' : 'idle'" />
       <p class="instruction">{{ instruction }}</p>
       <div class="bar"><div class="bar-fill" :style="{ width: `${(elapsedMs / 18000) * 100}%` }" /></div>
     </div>
 
     <div v-else-if="step === 'processing' || step === 'saving'" class="big-center">
+      <TofuBlock :size="110" />
       <p class="muted">{{ step === 'processing' ? '計算基準值…' : '上傳到資料庫…' }}</p>
     </div>
 
@@ -224,7 +228,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .big-center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
 .big { font-size: 96px; font-weight: 900; margin: 0; color: var(--accent); }
-.rec { color: var(--bad); font-weight: 800; }
+.rec { color: var(--bad); font-weight: 800; animation: blink 1s steps(2) infinite; }
+.pop { animation: pop 0.9s ease-out; }
+@keyframes pop { 0% { transform: scale(1.8); opacity: 0; } 30% { transform: scale(1); opacity: 1; } 100% { opacity: 0.7; } }
+@keyframes blink { 50% { opacity: 0.55; } }
 .instruction { font-size: 26px; font-weight: 800; }
 .bar { width: 100%; height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .bar-fill { height: 100%; background: var(--accent); transition: width 0.1s linear; }

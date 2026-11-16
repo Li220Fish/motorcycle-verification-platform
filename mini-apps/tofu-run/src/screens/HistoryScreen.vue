@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
+import TofuBlock from '@tofu/components/TofuBlock.vue'
 import { listRuns, type RunRecord } from '@tofu/services/data'
 
 const props = defineProps<{ uid: string | null }>()
@@ -29,7 +30,9 @@ onMounted(async () => {
     <p v-if="state === 'loading'" class="muted">載入中…</p>
     <p v-else-if="state === 'error'" class="error">無法讀取紀錄，請確認網路連線。</p>
     <p v-else-if="runs.length === 0" class="muted">還沒有送過豆腐。</p>
-    <div v-for="run in runs" :key="run.id" class="card">
+    <div v-for="run in runs" :key="run.id" class="card run">
+      <TofuBlock class="mini" :integrity="run.integrity" :idle="false" :size="52" />
+      <div class="run-body">
       <div class="stat">
         <span>{{ new Date(run.startedAt).toLocaleString('zh-TW') }}</span>
         <b class="grade">{{ run.grade ?? '—' }}</b>
@@ -38,6 +41,7 @@ onMounted(async () => {
         {{ (run.distanceMeters / 1000).toFixed(2) }} km ・ 完整度 {{ Math.round(run.integrity) }}% ・
         晃動 {{ run.eventCounts.sway }}／顛簸 {{ run.eventCounts.bump }}
       </p>
+      </div>
     </div>
     <div class="spacer" />
     <button class="btn secondary" @click="$emit('back')">返回</button>
@@ -45,5 +49,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.run { flex-direction: row; align-items: center; gap: 12px; }
+.run-body { flex: 1; min-width: 0; }
 .grade { color: var(--accent); font-size: 20px; }
 </style>

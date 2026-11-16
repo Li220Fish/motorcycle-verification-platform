@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
+import TofuBlock from '@tofu/components/TofuBlock.vue'
 import { startGps, stopGps } from '@tofu/services/gps'
 
 defineEmits<{ go: []; cancel: [] }>()
@@ -27,6 +28,10 @@ onBeforeUnmount(() => void stopGps())
 <template>
   <div class="screen">
     <h1>出發前確認</h1>
+    <div class="loading-bay">
+      <TofuBlock :size="120" />
+      <p class="muted">豆腐已上車，等你出發</p>
+    </div>
     <div class="card">
       <p>✅ 手機放在<b>跟校正時同一個位置</b>，並且固定好</p>
       <p>✅ 引擎已發動、戴好安全帽</p>
@@ -49,6 +54,7 @@ onBeforeUnmount(() => void stopGps())
 </template>
 
 <style scoped>
+.loading-bay { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ok { color: var(--good); }
 .wait { color: var(--warn); }
 </style>
