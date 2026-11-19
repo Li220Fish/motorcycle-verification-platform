@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import { COLD_CHECK_AI_ENABLED } from '@/config/coldCheck.config'
 import { getFlatItems, getFlowSections } from '@/data/verification'
 import type {
   FlatVerificationItem,
@@ -801,7 +802,9 @@ export const useVerificationStore = defineStore('verification', () => {
     'coreVisionFrontSuspension',
     'coreVisionEngineBottom',
     'dashboardOcr',
-    'coldCheck',
+    // Off while COLD_CHECK_AI_ENABLED is false — a stale 'processing' from
+    // before the switch must not block completion either.
+    ...(COLD_CHECK_AI_ENABLED ? ['coldCheck'] : []),
     'engineSensorSession',
     'hotEngineSensorSession',
   ]
@@ -847,7 +850,9 @@ export const useVerificationStore = defineStore('verification', () => {
     // — is a race that can leave this item permanently unverified rather
     // than just delayed. `=== 'completed'` on purpose: `undefined` (not
     // triggered yet / still in flight) must block exactly like 'failed'.
-    if (item.id === 'ENG-02' && analysisStatusFor('coldCheck') !== 'completed') return false
+    if (COLD_CHECK_AI_ENABLED && item.id === 'ENG-02' && analysisStatusFor('coldCheck') !== 'completed') {
+      return false
+    }
 
     const requiredEvidence = (item.evidence ?? []).filter((requirement) => requirement.required)
     if (requiredEvidence.length === 0) return true

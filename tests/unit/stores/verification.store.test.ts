@@ -131,9 +131,20 @@ describe('loadFlow', () => {
     await flush()
     fs.__seed('verifications/v1', {
       ...fs.__get('verifications/v1'),
-      analysisStatus: { coldCheck: { status: 'processing' } },
+      analysisStatus: { engineSensorSession: { status: 'processing' } },
     })
-    await vi.waitFor(() => expect(store.pendingRequiredAnalysis).toEqual(['coldCheck']))
+    await vi.waitFor(() => expect(store.pendingRequiredAnalysis).toEqual(['engineSensorSession']))
+  })
+
+  it('cold-check AI is switched off: a stale coldCheck status never blocks completion', async () => {
+    const store = await load()
+    await flush()
+    fs.__seed('verifications/v1', {
+      ...fs.__get('verifications/v1'),
+      analysisStatus: { coldCheck: { status: 'processing' }, dashboardOcr: { status: 'failed' } },
+    })
+    await vi.waitFor(() => expect(store.failedRequiredAnalysis).toEqual(['dashboardOcr']))
+    expect(store.pendingRequiredAnalysis).toEqual([])
   })
 })
 
@@ -402,7 +413,7 @@ describe('completion gate', () => {
 })
 
 describe('locked engine section', () => {
-  it('isItemAdvanceReady gates locked items on answer + required evidence + cold-check AI', async () => {
+  it('isItemAdvanceReady gates locked items on answer + required evidence (cold-check AI off)', async () => {
     const store = await load()
     const flat = (id: string) => store.flatItems.find((f) => f.item.id === id)!
     expect(store.isItemAdvanceReady(flat('APR-rear'))).toBe(true) // non-locked section: free
@@ -417,13 +428,10 @@ describe('locked engine section', () => {
     store.evidenceByItem['ENG-07'] = [evidence('ENG-07', { type: 'imu' })]
     expect(store.isItemAdvanceReady(flat('ENG-07'))).toBe(true)
 
-    await store.saveAnswer('ENG-02', 'normal')
+    // With COLD_CHECK_AI_ENABLED false, the recorded video alone unlocks
+    // 下一步 — no waiting on an AI verdict that is never requested.
+    await store.saveAnswer('ENG-02', 'unsure')
     store.evidenceByItem['ENG-02'] = [evidence('ENG-02', { type: 'video' })]
-    expect(store.isItemAdvanceReady(flat('ENG-02'))).toBe(false)
-    store.currentVerification = {
-      ...store.currentVerification!,
-      analysisStatus: { coldCheck: { status: 'completed' } },
-    } as never
     expect(store.isItemAdvanceReady(flat('ENG-02'))).toBe(true)
   })
 

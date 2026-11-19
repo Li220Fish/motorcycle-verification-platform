@@ -15,6 +15,7 @@ import PrimaryButton from '@/components/common/PrimaryButton.vue'
 import EngineWaveform from '@/components/verification/engine/EngineWaveform.vue'
 import { videoRecorderService } from '@/services/media/video-recorder.service'
 import { storageService } from '@/services/firebase/storage.service'
+import { COLD_CHECK_AI_ENABLED } from '@/config/coldCheck.config'
 import { analyzeColdEngineTouchCheck } from '@/services/firebase/ai-analysis.service'
 import { useVerificationStore } from '@/stores/verification.store'
 import type { VerificationEvidence } from '@/types/verification-evidence'
@@ -159,6 +160,8 @@ async function finish(): Promise<void> {
     // Fire-and-forget, same convention as every other capture step — the
     // Trusted Backend overwrites this placeholder with the real verified
     // result (and cold_state validity) once it lands.
+    // AI 判定暫停中（見 coldCheck.config.ts）：只存證，不送分析。
+    if (!COLD_CHECK_AI_ENABLED) return
     triggerFailed.value = false
     analyzeColdEngineTouchCheck(props.verificationId).catch((error) => {
       console.error('[AI analysis] analyzeColdEngineTouchCheck trigger failed:', error)
@@ -309,7 +312,10 @@ onBeforeUnmount(() => {
 
     <template v-else-if="phase === 'done'">
       <div class="panel-card">
-        <p v-if="coldCheckStatus === 'completed'" class="done-mark">
+        <p v-if="!COLD_CHECK_AI_ENABLED" class="done-mark">
+          {{ t('coldTouch', 'recordedNoAi') }}
+        </p>
+        <p v-else-if="coldCheckStatus === 'completed'" class="done-mark">
           {{ t('coldTouch', 'aiDone') }}
         </p>
         <p v-else-if="analysisFailed && !retryingAnalysis" class="error-text">
@@ -319,7 +325,7 @@ onBeforeUnmount(() => {
           <Loader2 :size="16" class="spin" /> {{ t('coldTouch', 'aiPending') }}
         </p>
         <button
-          v-if="analysisFailed"
+          v-if="COLD_CHECK_AI_ENABLED && analysisFailed"
           class="remeasure-btn"
           :disabled="retryingAnalysis"
           @click="handleRetryAnalysis"
