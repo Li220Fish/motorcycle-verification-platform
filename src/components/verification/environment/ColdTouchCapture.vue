@@ -159,9 +159,11 @@ async function finish(): Promise<void> {
     // Fire-and-forget, same convention as every other capture step — the
     // Trusted Backend overwrites this placeholder with the real verified
     // result (and cold_state validity) once it lands.
-    analyzeColdEngineTouchCheck(props.verificationId).catch((error) =>
-      console.error('[AI analysis] analyzeColdEngineTouchCheck trigger failed:', error),
-    )
+    triggerFailed.value = false
+    analyzeColdEngineTouchCheck(props.verificationId).catch((error) => {
+      console.error('[AI analysis] analyzeColdEngineTouchCheck trigger failed:', error)
+      triggerFailed.value = true
+    })
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : ''
     phase.value = 'failed'
@@ -177,13 +179,22 @@ const coldCheckStatus = computed(
   () => verificationStore.currentVerification?.analysisStatus?.coldCheck?.status,
 )
 const retryingAnalysis = ref(false)
+// The call itself erroring (crash, timeout, network) — a function killed
+// mid-run never gets to write analysisStatus 'failed', so without this the
+// screen would spin on "AI 判定中" forever with no retry button.
+const triggerFailed = ref(false)
+const analysisFailed = computed(
+  () => coldCheckStatus.value === 'failed' || (triggerFailed.value && coldCheckStatus.value !== 'completed'),
+)
 
 async function handleRetryAnalysis(): Promise<void> {
   retryingAnalysis.value = true
+  triggerFailed.value = false
   try {
     await analyzeColdEngineTouchCheck(props.verificationId)
   } catch (error) {
     console.error('[AI analysis] analyzeColdEngineTouchCheck retry failed:', error)
+    triggerFailed.value = true
   } finally {
     retryingAnalysis.value = false
   }
@@ -301,14 +312,14 @@ onBeforeUnmount(() => {
         <p v-if="coldCheckStatus === 'completed'" class="done-mark">
           {{ t('coldTouch', 'aiDone') }}
         </p>
-        <p v-else-if="coldCheckStatus === 'failed'" class="error-text">
+        <p v-else-if="analysisFailed && !retryingAnalysis" class="error-text">
           {{ t('coldTouch', 'aiFailed') }}
         </p>
         <p v-else class="checking">
           <Loader2 :size="16" class="spin" /> {{ t('coldTouch', 'aiPending') }}
         </p>
         <button
-          v-if="coldCheckStatus === 'failed'"
+          v-if="analysisFailed"
           class="remeasure-btn"
           :disabled="retryingAnalysis"
           @click="handleRetryAnalysis"

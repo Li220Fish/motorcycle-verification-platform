@@ -113,7 +113,7 @@ export interface Verification {
    *  a later admin edit to the model's known-issues list doesn't retroactively
    *  change what this buyer already saw. Consumed by BasicHealthCheck13.vue's known-issue reminder. */
   buyerKnownIssuesSnapshot?: VehicleModelKnownIssue[]
-  /** 5 分鐘作答窗口的起點（ms）— 新的驗證檔若在這之後 5 分鐘內沒有同時完成
+  /** 8 分鐘作答窗口的起點（ms）— 新的驗證檔若在這之後 8 分鐘內沒有同時完成
    *  核心照片＋冷車引擎檢查，就退回草稿並清空所有內容（見
    *  verification-attempt.ts）。只有建立時就帶這個欄位的新驗證檔才適用；
    *  舊資料沒有這個欄位，不受影響。 */

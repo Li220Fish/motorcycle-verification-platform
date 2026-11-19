@@ -302,9 +302,9 @@ const baseMessages = {
       errorCompleteFailed: '完成驗證失敗',
       loadFailed: '載入驗證資料失敗，請返回後重試',
       attemptCountdown: '⏱ {time} 內完成拍照＋引擎',
-      attemptExpiredTitle: '已超過 5 分鐘',
+      attemptExpiredTitle: '已超過 8 分鐘',
       attemptExpiredBody:
-        '未在 5 分鐘內完成拍照與引擎檢測，這份驗證已退回草稿，所有內容都已清除，請重新開始。',
+        '未在 8 分鐘內完成拍照與引擎檢測，這份驗證已退回草稿，所有內容都已清除，請重新開始。',
       attemptExpiredOk: '我知道了',
       coldFirstTitle: '請先完成冷車檢查',
       coldFirstBody:
@@ -1321,9 +1321,9 @@ const baseMessages = {
       errorCompleteFailed: 'Failed to complete verification',
       loadFailed: 'Failed to load this verification. Please go back and try again.',
       attemptCountdown: '⏱ {time} for photos + engine',
-      attemptExpiredTitle: '5 minutes have passed',
+      attemptExpiredTitle: '8 minutes have passed',
       attemptExpiredBody:
-        'Photos and the engine check were not both finished within 5 minutes, so this verification was reset to a draft and all its content was deleted. Please start again.',
+        'Photos and the engine check were not both finished within 8 minutes, so this verification was reset to a draft and all its content was deleted. Please start again.',
       attemptExpiredOk: 'Got it',
       coldFirstTitle: 'Do the cold-engine check first',
       coldFirstBody:

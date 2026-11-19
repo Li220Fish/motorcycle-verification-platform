@@ -454,7 +454,7 @@ describe('locked engine section', () => {
   })
 })
 
-describe('5-minute attempt expiry', () => {
+describe('8-minute attempt expiry', () => {
   it('expireAttempt clears every layer and resets to draft with a fresh clock', async () => {
     const store = await load('seller', '6速手排', { attemptStartedAt: NOW - 400_000 })
     await store.saveAnswer('APR-rear', 'normal')

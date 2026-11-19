@@ -432,12 +432,12 @@ const nextDisabledHint = computed(
       : undefined) ?? t('verificationSteps', 'nextDisabledHintFallback'),
 )
 
-// --- 5 分鐘作答窗口＋完成後鎖定 ------------------------------------------
+// --- 8 分鐘作答窗口＋完成後鎖定 ------------------------------------------
 // 新的驗證檔（建立時帶 attemptStartedAt，見 verification.service.ts create）
-// 必須在 5 分鐘內同時完成「核心照片」與「冷車＋引擎檢查」，逾時就退回草稿、
+// 必須在 8 分鐘內同時完成「核心照片」與「冷車＋引擎檢查」，逾時就退回草稿、
 // 清空所有內容（verificationStore.expireAttempt）並重新起算。兩者都完成後，
 // 狀態維持進行中，但這兩個區塊都鎖住，不能再點開修改或重拍／重錄。
-const ATTEMPT_WINDOW_MS = 5 * 60 * 1000
+const ATTEMPT_WINDOW_MS = 8 * 60 * 1000
 const corePhotosDone = computed(
   () =>
     corePhotoItemIds.value.length > 0 &&
@@ -1484,7 +1484,7 @@ onMounted(() => {
   z-index: 460;
 }
 
-/* Same layer as the 5-minute notice — above every capture screen. */
+/* Same layer as the 8-minute notice — above every capture screen. */
 .cold-first-overlay {
   z-index: 460;
 }

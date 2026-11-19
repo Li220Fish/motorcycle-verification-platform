@@ -60,21 +60,21 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-describe('VerificationStepsView — 5-minute attempt window', () => {
-  it('seller: compact countdown that ticks down from 5:00', async () => {
+describe('VerificationStepsView — 8-minute attempt window', () => {
+  it('seller: compact countdown that ticks down from 8:00', async () => {
     seed({ type: 'seller', attemptStartedAt: NOW })
     const wrapper = await render()
     expect(wrapper.findComponent(VerificationHub).exists()).toBe(true)
     const pill = () => wrapper.find('.attempt-countdown')
     expect(pill().exists()).toBe(true)
     expect(pill().classes()).toContain('on-hub')
-    expect(pill().text()).toContain('5:00')
+    expect(pill().text()).toContain('8:00')
     await vi.advanceTimersByTimeAsync(61_000)
-    expect(pill().text()).toContain('3:59')
+    expect(pill().text()).toContain('6:59')
   })
 
   it('seller: on expiry everything is wiped, status → draft, the clock restarts, and a notice is shown', async () => {
-    seed({ type: 'seller', attemptStartedAt: NOW - 4 * 60_000 - 58_000 })
+    seed({ type: 'seller', attemptStartedAt: NOW - 7 * 60_000 - 58_000 })
     fs.__seed('verifications/v1/answers/APR-rear', {
       itemId: 'APR-rear',
       result: 'normal',
@@ -88,7 +88,7 @@ describe('VerificationStepsView — 5-minute attempt window', () => {
     expect(fs.__get('verifications/v1/answers/APR-rear')).toBeUndefined()
     expect(fs.__get('verifications/v1')!.status).toBe('draft')
     expect(fs.__get('verifications/v1')!.attemptStartedAt).toBeGreaterThanOrEqual(NOW + 2000)
-    expect(wrapper.find('.attempt-countdown').text()).toMatch(/[45]:\d\d/)
+    expect(wrapper.find('.attempt-countdown').text()).toMatch(/[78]:\d\d/)
   })
 
   it('buyer: no time limit, even with a legacy attemptStartedAt', async () => {

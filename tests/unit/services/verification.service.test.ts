@@ -25,7 +25,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('verificationService.create', () => {
-  it('writes protocol v2, isPublic=false, server createdAt and a 5-minute attempt start for sellers', async () => {
+  it('writes protocol v2, isPublic=false, server createdAt and an 8-minute attempt start for sellers', async () => {
     const id = await verificationService.create(draft({ mileage: undefined }))
     const saved = fs.__get(`verifications/${id}`)!
     expect(saved.isPublic).toBe(false)

@@ -598,7 +598,7 @@ export const useVerificationStore = defineStore('verification', () => {
     }
   }
 
-  /** 5 分鐘作答窗口逾時（見 VerificationStepsView.vue 的 attempt 計時）—
+  /** 8 分鐘作答窗口逾時（見 VerificationStepsView.vue 的 attempt 計時）—
    *  Firestore 端清空＋退回草稿，本機草稿快取與記憶體狀態也一併清掉，否則
    *  下一次 loadFlow 的「本機補推」會把剛刪掉的內容又推回去。 */
   async function expireAttempt(): Promise<void> {

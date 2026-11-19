@@ -122,14 +122,14 @@ async function create(draft: VerificationDraft): Promise<string> {
     schemaVersion: SCHEMA_VERSION,
     createdAt: serverTimestamp(),
     // Buyer verifications have no time limit — only seller/professional
-    // ones get the 5-minute photos+engine window.
+    // ones get the 8-minute photos+engine window.
     ...(draft.type === 'buyer' ? {} : { attemptStartedAt: Date.now() }),
   })
   return docRef.id
 }
 
-/** 5 分鐘窗口逾時後：清空 answers/evidence（含 Storage 檔案）、退回草稿，並
- *  以「現在」重新起算下一次的 5 分鐘。 */
+/** 8 分鐘窗口逾時後：清空 answers/evidence（含 Storage 檔案）、退回草稿，並
+ *  以「現在」重新起算下一次的 8 分鐘。 */
 async function expireAttempt(id: string): Promise<void> {
   const [answers, evidence] = await Promise.all([listAnswers(id), listEvidence(id)])
   await Promise.all([
